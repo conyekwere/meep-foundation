@@ -11,6 +11,8 @@ struct MeepAppView: View {
     @StateObject private var viewModel = MeepViewModel()
     @State private var showOnboardingSheet: Bool = true
     @State private var showMeetingResultsSheet: Bool = false
+    @State private var showMeetingSearchSheet: Bool = false
+    @State private var searchInputDirty:Bool = false
 
     // Define heights for snapping points
     private let BottomSheetMinHeight: CGFloat = 50
@@ -93,30 +95,77 @@ struct MeepAppView: View {
                 viewModel.requestUserLocation()
             }
             
+            
+            
+            // MARK: - SearchBarWithAction
             VStack {
-                Button(action: {
-                    showMeetingResultsSheet = true
-                    showOnboardingSheet = false
-                }) {
-                    Text("Find Meeting Points")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                        .shadow(radius: 5)
-                        .padding(.bottom, 20)
+                if searchInputDirty {
+                    SearchBarWithAction(
+                        title: "35 Meeting Points",
+                        subtitle: "777 Broadway · 210 E 121st St",
+                        leadingIcon: "chevron.left",
+                        trailingIcon: "slider.horizontal.3",
+                        isDirty: true,
+                        onLeadingIconTap: {
+                            print("Back button tapped")
+                        },
+                        onTrailingIconTap: {
+                            print("Filters tapped")
+                        },
+                        onContainerTap: {
+                            print("Edit Search Bar tapped")
+                        }
+                    )
+                    .padding()
+                    .frame( height: 60)
+                    .background(Color.white)
+                    .cornerRadius(34)
+                    .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
+                }
+                else{
+
+                    SearchBarWithAction(
+                        title: "Find where to meet",
+                        subtitle: "My Location · Friends location",
+                        leadingIcon: "magnifyingglass",
+                        trailingIcon:"https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
+                        isDirty: false,
+                        onLeadingIconTap: {
+                            showMeetingResultsSheet = false
+                            showOnboardingSheet = false
+                            showMeetingSearchSheet = true
+                        },
+                        onTrailingIconTap: {
+                            print("User profile tapped")
+                        },
+                        onContainerTap: {
+                            showMeetingResultsSheet = false
+                            showOnboardingSheet = false
+                            showMeetingSearchSheet = true
+                        }
+                    )
+                    .padding()
+                    .frame( height: 60)
+                    .background(Color.white)
+                    .cornerRadius(34)
+                    .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
                 }
                 Spacer()
-            }
+            }.padding()
+                .zIndex(3)
+            
+            
+            
 
             // MARK: - Onboarding Sheet
             if showOnboardingSheet {
                 VStack {
-                    OnboardingSheetView(viewModel: viewModel, isLocationAllowed: $viewModel.isLocationAccessGranted)
-                        .cornerRadius(16)
-                        .shadow(radius: 30)
-                        .background(Color(.tertiarySystemBackground).opacity(0.9))
+                    OnboardingSheetView(viewModel: viewModel, isLocationAllowed: $viewModel.isLocationAccessGranted, searchRequest: $showMeetingSearchSheet)
+           
+                        .background(Color(.tertiarySystemBackground))
+                      
+                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
                         .offset(y: BottomSheetOffset / 2)
                         .gesture(smoothDragGesture())
                 }
@@ -127,17 +176,37 @@ struct MeepAppView: View {
             if showMeetingResultsSheet {
                 VStack {
                     MeetingResultsSheetView(viewModel: viewModel)
-                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 16 : 0)
-                        .shadow(radius: BottomSheetOffset == BottomSheetMinHeight ? 0 : 30)
                         .background(
                             Color(.tertiarySystemBackground)
-                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.5)
+                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
                         )
+                    
+                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
                         .offset(y: BottomSheetOffset)
                         .gesture(smoothDragGesture())
                 }
                 .zIndex(1)
             }
+            
+            
+            // MARK: - Meeting Search Sheet
+            if showMeetingSearchSheet {
+                VStack {
+                    MeetingSearchSheetView(
+                        viewModel: viewModel,
+                        isSearchActive: $showMeetingSearchSheet
+                    )
+                    .background(Color(.tertiarySystemBackground))
+                    .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                    .shadow(color: Color.black.opacity(0.2), radius: 30, x: 0, y: 3)
+                    .offset(y: BottomSheetOffset/2)
+                    .gesture(smoothDragGesture())
+                }
+                .zIndex(1)
+            }
+
+            
 
             // MARK: - Floating Card for Selected Point
             if let selectedPoint = viewModel.selectedPoint,
