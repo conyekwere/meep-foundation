@@ -99,7 +99,7 @@ struct MeepAppView: View {
             
             // MARK: - SearchBarWithAction
             VStack {
-                if searchInputDirty {
+                if showMeetingResultsSheet {
                     SearchBarWithAction(
                         title: "35 Meeting Points",
                         subtitle: "777 Broadway · 210 E 121st St",
@@ -122,8 +122,29 @@ struct MeepAppView: View {
                     .cornerRadius(34)
                     .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
                 }
-                else{
+                if  showMeetingSearchSheet {
+                    
+                    HStack {
+                        Button(action: {
+                            showMeetingResultsSheet = false
+                            showOnboardingSheet = true
+                            showMeetingSearchSheet = false
+                        })  {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16))
+                                .foregroundColor(Color(.gray))
+                                .frame(width: 60, height: 60)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                                .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
 
+                        }
+                        
+                        Spacer()
+                    }
+                    
+                }
+                if showOnboardingSheet  {
                     SearchBarWithAction(
                         title: "Find where to meet",
                         subtitle: "My Location · Friends location",
