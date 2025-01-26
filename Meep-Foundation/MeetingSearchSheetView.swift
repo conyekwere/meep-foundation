@@ -14,15 +14,14 @@ struct MeetingSearchSheetView: View {
     @Binding var isSearchActive: Bool
     @FocusState private var isMyLocationFocused: Bool
     @FocusState private var isFriendsLocationFocused: Bool
+    @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(spacing: 40) {
-            // Drag Handle
-            Capsule()
-                .frame(width: 40, height: 5)
-                .foregroundColor(Color(.lightGray).opacity(0.4))
-                .padding(.top, 8)
         
+        NavigationStack {
+            VStack(spacing: 40) {
 
+                
+                
                 VStack(spacing: 0) {
                     
                     // My Location Input Row
@@ -72,91 +71,132 @@ struct MeetingSearchSheetView: View {
                     )
                     .padding(.horizontal, 16)
                 
-  
-            
-            
-            
-            
-            // Suggestion Buttons Section
-            ScrollView(.horizontal, showsIndicators: false){
-                HStack(spacing: 24) {
-                    
-                    SuggestionButton(icon: "house", title: "Set location", label: "Home", action: {
-                        print("Home tapped")
-                    })
-                    
-                    SuggestionButton(icon: "briefcase", title: "Set location", label: "Work", action: {
-                        print("Work tapped")
-                    })
-                    SuggestionButton(icon: "ellipsis", title: "", label: "More", action: {
-                        print("More tapped")
-                    })
-                }
-                .padding(.horizontal, 16)
                 
-            }
-            .scrollTargetLayout()
-            .safeAreaPadding(.trailing, 16)
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled(true)
-            
-            if isMyLocationFocused {
-                // Current Location Section
+                
+                
+                
+                
+                // Suggestion Buttons Section
+                ScrollView(.horizontal, showsIndicators: false){
+                    HStack(spacing: 24) {
+                        
+                        SuggestionButton(icon: "house", title: "Set location", label: "Home", action: {
+                            print("Home tapped")
+                        })
+                        
+                        SuggestionButton(icon: "briefcase", title: "Set location", label: "Work", action: {
+                            print("Work tapped")
+                        })
+                        SuggestionButton(icon: "ellipsis", title: "", label: "More", action: {
+                            print("More tapped")
+                        })
+                    }
+                    .padding(.horizontal, 16)
+                    
+                }
+                .scrollTargetLayout()
+                .safeAreaPadding(.trailing, 16)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled(true)
+                
+                if isMyLocationFocused {
+                    // Current Location Section
+                    Button(action: {
+                        print("Current Location selected")
+                    }) {
+                        HStack(spacing:16) {
+                            
+                            Image(systemName: "location.fill")
+                                .font(.callout)
+                                .foregroundColor(.blue)
+                                .frame(width: 40, height: 40)
+                                .background(Color(hex: "E8F0FE"))
+                                .clipShape(Circle())
+                            
+                            Text("Current Location")
+                                .foregroundColor(.primary)
+                                .font(.body)
+                        }
+                        
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                }
+                // Ask for a Friend's Location Section
                 Button(action: {
-                    print("Current Location selected")
+                    print("Ask for Friend's Location selected")
                 }) {
                     HStack(spacing:16) {
                         
-                        Image(systemName: "location.fill")
+                        Image(systemName: "message.fill")
                             .font(.callout)
                             .foregroundColor(.blue)
                             .frame(width: 40, height: 40)
                             .background(Color(hex: "E8F0FE"))
                             .clipShape(Circle())
                         
-                        Text("Current Location")
+                        Text("Ask for a Friend's Location")
                             .foregroundColor(.primary)
                             .font(.body)
                     }
-                    
                     .padding(.horizontal, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                
+                Spacer()
             }
-            // Ask for a Friend's Location Section
-            Button(action: {
-                print("Ask for Friend's Location selected")
-            }) {
-                HStack(spacing:16) {
-
-                    Image(systemName: "message.fill")
-                        .font(.callout)
-                        .foregroundColor(.blue)
-                        .frame(width: 40, height: 40)
-                        .background(Color(hex: "E8F0FE"))
-                        .clipShape(Circle())
-                    
-                    Text("Ask for a Friend's Location")
-                        .foregroundColor(.primary)
-                        .font(.body)
+            .padding(.bottom, 8)
+            .background(Color(.systemBackground))
+            .ignoresSafeArea(edges: .bottom)
+            .onAppear {
+                // Automatically focus on "My Location" when the view appears
+                if isSearchActive {
+                    isMyLocationFocused = true
                 }
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Spacer()
-        }
-        .padding(.bottom, 8)
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
-        .ignoresSafeArea(edges: .bottom)
-        .onAppear {
-            // Automatically focus on "My Location" when the view appears
-            if isSearchActive {
-                isMyLocationFocused = true
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: {
+                        print("DEBUG: Back Button Tapped")
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(12)
+                            .font(.system(size: 12))
+                            .frame(width: 40, height: 40, alignment: .center)
+    
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 30)
+                                    .stroke(Color(.systemGray6), lineWidth: 2)
+                            )
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("Set meeting point")
+                            .font(.title2)
+                            .fontWidth(.expanded)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary) // Explicitly set the color
+                    }
+                    .padding(.top, 8)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Text("Done")
+                            .foregroundColor(.primary) // Apply the foreground color to the Text
+                    }
+                }
             }
         }
+
+ 
     }
 }
 
