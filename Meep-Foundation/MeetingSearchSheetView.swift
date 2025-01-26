@@ -15,15 +15,13 @@ struct MeetingSearchSheetView: View {
     @FocusState private var isMyLocationFocused: Bool
     @FocusState private var isFriendsLocationFocused: Bool
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 40) {
             // Drag Handle
             Capsule()
                 .frame(width: 40, height: 5)
                 .foregroundColor(Color(.lightGray).opacity(0.4))
                 .padding(.top, 8)
-            
-            
-            
+        
 
                 VStack(spacing: 0) {
                     
@@ -80,57 +78,73 @@ struct MeetingSearchSheetView: View {
             
             
             // Suggestion Buttons Section
-            HStack(spacing: 16) {
-                SuggestionButton(icon: "house.fill", label: "Home", action: {
-                    print("Home tapped")
-                })
-                SuggestionButton(icon: "briefcase.fill", label: "Work", action: {
-                    print("Work tapped")
-                })
-                SuggestionButton(icon: "ellipsis.circle", label: "More", action: {
-                    print("More tapped")
-                })
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            
-            Divider()
+            ScrollView(.horizontal, showsIndicators: false){
+                HStack(spacing: 24) {
+                    
+                    SuggestionButton(icon: "house", title: "Set location", label: "Home", action: {
+                        print("Home tapped")
+                    })
+                    
+                    SuggestionButton(icon: "briefcase", title: "Set location", label: "Work", action: {
+                        print("Work tapped")
+                    })
+                    SuggestionButton(icon: "ellipsis", title: "", label: "More", action: {
+                        print("More tapped")
+                    })
+                }
                 .padding(.horizontal, 16)
+                
+            }
+            .scrollTargetLayout()
+            .safeAreaPadding(.trailing, 16)
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled(true)
+            
             
             // Current Location Section
             Button(action: {
                 print("Current Location selected")
             }) {
-                HStack {
+                HStack(spacing:16) {
+
                     Image(systemName: "location.fill")
-                        .foregroundColor(Color.blue)
+                        .font(.callout)
+                        .foregroundColor(.blue)
+                        .frame(width: 40, height: 40)
+                        .background(Color(hex: "E8F0FE"))
+                        .clipShape(Circle())
+                    
                     Text("Current Location")
                         .foregroundColor(.primary)
-                        .font(.headline)
+                        .font(.body)
                 }
-                .padding(.vertical, 12)
+             
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            Divider()
-                .padding(.horizontal, 16)
             
             // Ask for a Friend's Location Section
             Button(action: {
                 print("Ask for Friend's Location selected")
             }) {
-                HStack {
+                HStack(spacing:16) {
+
                     Image(systemName: "message.fill")
-                        .foregroundColor(Color.blue)
+                        .font(.callout)
+                        .foregroundColor(.blue)
+                        .frame(width: 40, height: 40)
+                        .background(Color(hex: "E8F0FE"))
+                        .clipShape(Circle())
+                    
                     Text("Ask for a Friend's Location")
                         .foregroundColor(.primary)
-                        .font(.headline)
+                        .font(.body)
                 }
-                .padding(.vertical, 12)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            Spacer()
         }
         .padding(.bottom, 8)
         .background(Color(.systemBackground))
@@ -198,22 +212,39 @@ struct SearchTextFieldRow: View {
 // Suggestion Button
 struct SuggestionButton: View {
     let icon: String
+    let title: String
     let label: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.title2)
+                    .font(.callout)
                     .foregroundColor(.blue)
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(.primary)
+                 
+                    .foregroundColor(Color(.gray))
+                    .frame(width: 40, height: 40)
+                    .background(Color(hex: "E8F0FE"))
+                    .clipShape(Circle())
+                   
+                if title.isEmpty{
+                    Text(label)
+                        .font(.callout)
+                        .foregroundColor(.primary)
+                }
+                else{
+                    VStack(alignment: .leading) {
+                        Text(label)
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        Text(title)
+                            .font(.callout)
+                            .foregroundColor(Color(.darkGray))
+                    }
+                }
+                
             }
-            .padding()
-            .background(Color(.systemGray6).opacity(0.6))
-            .cornerRadius(10)
         }
     }
 }
