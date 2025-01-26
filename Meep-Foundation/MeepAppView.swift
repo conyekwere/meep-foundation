@@ -94,10 +94,21 @@ struct MeepAppView: View {
             .onAppear {
                 viewModel.requestUserLocation()
             }
+            
+            // MARK: - Meeting Search Sheet
+            
             .fullScreenCover(isPresented: $showMeetingSearchSheet) {
                 MeetingSearchSheetView(
                     viewModel: viewModel,
-                    isSearchActive: $showMeetingSearchSheet
+                    isSearchActive: $showMeetingSearchSheet, onDismiss: {
+                        showMeetingSearchSheet = false
+                        showOnboardingSheet = true
+                        showMeetingResultsSheet = false
+                    }, onDone: {
+                        showMeetingSearchSheet = false
+                        showOnboardingSheet = false
+                        showMeetingResultsSheet = true
+                    }
                 )
                 .background(Color(.tertiarySystemBackground))
             }
@@ -128,28 +139,7 @@ struct MeepAppView: View {
                     .cornerRadius(34)
                     .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
                 }
-                if  showMeetingSearchSheet {
-                    
-                    HStack {
-                        Button(action: {
-                            showMeetingResultsSheet = false
-                            showOnboardingSheet = true
-                            showMeetingSearchSheet = false
-                        })  {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16))
-                                .foregroundColor(Color(.gray))
-                                .frame(width: 60, height: 60)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                                .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)), radius:16, x:0, y:3)
 
-                        }
-                        
-                        Spacer()
-                    }
-                    
-                }
                 if showOnboardingSheet  {
                     SearchBarWithAction(
                         title: "Find where to meet",
@@ -202,36 +192,20 @@ struct MeepAppView: View {
             // MARK: - Meeting Results Sheet
             if showMeetingResultsSheet {
                 VStack {
-//                    MeetingResultsSheetView(viewModel: viewModel)
-//                        .background(
-//                            Color(.tertiarySystemBackground)
-//                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
-//                        )
-//                    
-//                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
-//                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
-//                        .offset(y: BottomSheetOffset)
-//                        .gesture(smoothDragGesture())
+                    MeetingResultsSheetView(viewModel: viewModel)
+                        .background(
+                            Color(.tertiarySystemBackground)
+                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
+                        )
+                    
+                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
+                        .offset(y: BottomSheetOffset)
+                        .gesture(smoothDragGesture())
                 }
                 .zIndex(1)
             }
             
-            
-            // MARK: - Meeting Search Sheet
-            if showMeetingSearchSheet {
-                VStack {
-                    MeetingSearchSheetView(
-                        viewModel: viewModel,
-                        isSearchActive: $showMeetingSearchSheet
-                    )
-                    .background(Color(.tertiarySystemBackground))
-                    .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
-                    .shadow(color: Color.black.opacity(0.2), radius: 30, x: 0, y: 3)
-                    .offset(y: BottomSheetOffset/2)
-                    .gesture(smoothDragGesture())
-                }
-                .zIndex(1)
-            }
 
             
 
