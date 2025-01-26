@@ -94,7 +94,13 @@ struct MeepAppView: View {
             .onAppear {
                 viewModel.requestUserLocation()
             }
-            
+            .fullScreenCover(isPresented: $showMeetingSearchSheet) {
+                MeetingSearchSheetView(
+                    viewModel: viewModel,
+                    isSearchActive: $showMeetingSearchSheet
+                )
+                .background(Color(.tertiarySystemBackground))
+            }
             
             
             // MARK: - SearchBarWithAction
@@ -196,16 +202,16 @@ struct MeepAppView: View {
             // MARK: - Meeting Results Sheet
             if showMeetingResultsSheet {
                 VStack {
-                    MeetingResultsSheetView(viewModel: viewModel)
-                        .background(
-                            Color(.tertiarySystemBackground)
-                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
-                        )
-                    
-                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
-                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
-                        .offset(y: BottomSheetOffset)
-                        .gesture(smoothDragGesture())
+//                    MeetingResultsSheetView(viewModel: viewModel)
+//                        .background(
+//                            Color(.tertiarySystemBackground)
+//                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
+//                        )
+//                    
+//                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
+//                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
+//                        .offset(y: BottomSheetOffset)
+//                        .gesture(smoothDragGesture())
                 }
                 .zIndex(1)
             }
