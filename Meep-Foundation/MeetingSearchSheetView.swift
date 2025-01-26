@@ -14,14 +14,13 @@ struct MeetingSearchSheetView: View {
     @Binding var isSearchActive: Bool
     @FocusState private var isMyLocationFocused: Bool
     @FocusState private var isFriendsLocationFocused: Bool
-    @Environment(\.dismiss) private var dismiss
+    var onDismiss: () -> Void
+    
+    var onDone: () -> Void
     var body: some View {
         
         NavigationStack {
             VStack(spacing: 40) {
-
-                
-                
                 VStack(spacing: 0) {
                     
                     // My Location Input Row
@@ -158,7 +157,7 @@ struct MeetingSearchSheetView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: {
                         print("DEBUG: Back Button Tapped")
-                        dismiss()
+                        onDismiss()
                     }) {
                         Image(systemName: "chevron.left")
                             .resizable()
@@ -166,7 +165,8 @@ struct MeetingSearchSheetView: View {
                             .padding(12)
                             .font(.system(size: 12))
                             .frame(width: 40, height: 40, alignment: .center)
-    
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(.gray))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30)
                                     .stroke(Color(.systemGray6), lineWidth: 2)
@@ -178,7 +178,7 @@ struct MeetingSearchSheetView: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
                         Text("Set meeting point")
-                            .font(.title2)
+                            .font(.headline)
                             .fontWidth(.expanded)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary) // Explicitly set the color
@@ -187,16 +187,14 @@ struct MeetingSearchSheetView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        dismiss()
+                        onDone()
                     }) {
                         Text("Done")
-                            .foregroundColor(.primary) // Apply the foreground color to the Text
+                            .foregroundColor(.primary)
                     }
                 }
             }
         }
-
- 
     }
 }
 
@@ -290,5 +288,10 @@ struct SuggestionButton: View {
 }
 
 #Preview {
-    MeetingSearchSheetView(viewModel: MeepViewModel(), isSearchActive: .constant(false))
+    MeetingSearchSheetView(viewModel: MeepViewModel(), isSearchActive: .constant(false),
+                           onDismiss: {
+                               print("Back button tapped")
+                           },onDone: {
+                               print("Done  tapped")
+                           } )
 }
