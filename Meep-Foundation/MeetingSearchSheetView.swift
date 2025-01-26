@@ -100,30 +100,30 @@ struct MeetingSearchSheetView: View {
             .scrollIndicators(.hidden)
             .scrollClipDisabled(true)
             
-            
-            // Current Location Section
-            Button(action: {
-                print("Current Location selected")
-            }) {
-                HStack(spacing:16) {
-
-                    Image(systemName: "location.fill")
-                        .font(.callout)
-                        .foregroundColor(.blue)
-                        .frame(width: 40, height: 40)
-                        .background(Color(hex: "E8F0FE"))
-                        .clipShape(Circle())
+            if isMyLocationFocused {
+                // Current Location Section
+                Button(action: {
+                    print("Current Location selected")
+                }) {
+                    HStack(spacing:16) {
+                        
+                        Image(systemName: "location.fill")
+                            .font(.callout)
+                            .foregroundColor(.blue)
+                            .frame(width: 40, height: 40)
+                            .background(Color(hex: "E8F0FE"))
+                            .clipShape(Circle())
+                        
+                        Text("Current Location")
+                            .foregroundColor(.primary)
+                            .font(.body)
+                    }
                     
-                    Text("Current Location")
-                        .foregroundColor(.primary)
-                        .font(.body)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-             
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                
             }
-            
-            
             // Ask for a Friend's Location Section
             Button(action: {
                 print("Ask for Friend's Location selected")
