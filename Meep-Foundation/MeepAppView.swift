@@ -12,61 +12,112 @@ struct MeepAppView: View {
     @State private var showOnboardingSheet: Bool = true
     @State private var showMeetingResultsSheet: Bool = false
     @State private var showMeetingSearchSheet: Bool = false
-    @State private var searchInputDirty:Bool = false
 
     // Define heights for snapping points
     private let BottomSheetMinHeight: CGFloat = 50
-    private let BottomSheetMiddleHeight: CGFloat = UIScreen.main.bounds.height * 0.4
+    private let BottomSheetMiddleHeight: CGFloat = UIScreen.main.bounds.height * 0.5
     private let BottomSheetMaxHeight: CGFloat = UIScreen.main.bounds.height * 0.8
 
-    @State private var BottomSheetOffset: CGFloat = UIScreen.main.bounds.height * 0.82 // Start at bottom height
-    @State private var lastDragOffset: CGFloat = UIScreen.main.bounds.height * 0.82 // Keep track of the last valid drag position
+    // Independent offsets for each sheet
+    @State private var OnboardingSheetOffset: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var lastOnboardingDragOffset: CGFloat = UIScreen.main.bounds.height * 0.5
 
-    private func smoothDragGesture() -> some Gesture {
+    @State private var MeetingResultsSheetOffset: CGFloat = UIScreen.main.bounds.height * 0.82
+    @State private var lastResultsDragOffset: CGFloat = UIScreen.main.bounds.height * 0.82
+
+    // MARK: - Gestures
+    
+    
+    private func onboardingDragGesture() -> some Gesture {
         DragGesture()
             .onChanged { value in
-                // Limit rapid updates for smooth movement
-                let newOffset = lastDragOffset + value.translation.height
+                let newOffset = lastOnboardingDragOffset + value.translation.height
                 if newOffset >= BottomSheetMinHeight && newOffset <= BottomSheetMaxHeight {
-                    BottomSheetOffset = newOffset
+                    OnboardingSheetOffset = newOffset
                 }
             }
             .onEnded { value in
                 let dragAmount = value.translation.height
+                let threshold = UIScreen.main.bounds.height * 0.15 // Sensitivity threshold for snapping
 
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.75, blendDuration: 1)) {
-                    // Snap to nearest snapping point
-                    if dragAmount < -50 {
-                        // Dragging up
-                        if BottomSheetOffset <= BottomSheetMiddleHeight {
-                            BottomSheetOffset = BottomSheetMinHeight // Snap to collapsed
+                    if dragAmount < -threshold {
+                        // Dragging up: Snap to the closest higher position
+                        if OnboardingSheetOffset <= BottomSheetMiddleHeight {
+                            OnboardingSheetOffset = BottomSheetMinHeight
                         } else {
-                            BottomSheetOffset = BottomSheetMiddleHeight // Snap to middle
+                            OnboardingSheetOffset = BottomSheetMiddleHeight
                         }
-                    } else if dragAmount > 50 {
-                        // Dragging down
-                        if BottomSheetOffset >= BottomSheetMiddleHeight {
-                            BottomSheetOffset = BottomSheetMaxHeight // Snap to expanded
+                    } else if dragAmount > threshold {
+                        // Dragging down: Snap to the closest lower position
+                        if OnboardingSheetOffset >= BottomSheetMiddleHeight {
+                            OnboardingSheetOffset = BottomSheetMaxHeight
                         } else {
-                            BottomSheetOffset = BottomSheetMiddleHeight // Snap to middle
+                            OnboardingSheetOffset = BottomSheetMiddleHeight
                         }
                     } else {
-                        // Snap to nearest based on the offset
-                        if BottomSheetOffset < BottomSheetMiddleHeight / 2 {
-                            BottomSheetOffset = BottomSheetMinHeight // Snap to collapsed
-                        } else if BottomSheetOffset > BottomSheetMiddleHeight && BottomSheetOffset < BottomSheetMaxHeight {
-                            BottomSheetOffset = BottomSheetMiddleHeight // Snap to middle
+                        // Snap to the **nearest** point based on offset
+                        let middleDistance = abs(OnboardingSheetOffset - BottomSheetMiddleHeight)
+                        let minDistance = abs(OnboardingSheetOffset - BottomSheetMinHeight)
+                        let maxDistance = abs(OnboardingSheetOffset - BottomSheetMaxHeight)
+
+                        if middleDistance < minDistance && middleDistance < maxDistance {
+                            OnboardingSheetOffset = BottomSheetMiddleHeight
+                        } else if minDistance < maxDistance {
+                            OnboardingSheetOffset = BottomSheetMinHeight
                         } else {
-                            BottomSheetOffset = BottomSheetMaxHeight // Snap to expanded
+                            OnboardingSheetOffset = BottomSheetMaxHeight
                         }
                     }
                 }
-
-                // Save the new drag position
-                lastDragOffset = BottomSheetOffset
+                lastOnboardingDragOffset = OnboardingSheetOffset
             }
     }
 
+    private func meetingResultsDragGesture() -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                let newOffset = lastResultsDragOffset + value.translation.height
+                if newOffset >= BottomSheetMinHeight && newOffset <= BottomSheetMaxHeight {
+                    MeetingResultsSheetOffset = newOffset
+                }
+            }
+            .onEnded { value in
+                let dragAmount = value.translation.height
+                let threshold = UIScreen.main.bounds.height * 0.15 // Sensitivity threshold for snapping
+
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75, blendDuration: 1)) {
+                    if dragAmount < -threshold {
+                        if MeetingResultsSheetOffset <= BottomSheetMiddleHeight {
+                            MeetingResultsSheetOffset = BottomSheetMinHeight
+                        } else {
+                            MeetingResultsSheetOffset = BottomSheetMiddleHeight
+                        }
+                    } else if dragAmount > threshold {
+                        if MeetingResultsSheetOffset >= BottomSheetMiddleHeight {
+                            MeetingResultsSheetOffset = BottomSheetMaxHeight
+                        } else {
+                            MeetingResultsSheetOffset = BottomSheetMiddleHeight
+                        }
+                    } else {
+                        let middleDistance = abs(MeetingResultsSheetOffset - BottomSheetMiddleHeight)
+                        let minDistance = abs(MeetingResultsSheetOffset - BottomSheetMinHeight)
+                        let maxDistance = abs(MeetingResultsSheetOffset - BottomSheetMaxHeight)
+
+                        if middleDistance < minDistance && middleDistance < maxDistance {
+                            MeetingResultsSheetOffset = BottomSheetMiddleHeight
+                        } else if minDistance < maxDistance {
+                            MeetingResultsSheetOffset = BottomSheetMinHeight
+                        } else {
+                            MeetingResultsSheetOffset = BottomSheetMaxHeight
+                        }
+                    }
+                }
+                lastResultsDragOffset = MeetingResultsSheetOffset
+            }
+    }
+    
+    
     var body: some View {
         ZStack {
             // MARK: - Map
@@ -178,18 +229,20 @@ struct MeepAppView: View {
 
             // MARK: - Onboarding Sheet
             if showOnboardingSheet {
-                VStack {
-                    OnboardingSheetView(viewModel: viewModel, isLocationAllowed: $viewModel.isLocationAccessGranted, searchRequest: $showMeetingSearchSheet)
-           
-                        .background(Color(.tertiarySystemBackground))
-                      
-                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
-                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
-                        .offset(y: BottomSheetOffset / 2)
-                        .gesture(smoothDragGesture())
-                }
-                .zIndex(2)
-            }
+                 VStack {
+                     OnboardingSheetView(
+                         viewModel: viewModel,
+                         isLocationAllowed: $viewModel.isLocationAccessGranted,
+                         searchRequest: $showMeetingSearchSheet
+                     )
+                     .background(Color(.tertiarySystemBackground))
+                     .cornerRadius(OnboardingSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                     .shadow(color: Color.black.opacity(0.24), radius: OnboardingSheetOffset == BottomSheetMinHeight ? 0 : 30, x: 0, y: 3)
+                     .offset(y: OnboardingSheetOffset)
+                     .gesture(onboardingDragGesture())
+                 }
+                 .zIndex(2)
+             }
 
             // MARK: - Meeting Results Sheet
             if showMeetingResultsSheet {
@@ -197,13 +250,12 @@ struct MeepAppView: View {
                     MeetingResultsSheetView(viewModel: viewModel)
                         .background(
                             Color(.tertiarySystemBackground)
-                                .opacity(BottomSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
+                                .opacity(MeetingResultsSheetOffset == BottomSheetMinHeight ? 1 : 0.3)
                         )
-                    
-                        .cornerRadius(BottomSheetOffset == BottomSheetMinHeight ? 0 : 24)
-                        .shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.23999999463558197)),radius: (BottomSheetOffset == BottomSheetMinHeight ? 0 : 30), x:0, y:3)
-                        .offset(y: BottomSheetOffset)
-                        .gesture(smoothDragGesture())
+                        .cornerRadius(MeetingResultsSheetOffset == BottomSheetMinHeight ? 0 : 24)
+                        .shadow(color: Color.black.opacity(0.24), radius: MeetingResultsSheetOffset == BottomSheetMinHeight ? 0 : 30, x: 0, y: 3)
+                        .offset(y: MeetingResultsSheetOffset)
+                        .gesture(meetingResultsDragGesture())
                 }
                 .zIndex(1)
             }
