@@ -169,7 +169,7 @@ struct MeetingSearchSheetView: View {
                             .foregroundColor(Color(.gray))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30)
-                                    .stroke(Color(.systemGray6), lineWidth: 2)
+                                    .stroke(Color(.systemGray6),    lineWidth: 2)
                             )
                             .clipShape(Circle())
                     }
