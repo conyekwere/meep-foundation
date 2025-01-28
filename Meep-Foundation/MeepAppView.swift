@@ -124,7 +124,9 @@ struct MeepAppView: View {
                         trailingIcon: "slider.horizontal.3",
                         isDirty: true,
                         onLeadingIconTap: {
-                            print("Back button tapped")
+                            showMeetingSearchSheet = false
+                            showOnboardingSheet = true
+                            showMeetingResultsSheet = false
                         },
                         onTrailingIconTap: {
                             print("Filters tapped")
