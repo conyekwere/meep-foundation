@@ -4,6 +4,7 @@
 //
 //  Created by Chima onyekwere on 1/21/25.
 //
+
 import SwiftUI
 import MapKit
 
@@ -25,6 +26,64 @@ struct MeepAppView: View {
     @State private var MeetingResultsSheetOffset: CGFloat = UIScreen.main.bounds.height * 0.82
     @State private var lastResultsDragOffset: CGFloat = UIScreen.main.bounds.height * 0.82
 
+    
+    
+    // MARK: - geocodeAndSetLocations
+    
+    
+    private func geocodeAndSetLocations(userAddress: String, friendAddress: String) {
+            let group = DispatchGroup()
+            let geocoder = CLGeocoder()
+            
+            var userCoord: CLLocationCoordinate2D?
+            var friendCoord: CLLocationCoordinate2D?
+            
+            // Geocode user address
+            group.enter()
+            geocoder.geocodeAddressString(userAddress) { placemarks, error in
+                defer { group.leave() }
+                guard error == nil,
+                      let first = placemarks?.first,
+                      let coordinate = first.location?.coordinate else {
+                    print("Failed to geocode user address:", error?.localizedDescription ?? "Unknown Error")
+                    return
+                }
+                userCoord = coordinate
+            }
+            
+            // Geocode friend address
+            group.enter()
+            geocoder.geocodeAddressString(friendAddress) { placemarks, error in
+                defer { group.leave() }
+                guard error == nil,
+                      let first = placemarks?.first,
+                      let coordinate = first.location?.coordinate else {
+                    print("Failed to geocode friend address:", error?.localizedDescription ?? "Unknown Error")
+                    return
+                }
+                friendCoord = coordinate
+            }
+            
+            // Once both geocoding calls complete...
+            group.notify(queue: .main) {
+                // Make sure we have both coordinates
+                if let u = userCoord, let f = friendCoord {
+                    // 2) Update locations in MeepViewModel
+                    viewModel.userLocation = u
+                    viewModel.friendLocation = f
+                    // The Combine pipeline in MeepViewModel will auto-sort
+                    // meetingPoints by the new midpoint and re-center the map.
+                    
+                    // 3) Show your results sheet
+                    showMeetingResultsSheet = true
+                    showOnboardingSheet = false
+                } else {
+                    // Handle geocoding failure if needed
+                    print("Could not get valid coordinates for both addresses.")
+                }
+            }
+        }
+        
     // MARK: - Gestures
     
     
@@ -209,9 +268,19 @@ struct MeepAppView: View {
                             print("User profile tapped")
                         },
                         onContainerTap: {
-                            showMeetingResultsSheet = false
+                            // MARK: - 2) Perform the geocoding when the user taps the container
+                                    geocodeAndSetLocations(
+                                        userAddress: "210 e 121st st new york ny 10035",
+                                        friendAddress: "770 Broadway, New York, NY 10003"
+                                    )
+                            
+                            
+                            viewModel.userLocation = CLLocationCoordinate2D(latitude: 40.80129, longitude: -73.93684)
+                            viewModel.friendLocation = CLLocationCoordinate2D(latitude: 40.729713, longitude: -73.992796)
+                            
+                            // Now show the results
+                            showMeetingResultsSheet = true
                             showOnboardingSheet = false
-                            showMeetingSearchSheet = true
                         }
                     )
                     .padding()
