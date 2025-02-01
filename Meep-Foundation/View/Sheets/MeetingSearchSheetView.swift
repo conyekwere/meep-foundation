@@ -15,7 +15,6 @@ struct MeetingSearchSheetView: View {
     @FocusState private var isMyLocationFocused: Bool
     @FocusState private var isFriendsLocationFocused: Bool
     var onDismiss: () -> Void
-    
     var onDone: () -> Void
     var body: some View {
         
@@ -69,11 +68,6 @@ struct MeetingSearchSheetView: View {
                             .strokeBorder( Color(#colorLiteral(red: 0.971, green: 0.971, blue: 0.971, alpha: 1)), lineWidth: 2)
                     )
                     .padding(.horizontal, 16)
-                
-                
-                
-                
-                
                 
                 // Suggestion Buttons Section
                 ScrollView(.horizontal, showsIndicators: false){
@@ -150,7 +144,7 @@ struct MeetingSearchSheetView: View {
             .onAppear {
                 // Automatically focus on "My Location" when the view appears
                 if isSearchActive {
-                    isMyLocationFocused = true
+                    isFriendsLocationFocused = true
                 }
             }
             .toolbar {
@@ -187,7 +181,10 @@ struct MeetingSearchSheetView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        onDone()
+                        // Call the view model's geocoding function with the input addresses.
+                         viewModel.geocodeAndSetLocations(userAddress: myLocation, friendAddress: friendLocation)
+                         // After starting the geocoding, call onDone() to dismiss the search view.
+                         onDone()
                     }) {
                         Text("Done")
                             .foregroundColor(.primary)
@@ -198,94 +195,6 @@ struct MeetingSearchSheetView: View {
     }
 }
 
-
-
-// Text Field Row
-struct SearchTextFieldRow: View {
-    let leadingIcon: String
-    let title: String
-    let placeholder: String
-    let trailingIcon: String
-    @Binding var text: String
-    let isDirty: Bool
-    let onTrailingIconTap: () -> Void
-
-    var body: some View {
-
-            HStack(spacing: 16) {
-                
-                Image(systemName: leadingIcon)
-                    .foregroundColor(isDirty ?  .blue : Color(.label).opacity(0.4)  )
-                    .font(.headline)
-                    .padding(.leading, 16)
-
-                ZStack(alignment: .leading) {
-                    TextField(placeholder, text: $text)
-                        .foregroundColor(.primary)
-                        .frame(height: 50, alignment: .leading)
-                        .offset(y:2)
-                        .padding(.vertical, 16)
-                        .zIndex(1)
-                    Text(title)
-                        .font(.caption)
-                        .fontWidth(.expanded)
-                        .foregroundColor(Color(.darkGray))
-                        .offset(y:-20)
-                        .frame(alignment: .leading)
-                }
-                Button(action: {
-                    onTrailingIconTap()
-                }) {
-                    
-                    Image(systemName: trailingIcon)
-                        .foregroundColor( Color(.label).opacity(0.4))
-                        .font(.headline)
-                        .padding(.trailing, 16)
-                }
-            }
-
-    }
-}
-
-// Suggestion Button
-struct SuggestionButton: View {
-    let icon: String
-    let title: String
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.callout)
-                    .foregroundColor(.blue)
-                 
-                    .foregroundColor(Color(.gray))
-                    .frame(width: 40, height: 40)
-                    .background(Color(hex: "E8F0FE"))
-                    .clipShape(Circle())
-                   
-                if title.isEmpty{
-                    Text(label)
-                        .font(.callout)
-                        .foregroundColor(.primary)
-                }
-                else{
-                    VStack(alignment: .leading) {
-                        Text(label)
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Text(title)
-                            .font(.callout)
-                            .foregroundColor(Color(.darkGray))
-                    }
-                }
-                
-            }
-        }
-    }
-}
 
 #Preview {
     MeetingSearchSheetView(viewModel: MeepViewModel(), isSearchActive: .constant(false),
