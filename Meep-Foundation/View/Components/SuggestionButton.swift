@@ -33,7 +33,7 @@ struct SuggestionButton: View {
                 else{
                     VStack(alignment: .leading) {
                         Text(label)
-                            .font(.subheadline)
+                            .font(.body)
                             .foregroundColor(.primary)
                         Text(title)
                             .font(.callout)
