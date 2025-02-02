@@ -47,7 +47,7 @@ struct MeepAppView: View {
             .fullScreenCover(isPresented: Binding(get: {
                 uiState == .searching
             }, set: { newValue in
-                if !newValue { uiState = .onboarding }
+                if !newValue { uiState = .results }
             })) {
                 MeetingSearchSheetView(
                     viewModel: viewModel,
@@ -69,7 +69,7 @@ struct MeepAppView: View {
                         isDirty: true,
                         onLeadingIconTap: { uiState = .onboarding },
                         onTrailingIconTap: { print("Filters tapped") },
-                        onContainerTap: { print("Edit Search Bar tapped") }
+                        onContainerTap: { uiState = .searching }
                     )
                     .padding()
                     .frame(height: 60)
@@ -90,13 +90,7 @@ struct MeepAppView: View {
                         onContainerTap: {
                             // Trigger geocoding (here with hardcoded addresses for example)
                             
-                            viewModel.userLocation = CLLocationCoordinate2D(latitude: 40.80129, longitude: -73.93684)
-                                  viewModel.friendLocation = CLLocationCoordinate2D(latitude: 40.729713, longitude: -73.992796)
-                            
-                            
-                            viewModel.geocodeAndSetLocations(userAddress: "210 e 121st st new york ny 10035",
-                                                             friendAddress: "770 Broadway, New York, NY 10003")
-                            uiState = .results
+                            uiState = .searching
                         }
                     )
                     .padding()
