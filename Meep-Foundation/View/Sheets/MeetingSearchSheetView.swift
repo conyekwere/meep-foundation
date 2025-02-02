@@ -224,15 +224,33 @@ struct MeetingSearchSheetView: View {
                     // if myLocation   && friendLocation is valid address
                     if isMyLocationValid && isFriendsLocationValid {
                         Button(action: {
-                            // Trigger geocoding with the input addresses.
-                            
-                            viewModel.geocodeAndSetLocations(userAddress: myLocation, friendAddress: friendLocation)
-                            onDone()
+                            // Forward geocode the "My Location" address.
+                            viewModel.geocodeAddress(myLocation) { userCoord in
+                                guard let userCoord = userCoord else {
+                                    print("Failed to geocode My Location")
+                                    return
+                                }
+                                viewModel.userLocation = userCoord
+                                
+                                // Then, forward geocode the "Friend's Location" address.
+                                viewModel.geocodeAddress(friendLocation) { friendCoord in
+                                    guard let friendCoord = friendCoord else {
+                                        print("Failed to geocode Friend's Location")
+                                        return
+                                    }
+                                    viewModel.friendLocation = friendCoord
+                                    
+                                    
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    onDone()
+                                }
+                            }
                         }) {
                         Text("Done")
                             .foregroundColor(.primary)
+                        }
                     }
-                }
                 }
             }
             .onAppear {
@@ -247,8 +265,12 @@ struct MeetingSearchSheetView: View {
                         if let placemark = placemarks?.first, error == nil {
                             let address = [
                                 placemark.name,
+//                                placemark.thoroughfare,
+//                                placemark.subThoroughfare,
                                 placemark.locality,
-                                placemark.administrativeArea
+                                placemark.administrativeArea,
+//                                placemark.postalCode,
+//                                placemark.country
                             ]
                             .compactMap { $0 }
                             .joined(separator: ", ")
@@ -272,17 +294,6 @@ struct MeetingSearchSheetView: View {
                 mySearchCompleter.updateQuery(newValue)
                 // Validate "My Location" based on autocomplete suggestions.
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if trimmed.count >= 5, !mySearchCompleter.completions.isEmpty {
-                    let valid = mySearchCompleter.completions.contains { suggestion in
-                        let suggestionAddress = "\(suggestion.title) \(suggestion.subtitle)"
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                            .lowercased()
-                        return suggestionAddress.contains(trimmed) || trimmed.contains(suggestionAddress)
-                    }
-                    isMyLocationValid = valid
-                } else {
-                    isMyLocationValid = false
-                }
             }
             .onChange(of: friendLocation) { newValue in
                 friendSearchCompleter.updateQuery(newValue)
