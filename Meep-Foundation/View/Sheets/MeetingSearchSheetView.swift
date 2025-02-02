@@ -9,6 +9,7 @@ import SwiftUI
 import CoreLocation
 import MapKit
 
+
 struct MeetingSearchSheetView: View {
     @State private var myLocation: String = ""
     @State private var friendLocation: String = ""
@@ -27,6 +28,13 @@ struct MeetingSearchSheetView: View {
     // Two separate local search completer instances:
     @StateObject private var mySearchCompleter = LocalSearchCompleterDelegate()
     @StateObject private var friendSearchCompleter = LocalSearchCompleterDelegate()
+    
+    
+    @State private var isMyLocationValid: Bool = false
+    @State private var isFriendsLocationValid: Bool = false
+    
+
+    
 
     var body: some View {
         NavigationStack {
@@ -73,87 +81,30 @@ struct MeetingSearchSheetView: View {
                 .padding(.horizontal, 16)
                 
                 
-                if friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 || myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 {
-                    // Autocomplete for "My Location"
-                    if isMyLocationFocused && myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 0 && !mySearchCompleter.completions.isEmpty {
-                        
-                        
-                        ScrollView(.vertical) {
-                            VStack(alignment:.leading,spacing: 24) {
-                                ForEach(mySearchCompleter.completions, id: \.title) { completion in
-                                    Button(action: {
-                                        myLocation = "\(completion.title) \(completion.subtitle)".trimmingCharacters(in: .whitespaces)
-                                        isMyLocationFocused = false
-                                        isFriendsLocationFocused = true
-                                    }) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "mappin.circle")
-                                                .font(.callout)
-                                                .foregroundColor(.blue)
-                                                .frame(width: 40, height: 40)
-                                                .background(Color(hex: "E8F0FE"))
-                                                .clipShape(Circle())
-                                            VStack(alignment: .leading) {
-                                                Text(completion.title)
-                                                    .foregroundColor(.primary)
-                                                    .font(.body)
-                                                Text(completion.subtitle)
-                                                    .font(.callout)
-                                                    .foregroundColor(Color(.darkGray))
-                                                    .lineLimit(1)
-                                            }
-                                        }.padding(.horizontal,16)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
+                // MARK: Autocomplete Section
+                if myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 || friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 {
+                    
+                    if isMyLocationFocused && myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && !mySearchCompleter.completions.isEmpty {
+                        AutocompleteSuggestionsView(
+                            completions: mySearchCompleter.completions,
+                            text: $myLocation,
+                            onSuggestionSelected: {
+                                isMyLocationFocused = false
+                                isFriendsLocationFocused = true
+                                isMyLocationValid = true
                             }
-                            
-                            
-                        }
-                        .scrollIndicators(.hidden)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 24)
-                        
-                        
+                        )
                     }
                     
-                    // Autocomplete for "Friend's Location"
-                    if isFriendsLocationFocused && friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 0 && !friendSearchCompleter.completions.isEmpty {
-                        
-                        ScrollView(.vertical) {
-                            VStack(alignment:.leading,spacing: 24) {
-                                ForEach(friendSearchCompleter.completions, id: \.title) { completion in
-                                    Button(action: {
-                                        friendLocation = "\(completion.title) \(completion.subtitle)".trimmingCharacters(in: .whitespaces)
-                                        isFriendsLocationFocused = false
-                                    }) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "mappin.circle")
-                                                .font(.callout)
-                                                .foregroundColor(.blue)
-                                                .frame(width: 40, height: 40)
-                                                .background(Color(hex: "E8F0FE"))
-                                                .clipShape(Circle())
-                                            VStack(alignment: .leading) {
-                                                Text(completion.title)
-                                                    .foregroundColor(.primary)
-                                                    .font(.body)
-                                                Text(completion.subtitle)
-                                                    .font(.callout)
-                                                    .foregroundColor(Color(.darkGray))
-                                                    .lineLimit(1)
-                                            }
-                                        }.padding(.horizontal,16)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                
-                                }
+                    if isFriendsLocationFocused && friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && !friendSearchCompleter.completions.isEmpty {
+                        AutocompleteSuggestionsView(
+                            completions: friendSearchCompleter.completions,
+                            text: $friendLocation,
+                            onSuggestionSelected: {
+                                isFriendsLocationFocused = false
+                                isFriendsLocationValid = true
                             }
-                        
-                        }
-                        .scrollIndicators(.hidden)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 24)
+                        )
                     }
                 }
                 
@@ -174,7 +125,7 @@ struct MeetingSearchSheetView: View {
                         }
                         .padding(.horizontal, 16)
                     }
-                    .padding(.top, 24)
+                    .padding(.top, 40)
                     .scrollTargetLayout()
                     .safeAreaPadding(.trailing, 16)
                     .scrollIndicators(.hidden)
@@ -237,7 +188,7 @@ struct MeetingSearchSheetView: View {
                 }
                 Spacer()
             }
-            .padding(.bottom, 8)
+            .padding(.top, -24)
             .background(Color(.systemBackground))
             .ignoresSafeArea(edges: .bottom)
             .toolbar {
@@ -270,15 +221,18 @@ struct MeetingSearchSheetView: View {
                     .padding(.top, 8)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                   // if myLocation   && friendLocation is valid address
-                    Button(action: {
-                        // Trigger geocoding with the input addresses.
-                        viewModel.geocodeAndSetLocations(userAddress: myLocation, friendAddress: friendLocation)
-                        onDone()
-                    }) {
+                    // if myLocation   && friendLocation is valid address
+                    if isMyLocationValid && isFriendsLocationValid {
+                        Button(action: {
+                            // Trigger geocoding with the input addresses.
+                            
+                            viewModel.geocodeAndSetLocations(userAddress: myLocation, friendAddress: friendLocation)
+                            onDone()
+                        }) {
                         Text("Done")
                             .foregroundColor(.primary)
                     }
+                }
                 }
             }
             .onAppear {
@@ -300,7 +254,9 @@ struct MeetingSearchSheetView: View {
                             .joined(separator: ", ")
                             DispatchQueue.main.async {
                                 myLocation = address
+                                isMyLocationValid = true
                                 isFriendsLocationFocused = true
+                                
                             }
                         } else {
                             myLocation = String(format: "%.4f, %.4f", userLoc.latitude, userLoc.longitude)
@@ -314,9 +270,34 @@ struct MeetingSearchSheetView: View {
             }
             .onChange(of: myLocation) { newValue in
                 mySearchCompleter.updateQuery(newValue)
+                // Validate "My Location" based on autocomplete suggestions.
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if trimmed.count >= 5, !mySearchCompleter.completions.isEmpty {
+                    let valid = mySearchCompleter.completions.contains { suggestion in
+                        let suggestionAddress = "\(suggestion.title) \(suggestion.subtitle)"
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                        return suggestionAddress.contains(trimmed) || trimmed.contains(suggestionAddress)
+                    }
+                    isMyLocationValid = valid
+                } else {
+                    isMyLocationValid = false
+                }
             }
             .onChange(of: friendLocation) { newValue in
                 friendSearchCompleter.updateQuery(newValue)
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if trimmed.count >= 5, !friendSearchCompleter.completions.isEmpty {
+                    let valid = friendSearchCompleter.completions.contains { suggestion in
+                        let suggestionAddress = "\(suggestion.title) \(suggestion.subtitle)"
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                        return suggestionAddress.contains(trimmed) || trimmed.contains(suggestionAddress)
+                    }
+                    isFriendsLocationValid = valid
+                } else {
+                    isFriendsLocationValid = false
+                }
             }
         }
     }
