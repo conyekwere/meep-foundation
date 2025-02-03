@@ -43,10 +43,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // Compute midpoint (fallback to NYC if either value is nil)
     var midpoint: CLLocationCoordinate2D {
-        let uLat = userLocation?.latitude ?? 40.7128
-        let uLon = userLocation?.longitude ?? -74.0060
-        let fLat = friendLocation?.latitude ?? 40.7128
-        let fLon = friendLocation?.longitude ?? -74.0060
+        let uLat = userLocation?.latitude ?? 40.80129
+        let uLon = userLocation?.longitude ?? -73.93684
+        let fLat = friendLocation?.latitude ?? 40.729713
+        let fLon = friendLocation?.longitude ?? -73.992796
         return CLLocationCoordinate2D(latitude: (uLat + fLat) / 2,
                                       longitude: (uLon + fLon) / 2)
     }
@@ -145,41 +145,59 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - Geocoding
     /// Geocode two addresses and update locations.
     func geocodeAndSetLocations(userAddress: String, friendAddress: String) {
-        let group = DispatchGroup()
         let geocoder = CLGeocoder()
         var userCoord: CLLocationCoordinate2D?
         var friendCoord: CLLocationCoordinate2D?
         
+        let group = DispatchGroup()
+        
+        print("Starting geocoding for: \(userAddress) and \(friendAddress)")
+        
+        // Geocode "My Location"
         group.enter()
         geocoder.geocodeAddressString(userAddress) { placemarks, error in
-            defer { group.leave() }
+            if let error = error {
+                print("User location geocode failed: \(error.localizedDescription)")
+            }
             if let placemark = placemarks?.first, let coord = placemark.location?.coordinate {
                 userCoord = coord
+                print("User location geocoded: \(coord.latitude), \(coord.longitude)")
             } else {
-                print("User address error: \(error?.localizedDescription ?? "Unknown error")")
+                print("User address not found.")
             }
+            group.leave()
         }
         
+        // Geocode "Friend's Location"
         group.enter()
         geocoder.geocodeAddressString(friendAddress) { placemarks, error in
-            defer { group.leave() }
+            if let error = error {
+                print("Friend location geocode failed: \(error.localizedDescription)")
+            }
             if let placemark = placemarks?.first, let coord = placemark.location?.coordinate {
                 friendCoord = coord
+                print("Friend location geocoded: \(coord.latitude), \(coord.longitude)")
             } else {
-                print("Friend address error: \(error?.localizedDescription ?? "Unknown error")")
+                print("Friend address not found.")
             }
+            group.leave()
         }
         
+        // Notify when both requests finish
         group.notify(queue: .main) {
-            if let u = userCoord, let f = friendCoord {
-                self.userLocation = u
-                self.friendLocation = f
+            if let userCoord = userCoord, let friendCoord = friendCoord {
+                print("Both locations geocoded successfully.")
+                self.userLocation = userCoord
+                self.friendLocation = friendCoord
+                
+                // Ensure mapRegion updates
+                self.centerMapOnMidpoint()
             } else {
-                print("Could not get valid coordinates for both addresses.")
+                print("Geocoding failed for at least one location.")
             }
         }
     }
-    
+
     /// Geocode a single address string.
     func geocodeAddress(_ address: String, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
         CLGeocoder().geocodeAddressString(address) { placemarks, error in
