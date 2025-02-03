@@ -224,31 +224,38 @@ struct MeetingSearchSheetView: View {
                     // if myLocation   && friendLocation is valid address
                     if isMyLocationValid && isFriendsLocationValid {
                         Button(action: {
-                            // Forward geocode the "My Location" address.
                             viewModel.geocodeAddress(myLocation) { userCoord in
                                 guard let userCoord = userCoord else {
-                                    print("Failed to geocode My Location")
+                                    print("❌ Failed to geocode My Location: \(myLocation)")
                                     return
                                 }
                                 viewModel.userLocation = userCoord
+                                print("✅ My Location geocoded: \(userCoord.latitude), \(userCoord.longitude)")
                                 
-                                // Then, forward geocode the "Friend's Location" address.
+                                
+                                viewModel.reverseGeocodeUserLocation()
+                                
                                 viewModel.geocodeAddress(friendLocation) { friendCoord in
                                     guard let friendCoord = friendCoord else {
-                                        print("Failed to geocode Friend's Location")
+                                        print("❌ Failed to geocode Friend's Location: \(friendLocation)")
                                         return
                                     }
                                     viewModel.friendLocation = friendCoord
+                                    print("✅ Friend's Location geocoded: \(friendCoord.latitude), \(friendCoord.longitude)")
                                     
+                                    DispatchQueue.main.async {
+                                        print("🟢 friendLocation before reverse geocode: \(String(describing: viewModel.friendLocation))")
+                                        
+                                        viewModel.reverseGeocodeFriendLocation()
+                                        
+                                        onDone()
+                                    }
                                     
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    onDone()
                                 }
                             }
                         }) {
-                        Text("Done")
-                            .foregroundColor(.primary)
+                            Text("Done")
+                                .foregroundColor(.primary)
                         }
                     }
                 }

@@ -18,22 +18,57 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
     
+
     @Published var meetingPoints: [MeetingPoint] = [
+        MeetingPoint(name: "McSorley's Old Ale House", distance: 0.8, emoji: "🍺", category: "Bar",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7295, longitude: -73.9890),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+
+        MeetingPoint(name: "Izakaya Toribar", distance: 1.2, emoji: "🍴", category: "Restaurant",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7282, longitude: -73.9921),
+                     imageUrl: "https://example.com/izakaya-toribar.jpg"), // ✅ Fixed missing comma
+
         MeetingPoint(name: "Central Park", distance: 0.5, emoji: "🌳", category: "Park",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7851, longitude: -73.9683)),
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7851, longitude: -73.9683),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+
         MeetingPoint(name: "Joe's Coffee", distance: 1.0, emoji: "☕", category: "Cafe",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7812, longitude: -73.9665)),
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7812, longitude: -73.9665),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+
         MeetingPoint(name: "Museum of Art", distance: 2.0, emoji: "🎨", category: "Museum",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7794, longitude: -73.9632))
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7794, longitude: -73.9632),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg")
     ]
+    
+
+        @Published var categories: [Category] = [
+            Category(emoji: "🌍", name: "All", hidden: false),
+            Category(emoji: "🍴", name: "Restaurant", hidden: false),
+            Category(emoji: "🍺", name: "Bar", hidden: false),
+            Category(emoji: "🌳", name: "Park", hidden: false),
+            Category(emoji: "☕", name: "Cafe", hidden: false),
+        ]
+        
+        @Published var hiddenCategories: [Category] = [
+            Category(emoji: "🎨", name: "Museum", hidden: true),
+            Category(emoji: "🏋️", name: "Gym", hidden: true),
+            Category(emoji: "📚", name: "Library", hidden: true),
+        ]
+    
     
     // MARK: - Filtering & Floating Card
     @Published var selectedCategory: String = "All"
-    @Published var categories: [String] = ["All", "Park", "Cafe", "Museum"]
-    @Published var hiddenCategories: [String] = ["Restaurant", "Gym", "Library"]
+
     
     @Published var selectedPoint: MeetingPoint? = nil
     @Published var isFloatingCardVisible = false
+    
+    
+    
+    @Published var SharableUserLocation: String = "My Location"
+    @Published var SharableFriendLocation: String = "Friend's Location"
+    
     
     // MARK: - Location Properties
     private var locationManager: CLLocationManager?
@@ -141,6 +176,58 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
         ])
     }
+    
+    
+    
+    // Reverse geocode the user's location.
+    func reverseGeocodeUserLocation() {
+        guard let userCoord = userLocation else {
+            print("❌ User location is nil, skipping reverse geocoding")
+            return
+        }
+        
+        let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+        let geocoder = CLGeocoder()
+        
+        geocoder.reverseGeocodeLocation(userLoc) { placemarks, error in
+            DispatchQueue.main.async {
+                if let placemark = placemarks?.first, error == nil {
+                    self.SharableUserLocation = [placemark.name]
+                        .compactMap { $0 }
+                        .joined(separator: ", ")
+                    print("✅ My location updated: \(self.SharableUserLocation)")
+                } else {
+                    print("❌ Error reverse geocoding My Location: \(error?.localizedDescription ?? "Unknown error")")
+                }
+            }
+        }
+    }
+
+    // Reverse geocode the friend's location.
+    func reverseGeocodeFriendLocation() {
+        guard let friendCoord = friendLocation else {
+            print("❌ friendLocation is nil, skipping Friend Location reverse geocode")
+            return
+        }
+        
+        let friendLoc = CLLocation(latitude: friendCoord.latitude, longitude: friendCoord.longitude)
+        let geocoder = CLGeocoder()
+        
+        geocoder.reverseGeocodeLocation(friendLoc) { placemarks, error in
+            DispatchQueue.main.async {
+                if let placemark = placemarks?.first, error == nil {
+                    self.SharableFriendLocation = [placemark.name]
+                        .compactMap { $0 }
+                        .joined(separator: ", ")
+                    print("✅ Friend location updated: \(self.SharableFriendLocation)")
+                } else {
+                    print("❌ Error reverse geocoding Friend Location: \(error?.localizedDescription ?? "Unknown error")")
+                }
+            }
+        }
+    }
+
+
     
     // MARK: - Geocoding
     /// Geocode two addresses and update locations.
