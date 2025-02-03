@@ -53,3 +53,12 @@ struct FilterBarView: View {
         }
     }
 }
+
+#Preview {
+    FilterBarView(
+        selectedCategory: .constant("All"), // Use .constant() for Binding
+        categories: ["All", "Park", "Cafe", "Museum"],
+        hiddenCategories: ["Restaurant", "Gym", "Library"]
+    )
+}
+

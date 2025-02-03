@@ -4,6 +4,13 @@
 //
 //  Created by Chima onyekwere on 1/21/25.
 //
+
+//
+//  MeepAppView.swift
+//  Meep-Foundation
+//
+//  Created by Chima onyekwere on 1/21/25.
+//
 import SwiftUI
 import MapKit
 
@@ -13,7 +20,11 @@ enum UIState {
 
 struct MeepAppView: View {
     @StateObject private var viewModel = MeepViewModel()
+    
+    // Overall UI state for top search bars etc.
     @State private var uiState: UIState = .onboarding
+    // Separate state variable to control the fullScreenCover presentation.
+    @State private var isSearching: Bool = false
 
     // Sheet height constants
     private let sheetMin: CGFloat = 50
@@ -43,17 +54,30 @@ struct MeepAppView: View {
                 viewModel.requestUserLocation()
             }
             
-            // MARK: Full-Screen Search Sheet (Appears when UIState is .searching)
-            .fullScreenCover(isPresented: Binding(get: {
-                uiState == .searching
-            }, set: { newValue in
-                if !newValue { uiState = .results }
-            })) {
+            // MARK: Full-Screen Search Sheet
+            .fullScreenCover(isPresented: $isSearching) {
                 MeetingSearchSheetView(
                     viewModel: viewModel,
                     isSearchActive: .constant(true),
-                    onDismiss: { uiState = .onboarding },
-                    onDone: { uiState = .results }
+                    onDismiss: {
+                        // When dismissing manually, switch to onboarding.
+                        isSearching = false
+                        uiState = .onboarding
+                        
+                        
+                        // Reset the viewModel's locations to clear map annotations.
+                        viewModel.userLocation = nil
+                        viewModel.friendLocation = nil
+
+                        // Reset the shareable location strings to their original values.
+                        viewModel.SharableUserLocation = "My Location"
+                        viewModel.SharableFriendLocation = "Friend's Location"
+                    },
+                    onDone: {
+                        // When done, switch to results.
+                        isSearching = false
+                        uiState = .results
+                    }
                 )
                 .background(Color(.tertiarySystemBackground))
             }
@@ -63,35 +87,34 @@ struct MeepAppView: View {
                 if uiState == .results {
                     SearchBarWithAction(
                         title: "35 Meeting Points",
-                        subtitle: "777 Broadway · 210 E 121st St",
+                        subtitle: "\(viewModel.SharableUserLocation) · \(viewModel.SharableFriendLocation)",
                         leadingIcon: "chevron.left",
                         trailingIcon: "slider.horizontal.3",
                         isDirty: true,
-                        onLeadingIconTap: { uiState = .onboarding },
+                        onLeadingIconTap: { isSearching = true }, // Trigger fullScreenCover
                         onTrailingIconTap: { print("Filters tapped") },
-                        onContainerTap: { uiState = .searching }
+                        onContainerTap: { isSearching = true }  // Trigger fullScreenCover
                     )
                     .padding()
                     .frame(height: 60)
                     .background(Color.white)
                     .cornerRadius(34)
                     .shadow(radius: 16)
+                    
+
+
                 }
                 
                 if uiState == .onboarding {
                     SearchBarWithAction(
                         title: "Find where to meet",
-                        subtitle: "My Location · Friend's Location",
+                        subtitle: "\(viewModel.SharableUserLocation) · \(viewModel.SharableFriendLocation)",
                         leadingIcon: "magnifyingglass",
                         trailingIcon: "person.fill",
                         isDirty: false,
-                        onLeadingIconTap: { uiState = .searching },
+                        onLeadingIconTap: { isSearching = true },   // Trigger fullScreenCover
                         onTrailingIconTap: { print("User profile tapped") },
-                        onContainerTap: {
-                            // Trigger geocoding (here with hardcoded addresses for example)
-                            
-                            uiState = .searching
-                        }
+                        onContainerTap: { isSearching = true }        // Trigger fullScreenCover
                     )
                     .padding()
                     .frame(height: 60)
