@@ -11,6 +11,8 @@ import SwiftUI
 struct MeetingResultsSheetView: View {
     @ObservedObject var viewModel: MeepViewModel
     @Environment(\.colorScheme) var colorScheme
+    
+
 
     var body: some View {
         ZStack {
@@ -28,9 +30,10 @@ struct MeetingResultsSheetView: View {
                 // Filter Bar
                 FilterBarView(
                     selectedCategory: $viewModel.selectedCategory,
-                    categories: viewModel.categories,
-                    hiddenCategories: viewModel.hiddenCategories
+                    categories: viewModel.categories.map { $0.name },  // ✅ Convert to `[String]`
+                    hiddenCategories: viewModel.hiddenCategories.map { $0.name }  // ✅ Convert to `[String]`
                 )
+
                 .padding(.horizontal)
 
                 // Meeting Points List
@@ -42,10 +45,17 @@ struct MeetingResultsSheetView: View {
                         }, id: \.id) { point in
                             
                             VStack(alignment: .leading, spacing: 8) {
-                                Image("placeholder-image") // Replace with real point image if available
-                                    .resizable()
-                                    .frame(height: 200)
-                                    .cornerRadius(12)
+                                AsyncImage(url: URL(string: point.imageUrl)) { image in
+                                    image.resizable()
+                                        .scaledToFill()
+                                        .frame(height: 200)
+                                        .clipped()
+                                } placeholder: {
+                                    Color.gray.opacity(0.3)
+                                        .frame(height: 200)
+                                }
+                                .cornerRadius(12)
+
                                 
                                 Text(point.name)
                                     .font(.headline)
