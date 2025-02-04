@@ -11,94 +11,56 @@ import SwiftUI
 struct MeetingResultsSheetView: View {
     @ObservedObject var viewModel: MeepViewModel
     @Environment(\.colorScheme) var colorScheme
-    
 
 
     var body: some View {
-        ZStack {
-            // A background blur, if desired
-            VisualEffectBlur(blurStyle: colorScheme == .dark ? .systemUltraThinMaterialDark : .systemUltraThinMaterialLight)
-                .cornerRadius(16)
-                .ignoresSafeArea(edges: .bottom)
-            
-            VStack(spacing: 16) {
-                // Drag handle
-                Capsule()
-                    .frame(width: 40, height: 5)
-                    .foregroundColor(Color(.lightGray).opacity(0.4))
+                    ZStack {
+                        // A background blur, if desired
+//                        VisualEffectBlur(blurStyle: colorScheme == .dark ? .systemUltraThinMaterialDark : .systemUltraThinMaterialLight)
+//                            .cornerRadius(16)
+//                            .ignoresSafeArea(edges: .bottom)
+                        
+                        VStack(spacing: 16) {
+                           Capsule()
+                               .frame(width: 40, height: 5)
+                               .foregroundColor(Color(.lightGray).opacity(0.4))
 
-                // Filter Bar
-                FilterBarView(
-                    selectedCategory: $viewModel.selectedCategory,
-                    categories: viewModel.categories.map { $0.name },  // ✅ Convert to `[String]`
-                    hiddenCategories: viewModel.hiddenCategories.map { $0.name }  // ✅ Convert to `[String]`
-                )
+                           // Filter Bar
+                           FilterBarView(
+                               selectedCategory: $viewModel.selectedCategory,
+                               categories: viewModel.categories,
+                               hiddenCategories: viewModel.hiddenCategories
+                           )
+                           .padding(.horizontal)
 
-                .padding(.horizontal)
-
-                // Meeting Points List
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Already sorted by midpoint in the ViewModel!
-                        ForEach(viewModel.meetingPoints.filter {
-                            viewModel.selectedCategory == "All" || $0.category == viewModel.selectedCategory
-                        }, id: \.id) { point in
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                AsyncImage(url: URL(string: point.imageUrl)) { image in
-                                    image.resizable()
-                                        .scaledToFill()
-                                        .frame(height: 200)
-                                        .clipped()
-                                } placeholder: {
-                                    Color.gray.opacity(0.3)
-                                        .frame(height: 200)
-                                }
-                                .cornerRadius(12)
-
-                                
-                                Text(point.name)
-                                    .font(.headline)
-                                
-                                HStack {
-                                    Text(point.category)
-                                        .font(.caption)
-                                        .padding(6)
-                                        .background(Color(.systemGray6))
-                                        .cornerRadius(8)
-                                    Spacer()
-                                    Text("\(point.distance, specifier: "%.2f") miles away")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Button(action: {
-                                    // Use Apple Maps directions
-                                    viewModel.showDirections(to: point)
-                                }) {
-                                    Text("Get Directions")
-                                        .font(.subheadline)
-                                        .fontWeight(.bold)
-                                        .padding()
-                                        .frame(maxWidth: .infinity)
-                                        .background(Color.black)
-                                        .foregroundColor(.white)
-                                        .cornerRadius(10)
-                                }
-                            }
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(12)
-                            .shadow(color: Color.black.opacity(0.1), radius: 5)
-                        }
+                           // Meeting Points List
+                           ScrollView(.vertical, showsIndicators: false) {
+                               VStack(spacing: 24) {
+                                   if viewModel.meetingPoints.isEmpty {
+                                       // Show 3 skeleton loaders while data is being fetched
+                                       ForEach(0..<3, id: \.self) { _ in
+                                           SkeletonMeetingPointCard()
+                                       }
+                                   } else {
+                                       ForEach(viewModel.meetingPoints.filter {
+                                           viewModel.selectedCategory.name == "All" || $0.category == viewModel.selectedCategory.name
+                                       }, id: \.id) { point in
+                                           MeetingPointCard(point: point) {
+                                               viewModel.showDirections(to: point)
+                                           }
+                                           .frame(maxWidth: UIScreen.main.bounds.width * 0.95)
+                                       }
+                                   }
+                               }
+                               .frame(maxWidth: .infinity)
+                           }
+                           .padding(.bottom, 20)
+                       }
+                       .padding(.top, 8)
+                       .padding(.bottom, 24)
+                       .ignoresSafeArea(edges: .bottom)
                     }
-                    .padding(.horizontal)
                 }
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 24)
-        }
-    }
 }
 
 #Preview {
