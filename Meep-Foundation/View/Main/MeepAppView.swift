@@ -27,8 +27,8 @@ struct MeepAppView: View {
     @State private var isSearching: Bool = false
 
     // Sheet height constants
-    private let sheetMin: CGFloat = 50
-    private let sheetMid: CGFloat = UIScreen.main.bounds.height * 0.5
+    private let sheetMin: CGFloat = 90
+    private let sheetMid: CGFloat = UIScreen.main.bounds.height * 0.4
     private let sheetMax: CGFloat = UIScreen.main.bounds.height * 0.8
 
     // Offsets for the draggable sheets along with last offset values
@@ -150,10 +150,7 @@ struct MeepAppView: View {
             // MARK: Meeting Results Sheet (Draggable)
             if uiState == .results {
                 MeetingResultsSheetView(viewModel: viewModel)
-                    .background(
-                        Color(.tertiarySystemBackground)
-                            .opacity(meetingResultsOffset == sheetMin ? 1 : 0.3)
-                    )
+                    .background(Color(.tertiarySystemBackground) )
                     .cornerRadius(meetingResultsOffset == sheetMin ? 0 : 24)
                     .shadow(color: Color.black.opacity(0.24),
                             radius: meetingResultsOffset == sheetMin ? 0 : 30, x: 0, y: 3)

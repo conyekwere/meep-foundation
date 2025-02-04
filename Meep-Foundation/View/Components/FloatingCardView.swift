@@ -34,7 +34,7 @@ struct FloatingCardView: View {
                     .font(.largeTitle)
             }
 
-            Text("\(meetingPoint.distance, specifier: "%.2f") miles away")
+            Text("\(30, specifier: "%.2f") miles away")
                 .font(.subheadline)
                 .foregroundColor(.gray)
 
