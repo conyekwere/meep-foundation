@@ -5,29 +5,43 @@
 //  Created by Chima onyekwere on 1/21/25.
 //
 
-
 import SwiftUI
 
 struct FilterBarView: View {
-    @Binding var selectedCategory: String
-    let categories: [String]
-    let hiddenCategories: [String]
+    @Binding var selectedCategory: Category
+    let categories: [Category]
+    let hiddenCategories: [Category]
 
     @State private var showMore: Bool = false
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(categories, id: \.self) { category in
+                ForEach(categories) { category in
                     Button(action: {
                         selectedCategory = category
                     }) {
-                        Text(category)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(selectedCategory == category ? Color.blue : Color.gray.opacity(0.1))
-                            .foregroundColor(selectedCategory == category ? .white : .black)
-                            .cornerRadius(8)
+                        HStack(spacing:4) {
+                            
+                            if   !category.emoji.isEmpty {
+                                Text(category.emoji)
+                                    .font(.body)
+                            }
+
+                            Text(category.name)
+                                .font(.body)
+                                .foregroundColor(Color(.label).opacity(0.8))
+                                .fontWidth(.expanded)
+                        }
+                    
+                        .frame(minWidth: 36, maxWidth: 180)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(selectedCategory == category ? Color.gray.opacity(0.1) : Color.white)
+                        .foregroundColor(selectedCategory == category ? Color(.label) : .black)
+                        .fontWeight(selectedCategory == category ? .medium : .regular)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
 
@@ -36,17 +50,25 @@ struct FilterBarView: View {
                     showMore = true
                 }) {
                     Text("More")
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.gray.opacity(0.1))
+                        .foregroundColor(Color(.label).opacity(0.8))
+                        .fontWidth(.expanded)
+                        .font(.body)
+                        .frame(minWidth: 32)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(Color.white)
                         .cornerRadius(8)
+                        .foregroundColor(Color(.label))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
             .padding(.horizontal)
         }
+        .scrollClipDisabled(true)
         .sheet(isPresented: $showMore) {
             MoreCategoriesView(
-                hiddenCategories: hiddenCategories,
+                hiddenCategories: hiddenCategories, // ✅ Now passing Category objects instead of Strings
                 selectedCategory: $selectedCategory,
                 showMore: $showMore
             )
@@ -56,9 +78,18 @@ struct FilterBarView: View {
 
 #Preview {
     FilterBarView(
-        selectedCategory: .constant("All"), // Use .constant() for Binding
-        categories: ["All", "Park", "Cafe", "Museum"],
-        hiddenCategories: ["Restaurant", "Gym", "Library"]
+        selectedCategory: .constant(Category(emoji: "", name: "All", hidden: false)), // Updated to use Category type
+        categories: [
+            Category(emoji: "", name: "All", hidden: false),
+            Category(emoji: "🍴", name: "Restaurant", hidden: false),
+            Category(emoji: "🍺", name: "Bar", hidden: false),
+            Category(emoji: "🌳", name: "Park", hidden: false),
+            Category(emoji: "☕", name: "Cafe", hidden: false),
+        ],
+        hiddenCategories: [
+            Category(emoji: "🎨", name: "Museum", hidden: true),
+            Category(emoji: "🏋️", name: "Gym", hidden: true),
+            Category(emoji: "📚", name: "Library", hidden: true),
+        ]
     )
 }
-

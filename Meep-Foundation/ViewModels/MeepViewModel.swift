@@ -20,45 +20,45 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
 
     @Published var meetingPoints: [MeetingPoint] = [
-        MeetingPoint(name: "McSorley's Old Ale House", distance: 0.8, emoji: "🍺", category: "Bar",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7295, longitude: -73.9890),
-                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+        MeetingPoint(name: "McSorley's Old Ale House", emoji: "🍺", category: "Bar",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.728838, longitude: -73.9896487),
+                     imageUrl: "https://thumbs.6sqft.com/wp-content/uploads/2017/03/10104443/02McSorleysInterior5Center72900.jpg?w=900&format=webp"),
 
-        MeetingPoint(name: "Izakaya Toribar", distance: 1.2, emoji: "🍴", category: "Restaurant",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7282, longitude: -73.9921),
-                     imageUrl: "https://example.com/izakaya-toribar.jpg"), // ✅ Fixed missing comma
+        MeetingPoint(name: "Izakaya Toribar", emoji: "🍴", category: "Restaurant",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7596279, longitude: -73.9685453),
+                     imageUrl: "https://i0.wp.com/izakayatoribar.com/wp-content/uploads/2020/02/FAA09132.jpg?resize=1024%2C683&ssl=1"), // ✅ Fixed missing comma
 
-        MeetingPoint(name: "Central Park", distance: 0.5, emoji: "🌳", category: "Park",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7851, longitude: -73.9683),
-                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+        MeetingPoint(name: "Central Park", emoji: "🌳", category: "Park",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7943199, longitude: -73.9548079),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"),
 
-        MeetingPoint(name: "Joe's Coffee", distance: 1.0, emoji: "☕", category: "Cafe",
-                     coordinate: CLLocationCoordinate2D(latitude: 40.7812, longitude: -73.9665),
-                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg"),
+        MeetingPoint(name: "The Oasis Cafe", emoji: "☕", category: "Cafe",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7671355, longitude: -73.9866929),
+                     imageUrl: "https://lh5.googleusercontent.com/p/AF1QipPCLsIFjbErCOILrg-jnMWBFmNG3RdSuEKsWd8E=w800-h500-k-no"),
 
-        MeetingPoint(name: "Museum of Art", distance: 2.0, emoji: "🎨", category: "Museum",
+        MeetingPoint(name: "Museum of Art", emoji: "🎨", category: "Museum",
                      coordinate: CLLocationCoordinate2D(latitude: 40.7794, longitude: -73.9632),
-                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/6/6b/McSorleys_Bar_NYC.jpg")
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg/500px-Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg")
     ]
     
 
-        @Published var categories: [Category] = [
-            Category(emoji: "🌍", name: "All", hidden: false),
-            Category(emoji: "🍴", name: "Restaurant", hidden: false),
-            Category(emoji: "🍺", name: "Bar", hidden: false),
-            Category(emoji: "🌳", name: "Park", hidden: false),
-            Category(emoji: "☕", name: "Cafe", hidden: false),
-        ]
-        
-        @Published var hiddenCategories: [Category] = [
-            Category(emoji: "🎨", name: "Museum", hidden: true),
-            Category(emoji: "🏋️", name: "Gym", hidden: true),
-            Category(emoji: "📚", name: "Library", hidden: true),
-        ]
+
+    @Published var categories: [Category] = [
+        Category(emoji: "", name: "All", hidden: false),
+        Category(emoji: "🍴", name: "Restaurant", hidden: false),
+        Category(emoji: "🍺", name: "Bar", hidden: false),
+        Category(emoji: "🌳", name: "Park", hidden: false),
+        Category(emoji: "☕", name: "Cafe", hidden: false),
+    ]
     
+    @Published var hiddenCategories: [Category] = [
+        Category(emoji: "🎨", name: "Museum", hidden: true),
+        Category(emoji: "🏋️", name: "Gym", hidden: true),
+        Category(emoji: "📚", name: "Library", hidden: true),
+    ]
     
     // MARK: - Filtering & Floating Card
-    @Published var selectedCategory: String = "All"
+    @Published var selectedCategory: Category = Category(emoji: "🌍", name: "All", hidden: false)
 
     
     @Published var selectedPoint: MeetingPoint? = nil
