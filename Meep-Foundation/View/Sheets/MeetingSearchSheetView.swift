@@ -220,7 +220,8 @@ struct MeetingSearchSheetView: View {
                         Text("Set meeting point")
                             .font(.headline)
                             .fontWeight(.semibold)
-                            .foregroundColor(.primary)
+                            .fontWidth(.expanded)
+                            .foregroundColor(.primary).opacity(0.7)
                     }
                     .padding(.top, 8)
                 }
