@@ -33,6 +33,12 @@ struct MeetingSearchSheetView: View {
     @State private var isMyLocationValid: Bool = false
     @State private var isFriendsLocationValid: Bool = false
     
+    // Add state for the selected transport mode for each row.
+    @State private var selectedMyTransport: TransportMode? = nil
+    @State private var selectedFriendTransport: TransportMode? = nil
+    
+    // Flag to detect whether the friend’s transport was manually changed.
+       @State private var friendTransportManuallyChanged: Bool = false
 
     
 
@@ -46,10 +52,9 @@ struct MeetingSearchSheetView: View {
                         leadingIcon: "dot.square.fill",
                         title: "My Location",
                         placeholder: "What’s your location?",
-                        trailingIcon: "tram.fill",
                         text: $myLocation,
                         isDirty: !myLocation.isEmpty,
-                        onTrailingIconTap: { }
+                        selectedMode: $selectedMyTransport
                     )
                     .focused($isMyLocationFocused)
                     .onSubmit { isMyLocationFocused = false }
@@ -65,10 +70,9 @@ struct MeetingSearchSheetView: View {
                         leadingIcon: "dot.square.fill",
                         title: "Friend's Location",
                         placeholder: "What's your friend's location?",
-                        trailingIcon: "tram.fill",
                         text: $friendLocation,
                         isDirty: !friendLocation.isEmpty,
-                        onTrailingIconTap: { print("Trailing icon tapped") }
+                        selectedMode: $selectedFriendTransport
                     )
                     .focused($isFriendsLocationFocused)
                     .onSubmit { isFriendsLocationFocused = false }
@@ -315,6 +319,21 @@ struct MeetingSearchSheetView: View {
                     isFriendsLocationValid = valid
                 } else {
                     isFriendsLocationValid = false
+                }
+            }
+            
+            // When "My Transport" changes, update friend's transport (if the friend hasn't been manually changed).
+            .onChange(of: selectedMyTransport) { newValue in
+                if !friendTransportManuallyChanged {
+                    selectedFriendTransport = newValue
+                }
+            }
+            // If the friend’s selection deviates from "My Transport," mark it as manually changed.
+            .onChange(of: selectedFriendTransport) { newValue in
+                if newValue != selectedMyTransport {
+                    friendTransportManuallyChanged = true
+                } else {
+                    friendTransportManuallyChanged = false
                 }
             }
         }
