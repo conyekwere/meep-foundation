@@ -110,7 +110,7 @@ struct MeepAppView: View {
                         title: "Find where to meet",
                         subtitle: "\(viewModel.SharableUserLocation) · \(viewModel.SharableFriendLocation)",
                         leadingIcon: "magnifyingglass",
-                        trailingIcon: "person.fill",
+                        trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
                         onLeadingIconTap: { isSearching = true },   // Trigger fullScreenCover
                         onTrailingIconTap: { print("User profile tapped") },
