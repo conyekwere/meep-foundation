@@ -5,12 +5,6 @@
 //  Created by Chima onyekwere on 1/21/25.
 //
 
-//
-//  MeepAppView.swift
-//  Meep-Foundation
-//
-//  Created by Chima onyekwere on 1/21/25.
-//
 import SwiftUI
 import MapKit
 
@@ -25,6 +19,9 @@ struct MeepAppView: View {
     @State private var uiState: UIState = .onboarding
     // Separate state variable to control the fullScreenCover presentation.
     @State private var isSearching: Bool = false
+    
+    // Separate state variable to control the fullScreenCover presentation.
+    @State private var isProfileShown: Bool = false
 
     // Sheet height constants
     private let sheetMin: CGFloat = 90
@@ -52,34 +49,6 @@ struct MeepAppView: View {
             .ignoresSafeArea()
             .onAppear {
                 viewModel.requestUserLocation()
-            }
-            
-            // MARK: Full-Screen Search Sheet
-            .fullScreenCover(isPresented: $isSearching) {
-                MeetingSearchSheetView(
-                    viewModel: viewModel,
-                    isSearchActive: .constant(true),
-                    onDismiss: {
-                        // When dismissing manually, switch to onboarding.
-                        isSearching = false
-                        uiState = .onboarding
-                        
-                        
-                        // Reset the viewModel's locations to clear map annotations.
-                        viewModel.userLocation = nil
-                        viewModel.friendLocation = nil
-
-                        // Reset the shareable location strings to their original values.
-                        viewModel.SharableUserLocation = "My Location"
-                        viewModel.SharableFriendLocation = "Friend's Location"
-                    },
-                    onDone: {
-                        // When done, switch to results.
-                        isSearching = false
-                        uiState = .results
-                    }
-                )
-                .background(Color(.tertiarySystemBackground))
             }
             
             // MARK: Top Search Bars Based on UIState
@@ -113,7 +82,10 @@ struct MeepAppView: View {
                         trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
                         onLeadingIconTap: { isSearching = true },   // Trigger fullScreenCover
-                        onTrailingIconTap: { print("User profile tapped") },
+                        onTrailingIconTap: {
+                            isProfileShown = true
+                            print("User profile tapped")
+                        },
                         onContainerTap: { isSearching = true }        // Trigger fullScreenCover
                     )
                     .padding()
@@ -175,6 +147,39 @@ struct MeepAppView: View {
                 .transition(.move(edge: .bottom))
                 .zIndex(3)
             }
+        }
+        // MARK: Full-Screen Search Sheet
+        .fullScreenCover(isPresented: $isSearching) {
+            MeetingSearchSheetView(
+                viewModel: viewModel,
+                isSearchActive: .constant(true),
+                onDismiss: {
+                    // When dismissing manually, switch to onboarding.
+                    isSearching = false
+                    uiState = .onboarding
+                    
+                    
+                    // Reset the viewModel's locations to clear map annotations.
+                    viewModel.userLocation = nil
+                    viewModel.friendLocation = nil
+
+                    // Reset the shareable location strings to their original values.
+                    viewModel.SharableUserLocation = "My Location"
+                    viewModel.SharableFriendLocation = "Friend's Location"
+                },
+                onDone: {
+                    // When done, switch to results.
+                    isSearching = false
+                    uiState = .results
+                }
+            )
+            .background(Color(.tertiarySystemBackground))
+        }
+        
+        .sheet(isPresented: $isProfileShown) {
+            ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
+                .presentationDetents([.fraction(0.65)])
+                .presentationDragIndicator(.hidden)
         }
     }
 }
