@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct MeetingPointCard: View {
     let point: MeetingPoint
     let showDirections: () -> Void
-
+    let userLocation: CLLocationCoordinate2D?
+    
     var body: some View {
        
         VStack{
@@ -52,7 +54,7 @@ struct MeetingPointCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     Spacer()
-                    Text("\(20, specifier: "%.2f") miles away")
+                    Text("\(point.distance(from: userLocation), specifier: "%.2f") miles away")
                         .font(.body)
                         .foregroundColor(.gray)
                 }
