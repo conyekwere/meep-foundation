@@ -21,26 +21,25 @@ struct FilterBarView: View {
                     Button(action: {
                         selectedCategory = category
                     }) {
-                        HStack(spacing:4) {
-                            
-                            if   !category.emoji.isEmpty {
+                        HStack(spacing: 4) {
+                            if !category.emoji.isEmpty {
                                 Text(category.emoji)
                                     .font(.body)
                             }
-
                             Text(category.name)
                                 .font(.body)
-                                .foregroundColor(Color(.label).opacity(0.8))
+                                .foregroundColor(selectedCategory.name == category.name ? .black : Color(.label).opacity(0.8))
                                 .fontWidth(.expanded)
                         }
-                    
                         .frame(minWidth: 36, maxWidth: 180)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(selectedCategory == category ? Color.gray.opacity(0.1) : Color.white)
-                        .foregroundColor(selectedCategory == category ? Color(.label) : .black)
-                        .fontWeight(selectedCategory == category ? .medium : .regular)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                        .background(selectedCategory.name == category.name ? Color.gray.opacity(0.1) : Color.white)
+                        .fontWeight(selectedCategory.name == category.name ? .medium : .regular)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(.lightGray).opacity(0.3), lineWidth: 2)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
@@ -58,9 +57,10 @@ struct FilterBarView: View {
                         .padding(.vertical, 12)
                         .background(Color.white)
                         .cornerRadius(8)
-                        .foregroundColor(Color(.label))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(.lightGray).opacity(0.3), lineWidth: 2)
+                        )
                 }
             }
             .padding(.horizontal)
@@ -68,13 +68,14 @@ struct FilterBarView: View {
         .scrollClipDisabled(true)
         .sheet(isPresented: $showMore) {
             MoreCategoriesView(
-                hiddenCategories: hiddenCategories, // ✅ Now passing Category objects instead of Strings
+                hiddenCategories: hiddenCategories,
                 selectedCategory: $selectedCategory,
                 showMore: $showMore
             )
         }
     }
 }
+
 
 #Preview {
     FilterBarView(
