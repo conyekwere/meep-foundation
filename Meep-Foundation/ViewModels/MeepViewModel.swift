@@ -58,7 +58,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     ]
     
     // MARK: - Filtering & Floating Card
-    @Published var selectedCategory: Category = Category(emoji: "🌍", name: "All", hidden: false)
+    @Published var selectedCategory: Category = Category(emoji: "", name: "All", hidden: false)
 
     
     @Published var selectedPoint: MeetingPoint? = nil
