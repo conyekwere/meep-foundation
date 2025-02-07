@@ -45,9 +45,9 @@ struct MeetingResultsSheetView: View {
                                        ForEach(viewModel.meetingPoints.filter {
                                            viewModel.selectedCategory.name == "All" || $0.category == viewModel.selectedCategory.name
                                        }, id: \.id) { point in
-                                           MeetingPointCard(point: point) {
+                                           MeetingPointCard(point: point, showDirections: {
                                                viewModel.showDirections(to: point)
-                                           }
+                                           }, userLocation: viewModel.userLocation) // ✅ Fix argument order
                                            .frame(maxWidth: UIScreen.main.bounds.width * 0.95)
                                        }
                                    }

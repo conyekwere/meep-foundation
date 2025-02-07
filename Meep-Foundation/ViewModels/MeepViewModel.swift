@@ -115,9 +115,27 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 self?.centerMapOnMidpoint()
             }
             .store(in: &cancellables)
+        
+        $userLocation
+            .sink { [weak self] _ in
+                self?.updateMeetingPointDistances()
+            }
+            .store(in: &cancellables)
     }
     
+    
+    
+    
+    
+    
     // MARK: - Helpers
+    
+    
+    private func updateMeetingPointDistances() {
+        objectWillChange.send()  // Ensures SwiftUI updates UI
+    }
+    
+    
     private func sortMeetingPointsByMidpoint() {
         let midLoc = CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude)
         meetingPoints.sort {
