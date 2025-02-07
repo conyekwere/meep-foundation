@@ -15,4 +15,14 @@ struct MeetingPoint: Identifiable {
     let category: String                        // Category of the meeting point
     let coordinate: CLLocationCoordinate2D      // Geographic coordinates
     let imageUrl: String                        // ✅ Store image URLs
+    
+    
+    func distance(from userLocation: CLLocationCoordinate2D?) -> Double {
+           guard let userLocation = userLocation else { return 0.0 }
+           
+           let userLoc = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+           let pointLoc = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+           
+           return userLoc.distance(from: pointLoc) / 1609.34  // Convert meters to miles
+       }
 }
