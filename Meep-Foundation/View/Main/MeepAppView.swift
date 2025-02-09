@@ -81,12 +81,12 @@ struct MeepAppView: View {
                         leadingIcon: "magnifyingglass",
                         trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
-                        onLeadingIconTap: { isSearching = true },   // Trigger fullScreenCover
+                        onLeadingIconTap: { isSearching = true },   
                         onTrailingIconTap: {
                             isProfileShown = true
                             print("User profile tapped")
                         },
-                        onContainerTap: { isSearching = true }        // Trigger fullScreenCover
+                        onContainerTap: { isSearching = true }
                     )
                     .padding()
                     .frame(height: 60)
