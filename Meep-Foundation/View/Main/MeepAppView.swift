@@ -21,8 +21,11 @@ struct MeepAppView: View {
     @State private var isSearching: Bool = false
     
     // Separate state variable to control the fullScreenCover presentation.
-    @State private var isProfileShown: Bool = false
+    @State private var isProfilePresented: Bool = false
 
+    
+    @State private var isAdvancedFiltersPresented: Bool  = false
+    
     // Sheet height constants
     private let sheetMin: CGFloat = 90
     private let sheetMid: CGFloat = UIScreen.main.bounds.height * 0.4
@@ -34,6 +37,10 @@ struct MeepAppView: View {
 
     @State private var meetingResultsOffset: CGFloat = UIScreen.main.bounds.height * 0.82
     @State private var lastMeetingResultsDragOffset: CGFloat = UIScreen.main.bounds.height * 0.82
+    
+    @State private var myTransit: TransportMode = .train
+    @State private var friendTransit: TransportMode = .train
+    @State private var searchRadius: Double = 10
 
     var body: some View {
         ZStack {
@@ -61,7 +68,9 @@ struct MeepAppView: View {
                         trailingIcon: "slider.horizontal.3",
                         isDirty: true,
                         onLeadingIconTap: { isSearching = true }, // Trigger fullScreenCover
-                        onTrailingIconTap: { print("Filters tapped") },
+                        onTrailingIconTap: {
+                            isAdvancedFiltersPresented.toggle()
+                        },
                         onContainerTap: { isSearching = true }  // Trigger fullScreenCover
                     )
                     .padding()
@@ -83,7 +92,7 @@ struct MeepAppView: View {
                         isDirty: false,
                         onLeadingIconTap: { isSearching = true },   
                         onTrailingIconTap: {
-                            isProfileShown = true
+                            isProfilePresented.toggle()
                             print("User profile tapped")
                         },
                         onContainerTap: { isSearching = true }
@@ -176,11 +185,21 @@ struct MeepAppView: View {
             .background(Color(.tertiarySystemBackground))
         }
         
-        .sheet(isPresented: $isProfileShown) {
+        .sheet(isPresented: $isProfilePresented) {
             ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
                 .presentationDetents([.fraction(0.65)])
                 .presentationDragIndicator(.hidden)
         }
+        
+        .sheet(isPresented: $isAdvancedFiltersPresented) {
+            AdvancedFiltersBottomSheet(
+                myTransit: $myTransit,
+                friendTransit: $friendTransit,
+                searchRadius: $searchRadius
+            )
+            .presentationDetents([.medium])
+        }
+        
     }
 }
 
