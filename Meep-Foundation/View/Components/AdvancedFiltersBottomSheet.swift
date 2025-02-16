@@ -84,6 +84,7 @@ struct AdvancedFiltersBottomSheet: View {
                                         .fontWeight(.regular)
                                         .fontWidth(.expanded)
                                         .padding(8)
+                                        .foregroundColor(.black)
                                         .background(Color(.lightGray).opacity(0.2))
                                         .cornerRadius(8)
                                 }
