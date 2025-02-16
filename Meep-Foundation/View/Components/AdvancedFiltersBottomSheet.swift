@@ -4,7 +4,6 @@
 //
 //  Created by Chima Onyekwere on 2/8/25.
 //
-
 import SwiftUI
 
 struct AdvancedFiltersBottomSheet: View {
@@ -12,36 +11,117 @@ struct AdvancedFiltersBottomSheet: View {
     @Binding var friendTransit: TransportMode
     @Binding var searchRadius: Double
     @Environment(\.dismiss) var dismiss
-    
+
+    @State private var isNowSelected = true // Default to "Now"
+    @State private var startDate = Date()
+    @State private var showDatePicker = false // Controls overlay visibility
+
+    let dateRange: ClosedRange<Date> = {
+        let calendar = Calendar.current
+        let startComponents = DateComponents(year: 2025, month: 1, day: 1)
+        let endComponents = DateComponents(year: 2030, month: 12, day: 31, hour: 59, second: 59)
+        return calendar.date(from: startComponents)! ... calendar.date(from: endComponents)!
+    }()
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
-                
-                // My Transit Selection
-                TransportModePicker(title: "My Transit", selectedMode: $myTransit)
-                    .padding(.top,32)
-                
-                // Friend's Transit Selection
-                TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
-                
-                // Search Range Interactive Indicator (Acts as Slider)
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Search Range (\(Int(searchRadius)) miles)")
-                        .font(.headline)
-                        .fontWeight(.regular)
-                        .fontWidth(.expanded)
-                    
-                    CustomRangeSlider(value: $searchRadius, range: 1...20, step: 1)
+            ScrollView {
+                VStack(spacing: 16) {
+
+                    // Time Selection
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Departure Time")
+                            .font(.headline)
+                            .fontWeight(.regular)
+                            .fontWidth(.expanded)
+                        
+                        HStack(spacing: 10) {
+                            Button(action: { isNowSelected = true }) {
+                                Text("Now")
+                                    .fontWeight(.regular)
+                                    .fontWidth(.expanded)
+                                    .frame(maxWidth: .infinity) // Makes button take up full available space
+                                    .padding(.vertical, 12)
+                                    .background(isNowSelected ? Color.gray.opacity(0.1) : Color.white)
+                                    .foregroundColor(isNowSelected ? Color(.label) : .black)
+                                    .fontWeight(isNowSelected ? .medium : .regular)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+
+                            Button(action: {
+                                isNowSelected = false
+                                showDatePicker.toggle()
+                            }) {
+                                Text("Leave")
+                                    .fontWeight(.regular)
+                                    .fontWidth(.expanded)
+                                    .frame(maxWidth: .infinity) // Makes button take up full available space
+                                    .padding(.vertical, 12)
+                                    .background(!isNowSelected ? Color.gray.opacity(0.1) : Color.white)
+                                    .foregroundColor(!isNowSelected ? Color(.label) : .black)
+                                    .fontWeight(!isNowSelected ? .medium : .regular)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .frame(maxWidth: .infinity) // Ensures the entire HStack stretches to fit the screen width
+
+
+                        // Show Selected Time if "Leave" is selected
+                        if !isNowSelected {
+                            Button(action: { showDatePicker.toggle() }) {
+                                HStack {
+                                    Text("Leave At")
+                                        .font(.headline)
+                                        .foregroundColor(.black)
+                                        .fontWeight(.regular)
+                                        .fontWidth(.expanded)
+                                    
+                                    Spacer()
+                                    
+                                    Text(startDate, style: .time)
+                                        .fontWeight(.regular)
+                                        .fontWidth(.expanded)
+                                        .padding(8)
+                                        .background(Color(.lightGray).opacity(0.2))
+                                        .cornerRadius(8)
+                                }
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(10)
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.lightGray), lineWidth: 0.5))
+                            }
+                        }
+                    }
+                    .padding(.top, 16)
+
+                    // My Transit Selection
+                    TransportModePicker(title: "My Transit", selectedMode: $myTransit)
+                        .padding(.top, 16)
+
+                    // Friend's Transit Selection
+                    TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
+
+                    // Search Range Interactive Indicator (Acts as Slider)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Search Range (\(Int(searchRadius)) miles)")
+                            .font(.headline)
+                            .fontWeight(.regular)
+                            .fontWidth(.expanded)
+
+                        CustomRangeSlider(value: $searchRadius, range: 1...20, step: 1)
+                    }
+                    .padding(.top, 16)
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+
+                    Spacer(minLength: 50)
                 }
                 .padding()
-                .background(Color.white)
-                .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
-                
-                Spacer()
             }
-            .padding()
-        
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: { dismiss() }) {
@@ -69,9 +149,73 @@ struct AdvancedFiltersBottomSheet: View {
                     }
                 }
             }
+            .sheet(isPresented: $showDatePicker) {
+                DatePickerSheet(startDate: $startDate)
+            }
         }
     }
 }
+
+// ✅ **DatePicker Overlay View**
+struct DatePickerSheet: View {
+    @Binding var startDate: Date
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack {
+            DatePicker(
+                "Select Time",
+                selection: $startDate,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(WheelDatePickerStyle())
+            .labelsHidden()
+            .padding()
+
+            HStack {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
+
+                Button("Done") {
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding()
+        }
+        .presentationDetents([.fraction(0.4)]) // Limits overlay size
+    }
+}
+
+
+
+
+// ✅ **Time Mode Enum**
+enum TimeMode: String, CaseIterable {
+    case now = "Now"
+    case leave = "Leave"
+    case arrive = "Arrive"
+    case last = "Last"
+
+    var pickerLabel: String {
+        switch self {
+        case .now: return "Now"
+        case .leave: return "Leave At"
+        case .arrive: return "Arrive By"
+        case .last: return "Last Departure"
+        }
+    }
+}
+
 
 // ✅ **Updated Custom Range Slider (Acts as Slider)**
 struct CustomRangeSlider: View {
@@ -124,6 +268,7 @@ struct CustomRangeSlider: View {
 }
 
 
+
 // ✅ **Updated TransportModePicker with FilterBarView Styling**
 struct TransportModePicker: View {
     let title: String
@@ -138,7 +283,7 @@ struct TransportModePicker: View {
                 .padding(.bottom,16)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: 16) {
                     ForEach(TransportMode.allCases) { mode in
                         Button(action: {
                             selectedMode = mode
@@ -146,12 +291,8 @@ struct TransportModePicker: View {
                             HStack(spacing: 4) {
                                 Image(systemName: mode.systemImageName)
                                     .font(.body)
-                                Text(mode.title)
-                                    .font(.body)
-                                    .foregroundColor(Color(.label).opacity(0.8))
-                                    .fontWidth(.expanded)
                             }
-                            .frame(minWidth: 90, maxWidth: 150)
+                            .frame(minWidth: 50, maxWidth: 100)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .background(selectedMode == mode ? Color.gray.opacity(0.1) : Color.white)
