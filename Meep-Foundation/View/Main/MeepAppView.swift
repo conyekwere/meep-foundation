@@ -197,7 +197,7 @@ struct MeepAppView: View {
                 friendTransit: $friendTransit,
                 searchRadius: $searchRadius
             )
-            .presentationDetents([.large])
+            .presentationDetents([.fraction(0.70)])
         }
         
     }
