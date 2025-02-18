@@ -41,22 +41,47 @@ struct MeepAppView: View {
     @State private var myTransit: TransportMode = .train
     @State private var friendTransit: TransportMode = .train
     @State private var searchRadius: Double = 10
+    
+    
+    
+    @State private var selectedAnnotation: MeepAnnotation? = nil 
 
     var body: some View {
         ZStack {
             // MARK: Map View with Annotations
             Map(coordinateRegion: $viewModel.mapRegion,
-                interactionModes: .all,
-                showsUserLocation: true,
-                annotationItems: viewModel.annotations) { annotation in
-                    MapAnnotation(coordinate: annotation.coordinate) {
-                        annotation.annotationView
-                    }
-                }
+                            interactionModes: .all,
+                            showsUserLocation: true,
+                            annotationItems: viewModel.annotations) { annotation in
+                                MapAnnotation(coordinate: annotation.coordinate) {
+                                    annotation.annotationView
+                                        .onTapGesture {
+                                            selectedAnnotation = annotation
+                                            
+                                            // Extract emoji safely from AnnotationType
+                                            let emoji: String
+                                            if case let .place(emojiValue) = annotation.type {
+                                                emoji = emojiValue
+                                            } else {
+                                                emoji = "📍" // Default emoji for non-place annotations
+                                            }
+
+                                            viewModel.selectedPoint = MeetingPoint(
+                                                name: annotation.title,
+                                                emoji: emoji,
+                                                category: "Sample",
+                                                coordinate: annotation.coordinate,
+                                                imageUrl: "https://via.placeholder.com/150"
+                                            )
+                                            viewModel.isFloatingCardVisible = true
+                                        }
+                                }
+                            }
             .ignoresSafeArea()
             .onAppear {
-                viewModel.requestUserLocation()
+                viewModel.loadSampleAnnotations()
             }
+
             
             // MARK: Top Search Bars Based on UIState
             VStack {
@@ -156,6 +181,8 @@ struct MeepAppView: View {
                 .transition(.move(edge: .bottom))
                 .zIndex(3)
             }
+
+
         }
         // MARK: Full-Screen Search Sheet
         .fullScreenCover(isPresented: $isSearching) {
@@ -197,7 +224,7 @@ struct MeepAppView: View {
                 friendTransit: $friendTransit,
                 searchRadius: $searchRadius
             )
-            .presentationDetents([.fraction(0.70)])
+            .presentationDetents([.fraction(0.85)])
         }
         
     }
