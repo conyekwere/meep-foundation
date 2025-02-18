@@ -5,50 +5,53 @@
 //  Created by Chima onyekwere on 1/21/25.
 //
 
-import Foundation
-import CoreLocation
-import MapKit
-import Combine
-import SwiftUI
 
+import SwiftUI
+import MapKit
+import CoreLocation
+import Combine
+
+/// ViewModel for the Meep App, handling user location, friend location,
+/// map region updates, meeting points, filtering, geocoding, and more.
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
+    
     // MARK: - Map Region & Meeting Points
-    @Published var mapRegion = MKCoordinateRegion(
+    
+    /// The current region of the map (center + span).
+    @Published var mapRegion: MKCoordinateRegion = .init(
         center: CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060),
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
     
-
+    /// The list of meeting points shown on the map.
     @Published var meetingPoints: [MeetingPoint] = [
         MeetingPoint(name: "McSorley's Old Ale House", emoji: "🍺", category: "Bar",
                      coordinate: CLLocationCoordinate2D(latitude: 40.728838, longitude: -73.9896487),
                      imageUrl: "https://thumbs.6sqft.com/wp-content/uploads/2017/03/10104443/02McSorleysInterior5Center72900.jpg?w=900&format=webp"),
-
+        
         MeetingPoint(name: "Izakaya Toribar", emoji: "🍴", category: "Restaurant",
                      coordinate: CLLocationCoordinate2D(latitude: 40.7596279, longitude: -73.9685453),
-                     imageUrl: "https://i0.wp.com/izakayatoribar.com/wp-content/uploads/2020/02/FAA09132.jpg?resize=1024%2C683&ssl=1"), // ✅ Fixed missing comma
-
+                     imageUrl: "https://i0.wp.com/izakayatoribar.com/wp-content/uploads/2020/02/FAA09132.jpg?resize=1024%2C683&ssl=1"),
+        
         MeetingPoint(name: "Central Park", emoji: "🌳", category: "Park",
                      coordinate: CLLocationCoordinate2D(latitude: 40.7943199, longitude: -73.9548079),
                      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"),
-
+        
         MeetingPoint(name: "The Oasis Cafe", emoji: "☕", category: "Coffee shop",
                      coordinate: CLLocationCoordinate2D(latitude: 40.7671355, longitude: -73.9866929),
                      imageUrl: "https://lh5.googleusercontent.com/p/AF1QipPCLsIFjbErCOILrg-jnMWBFmNG3RdSuEKsWd8E=w800-h500-k-no"),
-
+        
         MeetingPoint(name: "Museum of Art", emoji: "🎨", category: "Museum",
                      coordinate: CLLocationCoordinate2D(latitude: 40.7794, longitude: -73.9632),
                      imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg/500px-Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg")
     ]
     
-
-
     @Published var categories: [Category] = [
         Category(emoji: "", name: "All", hidden: false),
         Category(emoji: "🍴", name: "Restaurant", hidden: false),
         Category(emoji: "🍺", name: "Bar", hidden: false),
         Category(emoji: "🌳", name: "Park", hidden: false),
-        Category(emoji: "☕", name: "Coffee shop", hidden: false),
+        Category(emoji: "☕", name: "Coffee shop", hidden: false)
     ]
     
     @Published var hiddenCategories: [Category] = [
@@ -69,20 +72,20 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         Category(emoji: "🎭", name: "Theater", hidden: true),
         Category(emoji: "🎓", name: "University", hidden: true),
         Category(emoji: "🍷", name: "Winery", hidden: true),
-        Category(emoji: "🦁", name: "Zoo", hidden: true),
+        Category(emoji: "🦁", name: "Zoo", hidden: true)
     ]
     
     // MARK: - Filtering & Floating Card
     @Published var selectedCategory: Category = Category(emoji: "", name: "All", hidden: false)
-
+    
     
     @Published var selectedPoint: MeetingPoint? = nil
-    @Published var isFloatingCardVisible = false
+    @Published var isFloatingCardVisible: Bool = false
     
-    
-    
+    // Sharable location strings (for UI display)
     @Published var SharableUserLocation: String = "My Location"
     @Published var SharableFriendLocation: String = "Friend's Location"
+    
     
     
     // MARK: - Location Properties
@@ -101,16 +104,31 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                                       longitude: (uLon + fLon) / 2)
     }
     
+    @Published var sampleAnnotations: [MeepAnnotation] = []
+    
     // Dynamic annotations (midpoint, user, friend)
     var annotations: [MeepAnnotation] {
         var results: [MeepAnnotation] = []
-        results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .place))
+
+        // Midpoint
+        results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
+
+        // User location (if available)
         if let uLoc = userLocation {
-            results.append(MeepAnnotation(coordinate: uLoc, title: "You", type: .user))
+            results.append(MeepAnnotation(coordinate: uLoc, title: SharableUserLocation, type: .user))
         }
+
+        // Friend location (if available)
         if let fLoc = friendLocation {
-            results.append(MeepAnnotation(coordinate: fLoc, title: "Friend", type: .user))
+            results.append(MeepAnnotation(coordinate: fLoc, title: SharableFriendLocation, type: .friend))
         }
+
+        // Meeting points as place annotations
+        results.append(contentsOf: meetingPoints.map {
+            MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+        })
+        results.append(contentsOf: sampleAnnotations)
+        
         return results
     }
     
@@ -136,20 +154,17 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 self?.updateMeetingPointDistances()
             }
             .store(in: &cancellables)
+        
+        // Optionally, load sample meeting points (if not already set)
+        // Uncomment if you want to load these on initialization:
+        // loadSampleAnnotations()
     }
-    
-    
-    
-    
-    
     
     // MARK: - Helpers
     
-    
     private func updateMeetingPointDistances() {
-        objectWillChange.send()  // Ensures SwiftUI updates UI
+        objectWillChange.send()  // Ensures SwiftUI updates the UI
     }
-    
     
     private func sortMeetingPointsByMidpoint() {
         let midLoc = CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude)
@@ -169,12 +184,40 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+
+    
+    
+    func loadSampleAnnotations() {
+        sampleAnnotations = [
+            MeepAnnotation(
+                coordinate: CLLocationCoordinate2D(latitude: 40.728838, longitude: -73.9896487),
+                title: "McSorley's Old Ale House",
+                type: .place(emoji: "🍺")
+            ),
+            MeepAnnotation(
+                coordinate: CLLocationCoordinate2D(latitude: 40.759628, longitude: -73.968545),
+                title: "Izakaya Toribar",
+                type: .place(emoji: "🍴")
+            ),
+            MeepAnnotation(
+                coordinate: CLLocationCoordinate2D(latitude: 40.794320, longitude: -73.954808),
+                title: "Central Park",
+                type: .place(emoji: "🌳")
+            )
+        ]
+    }
+
+    
+    // MARK: - Location Permissions
+    
+    /// Requests “when in use” location permission from the user.
     func requestUserLocation() {
         locationManager?.requestWhenInUseAuthorization()
         locationManager?.startUpdatingLocation()
     }
     
     // MARK: - CLLocationManagerDelegate Methods
+    
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
@@ -201,6 +244,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     // MARK: - Apple Maps Directions
+    
+    /// Opens Apple Maps with directions to the specified meeting point.
     func showDirections(to point: MeetingPoint) {
         let placemark = MKPlacemark(coordinate: point.coordinate)
         let mapItem = MKMapItem(placemark: placemark)
@@ -210,24 +255,20 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         ])
     }
     
+    // MARK: - Reverse Geocoding
     
-    
-    // Reverse geocode the user's location.
+    /// Reverse geocode the user's location into a sharable address.
     func reverseGeocodeUserLocation() {
         guard let userCoord = userLocation else {
             print("❌ User location is nil, skipping reverse geocoding")
             return
         }
-        
         let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
         let geocoder = CLGeocoder()
-        
         geocoder.reverseGeocodeLocation(userLoc) { placemarks, error in
             DispatchQueue.main.async {
                 if let placemark = placemarks?.first, error == nil {
-                    self.SharableUserLocation = [placemark.name]
-                        .compactMap { $0 }
-                        .joined(separator: ", ")
+                    self.SharableUserLocation = [placemark.name].compactMap { $0 }.joined(separator: ", ")
                     print("✅ My location updated: \(self.SharableUserLocation)")
                 } else {
                     print("❌ Error reverse geocoding My Location: \(error?.localizedDescription ?? "Unknown error")")
@@ -235,23 +276,19 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
-
-    // Reverse geocode the friend's location.
+    
+    /// Reverse geocode the friend's location into a sharable address.
     func reverseGeocodeFriendLocation() {
         guard let friendCoord = friendLocation else {
             print("❌ friendLocation is nil, skipping Friend Location reverse geocode")
             return
         }
-        
         let friendLoc = CLLocation(latitude: friendCoord.latitude, longitude: friendCoord.longitude)
         let geocoder = CLGeocoder()
-        
         geocoder.reverseGeocodeLocation(friendLoc) { placemarks, error in
             DispatchQueue.main.async {
                 if let placemark = placemarks?.first, error == nil {
-                    self.SharableFriendLocation = [placemark.name]
-                        .compactMap { $0 }
-                        .joined(separator: ", ")
+                    self.SharableFriendLocation = [placemark.name].compactMap { $0 }.joined(separator: ", ")
                     print("✅ Friend location updated: \(self.SharableFriendLocation)")
                 } else {
                     print("❌ Error reverse geocoding Friend Location: \(error?.localizedDescription ?? "Unknown error")")
@@ -259,11 +296,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
-
-
     
     // MARK: - Geocoding
-    /// Geocode two addresses and update locations.
+    
+    /// Geocode two addresses concurrently and update user and friend locations.
     func geocodeAndSetLocations(userAddress: String, friendAddress: String) {
         let geocoder = CLGeocoder()
         var userCoord: CLLocationCoordinate2D?
@@ -303,21 +339,19 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             group.leave()
         }
         
-        // Notify when both requests finish
+        // When both are done, update the locations.
         group.notify(queue: .main) {
             if let userCoord = userCoord, let friendCoord = friendCoord {
                 print("Both locations geocoded successfully.")
                 self.userLocation = userCoord
                 self.friendLocation = friendCoord
-                
-                // Ensure mapRegion updates
                 self.centerMapOnMidpoint()
             } else {
                 print("Geocoding failed for at least one location.")
             }
         }
     }
-
+    
     /// Geocode a single address string.
     func geocodeAddress(_ address: String, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
         CLGeocoder().geocodeAddressString(address) { placemarks, error in

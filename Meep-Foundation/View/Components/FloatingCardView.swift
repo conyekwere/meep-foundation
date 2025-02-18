@@ -7,6 +7,7 @@
 
 
 import SwiftUI
+import MapKit
 
 struct FloatingCardView: View {
     let meetingPoint: MeetingPoint
@@ -14,48 +15,65 @@ struct FloatingCardView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            // Dismiss Handle
-            Capsule()
-                .frame(width: 40, height: 6)
-                .foregroundColor(.gray.opacity(0.5))
-                .padding(.top, 8)
-                .padding(.bottom, 10)
-
-            // Meeting Point Details
+            // Dismiss Button
             HStack {
-                Text(meetingPoint.name)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .padding(.bottom, 5)
-
                 Spacer()
-
-                Text(meetingPoint.emoji)
-                    .font(.largeTitle)
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.gray)
+                        .imageScale(.large)
+                }
             }
+            .padding(.top)
 
-            Text("\(30, specifier: "%.2f") miles away")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-
-            // "Get Directions" Button
-            Button("Get Directions") {
-                // e.g., open Apple Maps, etc.
+            // Meeting Point Image
+            AsyncImage(url: URL(string: meetingPoint.imageUrl ?? "")) { image in
+                image.resizable()
+            } placeholder: {
+                Color.gray.opacity(0.3)
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
+            .frame(height: 150)
             .cornerRadius(10)
 
-            Spacer()
+            // Meeting Point Name & Category
+            Text(meetingPoint.name)
+                .font(.title2)
+                .bold()
+            HStack {
+                Text(meetingPoint.emoji)
+                Text(meetingPoint.category)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+
+            // Distance Info
+//            Text("\(meetingPoint.distance ?? 0.0, specifier: "%.2f") miles away")
+//                .font(.subheadline)
+//                .foregroundColor(.gray)
+
+
+            // "Get Directions" Button
+            Button(action: {
+                let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: meetingPoint.coordinate))
+                mapItem.name = meetingPoint.name
+                mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+            }) {
+                HStack {
+                    Image(systemName: "tram.fill")
+                    Text("Get Directions")
+                        .bold()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
         }
         .padding()
         .background(Color.white)
         .cornerRadius(15)
         .shadow(radius: 5)
-        .onTapGesture {
-            // If you want the tap to do something else
-        }
+        .padding(.horizontal)
     }
 }
