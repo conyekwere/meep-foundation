@@ -9,7 +9,7 @@ import SwiftUI
 import MapKit
 
 enum UIState {
-    case onboarding, searching, results
+    case onboarding, searching, results,floatingResults
 }
 
 struct MeepAppView: View {
@@ -44,39 +44,58 @@ struct MeepAppView: View {
     
     
     
-    @State private var selectedAnnotation: MeepAnnotation? = nil 
+    @State private var selectedAnnotation: MeepAnnotation? = nil
+    
+    private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
+        let emoji: String
+        if case let .place(emojiValue) = annotation.type {
+            emoji = emojiValue
+        } else {
+            emoji = "📍"
+        }
+
+        let category = viewModel.getCategory(for: emoji) // ✅ Dynamically get category
+
+        viewModel.selectedPoint = MeetingPoint(
+            name: annotation.title,
+            emoji: emoji,
+            category: category, // ✅ Uses dynamic category lookup
+            coordinate: annotation.coordinate,
+            imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
+        )
+        viewModel.isFloatingCardVisible = true
+    }
+
+    
 
     var body: some View {
         ZStack {
             // MARK: Map View with Annotations
             Map(coordinateRegion: $viewModel.mapRegion,
-                            interactionModes: .all,
-                            showsUserLocation: true,
-                            annotationItems: viewModel.annotations) { annotation in
-                                MapAnnotation(coordinate: annotation.coordinate) {
-                                    annotation.annotationView
-                                        .onTapGesture {
-                                            selectedAnnotation = annotation
-                                            
-                                            // Extract emoji safely from AnnotationType
-                                            let emoji: String
-                                            if case let .place(emojiValue) = annotation.type {
-                                                emoji = emojiValue
-                                            } else {
-                                                emoji = "📍" // Default emoji for non-place annotations
-                                            }
-
-                                            viewModel.selectedPoint = MeetingPoint(
-                                                name: annotation.title,
-                                                emoji: emoji,
-                                                category: "Sample",
-                                                coordinate: annotation.coordinate,
-                                                imageUrl: "https://via.placeholder.com/150"
-                                            )
-                                            viewModel.isFloatingCardVisible = true
-                                        }
+                interactionModes: .all,
+                showsUserLocation: true,
+                annotationItems: viewModel.annotations) { annotation in
+                    MapAnnotation(coordinate: annotation.coordinate) {
+                        annotation.annotationView(isSelected: Binding(
+                            get: { selectedAnnotation?.id == annotation.id },
+                            set: { newValue in
+                                withAnimation(.spring()) {
+                                    print("Parent binding setter called with:", newValue)
+                                    if newValue {
+                                        selectedAnnotation = annotation
+                                        setSelectedMeetingPoint(for: annotation)
+                                    } else {
+                                        selectedAnnotation = nil
+                                        viewModel.isFloatingCardVisible = false
+                                    }
                                 }
                             }
+
+                        ))
+                    }
+                }
+
+
             .ignoresSafeArea()
             .onAppear {
                 viewModel.loadSampleAnnotations()
@@ -171,16 +190,18 @@ struct MeepAppView: View {
             
             // MARK: Floating Card for Selected Point
             if let selectedPoint = viewModel.selectedPoint, viewModel.isFloatingCardVisible {
-                FloatingCardView(meetingPoint: selectedPoint) {
-                    withAnimation {
-                        viewModel.isFloatingCardVisible = false
-                        viewModel.selectedPoint = nil
+                Spacer()
+                    FloatingCardView(meetingPoint: selectedPoint) {
+                        withAnimation {
+                            viewModel.isFloatingCardVisible = false
+                            viewModel.selectedPoint = nil
+                            selectedAnnotation = nil // Deselect annotation when closing
+                        }
                     }
+                    .padding(.horizontal)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(3)
                 }
-                .padding(.horizontal)
-                .transition(.move(edge: .bottom))
-                .zIndex(3)
-            }
 
 
         }
