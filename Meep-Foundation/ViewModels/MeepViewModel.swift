@@ -75,6 +75,15 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         Category(emoji: "🦁", name: "Zoo", hidden: true)
     ]
     
+    
+    
+    /// ✅ Lookup function for emoji-based categories
+    func getCategory(for emoji: String) -> String {
+        return (categories + hiddenCategories)
+            .first(where: { $0.emoji == emoji })?.name ?? "📍 Unknown"
+    }
+    
+    
     // MARK: - Filtering & Floating Card
     @Published var selectedCategory: Category = Category(emoji: "", name: "All", hidden: false)
     
