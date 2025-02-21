@@ -14,6 +14,8 @@ struct FloatingCardView: View {
     let onClose: () -> Void
 
     var body: some View {
+        
+        
         VStack(alignment: .leading) {
             // Dismiss Button
             HStack {
@@ -77,3 +79,17 @@ struct FloatingCardView: View {
         .padding(.horizontal)
     }
 }
+
+
+#Preview {
+    FloatingCardView(meetingPoint: MeetingPoint(
+        name: "Central Park",
+        emoji: "🌳",
+        category: "Park",
+        coordinate: CLLocationCoordinate2D(latitude: 40.785091, longitude: -73.968285),
+        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
+    )) {
+        print("FloatingCardView closed")
+    }
+}
+

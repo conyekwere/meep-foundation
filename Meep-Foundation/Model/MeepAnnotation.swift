@@ -4,8 +4,7 @@
 //
 //  Created by Chima onyekwere on 1/22/25.
 //
-
-// MeepAnnotation.swift
+//
 
 import CoreLocation
 
@@ -15,12 +14,12 @@ struct MeepAnnotation: Identifiable {
     let title: String
     let type: AnnotationType
 
-
     init(coordinate: CLLocationCoordinate2D, title: String, type: AnnotationType) {
         self.coordinate = coordinate
         self.title = title
         self.type = type
     }
+
 }
 
 enum AnnotationType {
