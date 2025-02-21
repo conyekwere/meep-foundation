@@ -7,11 +7,12 @@
 
 import SwiftUI
 
+
+
 extension MeepAnnotation {
     /// A computed property that returns a SwiftUI view for each annotation type.
-    /// Using @ViewBuilder lets us return different view structs without type errors.
     @ViewBuilder
-    var annotationView: some View {
+    func annotationView(isSelected: Binding<Bool>) -> some View {
         switch type {
         case .user:
             UserAnnotationView(title: title)
@@ -20,10 +21,11 @@ extension MeepAnnotation {
         case .midpoint:
             MidpointAnnotationView(title: title)
         case .place(let emoji):
-            PlaceAnnotationView(title: title, emoji: emoji)
+            PlaceAnnotationView(title: title, emoji: emoji, isSelected: isSelected)
         }
     }
 }
+
 
 // MARK: - Custom subviews for each annotation type
 
@@ -122,21 +124,78 @@ private struct MidpointAnnotationView: View {
 }
 
 
+//private struct PlaceAnnotationView: View {
+//    let title: String
+//    let emoji: String
+//    @Binding var isSelected: Bool
+//
+//    @Namespace private var animationNamespace
+//
+//    var body: some View {
+//        VStack(spacing: 0) {
+//            if isSelected {
+//                // 🔵 Active State (Expanded with title)
+//                HStack(alignment: .center, spacing: 6) {
+//                    Text(emoji)
+//                        .font(.callout)
+//                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
+//
+//                    Text(title)
+//                        .font(.footnote)
+//                        .foregroundColor(Color(.white))
+//                        .fontWeight(.regular)
+//                        .lineLimit(1)
+//                        .truncationMode(.tail)
+//                        .matchedGeometryEffect(id: "title-\(title)", in: animationNamespace)
+//                }
+//                .padding(.horizontal, 12)
+//                .frame(minHeight: 32)
+//                .background(Color(.label).opacity(0.9))
+//                .clipShape(RoundedRectangle(cornerRadius: 100))
+//                .overlay(RoundedRectangle(cornerRadius: 100).stroke(Color(.white), lineWidth: 2))
+//                .zIndex(1)
+//                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
+//            } else {
+//                // ⚪ Default State (Just Emoji)
+//                ZStack(alignment: .center) {
+//                    Text(emoji)
+//                        .font(.callout)
+//                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
+//                }
+//                .frame(width: 32, height: 32)
+//                .background(Color.white)
+//                .clipShape(Circle())
+//                .zIndex(1)
+//                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
+//
+//                PinPointer()
+//            }
+//        }
+//        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 2)
+//        .onTapGesture {
+//            withAnimation(.spring()) {
+//                isSelected.toggle() 
+//            }
+//        }
+//    }
+//}
+
+
 private struct PlaceAnnotationView: View {
     let title: String
     let emoji: String
+    @Binding var isSelected: Bool
 
-    @State private var isSelected: Bool = false // Track selection state
-    @Namespace private var animationNamespace // Matched Geometry Effect namespace
+    @Namespace private var animationNamespace
 
     var body: some View {
         VStack(spacing: 0) {
             if isSelected {
-                // 🔵 Active State (Expanded with title)
+                
                 HStack(alignment: .center, spacing: 6) {
                     Text(emoji)
                         .font(.callout)
-                        .matchedGeometryEffect(id: "emoji", in: animationNamespace)
+                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
 
                     Text(title)
                         .font(.footnote)
@@ -144,7 +203,7 @@ private struct PlaceAnnotationView: View {
                         .fontWeight(.regular)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .matchedGeometryEffect(id: "title", in: animationNamespace)
+                        .matchedGeometryEffect(id: "title-\(title)", in: animationNamespace)
                 }
                 .padding(.horizontal, 12)
                 .frame(minHeight: 32)
@@ -152,31 +211,33 @@ private struct PlaceAnnotationView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 100))
                 .overlay(RoundedRectangle(cornerRadius: 100).stroke(Color(.white), lineWidth: 2))
                 .zIndex(1)
-                .matchedGeometryEffect(id: "background", in: animationNamespace)
+                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
             } else {
-                // ⚪ Default State (Just Emoji)
+                
                 ZStack(alignment: .center) {
                     Text(emoji)
                         .font(.callout)
-                        .matchedGeometryEffect(id: "emoji", in: animationNamespace)
+                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
                 }
                 .frame(width: 32, height: 32)
                 .background(Color.white)
                 .clipShape(Circle())
                 .zIndex(1)
-                .matchedGeometryEffect(id: "background", in: animationNamespace)
+                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
 
                 PinPointer()
             }
         }
         .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 2)
         .onTapGesture {
-            withAnimation(.spring()) {
-                isSelected.toggle() // Toggle between active/inactive states
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { 
+                isSelected.toggle()
+                print("PlaceAnnotationView is \(isSelected)")
             }
         }
     }
 }
+
 
 // MARK: - Shared subviews
 
@@ -216,19 +277,31 @@ private struct AnnotationLabel: View {
  
 
 #Preview {
-    VStack(spacing: 20) {
-        UserAnnotationView(title: "City Hall, New York, NY 10007")
-        FriendAnnotationView(title: "Church Ave, Brooklyn, NY 11203")
-        MidpointAnnotationView(title: "E 88th St, New York, NY 10128")
-        PlaceAnnotationView(title: "McSorley's", emoji: "🍺")
-        
-        PlaceAnnotationView(title: "Central ParkCentral ParkCentral ParkCentral  Park", emoji: "🌳")
-        
-        PlaceAnnotationView(title: "Cafe", emoji: "☕")
-        PlaceAnnotationView(title: "The Grand Central Market", emoji: "🍽")
-        PlaceAnnotationView(title: "John's Italian Restaurant", emoji: "🍕")
-        PlaceAnnotationView(title: "Broadway Theater, New York", emoji: "🎭")
+    struct PlaceAnnotationPreview: View {
+        @State private var isSelectedMcSorleys = false
+        @State private var isSelectedCentralPark = false
+        @State private var isSelectedCafe = false
+        @State private var isSelectedGrandCentralMarket = false
+        @State private var isSelectedJohnsItalian = false
+        @State private var isSelectedBroadwayTheater = false
+
+        var body: some View {
+            VStack(spacing: 20) {
+                UserAnnotationView(title: "City Hall, New York, NY 10007")
+                FriendAnnotationView(title: "Church Ave, Brooklyn, NY 11203")
+                MidpointAnnotationView(title: "E 88th St, New York, NY 10128")
+
+                PlaceAnnotationView(title: "McSorley's", emoji: "🍺", isSelected: $isSelectedMcSorleys)
+                PlaceAnnotationView(title: "Central Park", emoji: "🌳", isSelected: $isSelectedCentralPark)
+                PlaceAnnotationView(title: "Cafe", emoji: "☕", isSelected: $isSelectedCafe)
+                PlaceAnnotationView(title: "The Grand Central Market", emoji: "🍽", isSelected: $isSelectedGrandCentralMarket)
+                PlaceAnnotationView(title: "John's Italian Restaurant", emoji: "🍕", isSelected: $isSelectedJohnsItalian)
+                PlaceAnnotationView(title: "Broadway Theater, New York", emoji: "🎭", isSelected: $isSelectedBroadwayTheater)
+            }
+            .padding()
+            .previewLayout(.sizeThatFits)
+        }
     }
-    .padding()
-    .previewLayout(.sizeThatFits)
+    
+    return PlaceAnnotationPreview()
 }
