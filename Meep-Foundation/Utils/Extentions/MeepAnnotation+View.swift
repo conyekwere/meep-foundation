@@ -112,6 +112,7 @@ private struct MidpointAnnotationView: View {
                     .fontWidth(.expanded)
                     .fontWeight(.regular)
                     .padding(4)
+                    .frame(minWidth:80)
                     .background(Color.white.opacity(0.9))
                         .cornerRadius(4)
                         .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 1)
