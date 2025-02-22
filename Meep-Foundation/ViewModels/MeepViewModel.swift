@@ -5,6 +5,13 @@
 //  Refactored for scalability and enhanced searchNearbyPlaces functionality.
 //  Created by Chima onyekwere on 1/21/25.
 //
+//
+//  MeepViewModel.swift
+//  Meep-Foundation
+//  Handles all location, geocoding, and midpoint logic.
+//  Refactored for scalability and enhanced searchNearbyPlaces functionality.
+//  Created by Chima onyekwere on 1/21/25.
+//
 
 import SwiftUI
 import MapKit
@@ -20,7 +27,28 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     )
     
     // List of meeting points found via search.
-    @Published var meetingPoints: [MeetingPoint] = []
+    @Published var meetingPoints: [MeetingPoint] = [
+        MeetingPoint(name: "McSorley's Old Ale House", emoji: "🍺", category: "Bar",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.728838, longitude: -73.9896487),
+                     imageUrl: "https://thumbs.6sqft.com/wp-content/uploads/2017/03/10104443/02McSorleysInterior5Center72900.jpg?w=900&format=webp"),
+        
+        MeetingPoint(name: "Izakaya Toribar", emoji: "🍴", category: "Restaurant",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7596279, longitude: -73.9685453),
+                     imageUrl: "https://i0.wp.com/izakayatoribar.com/wp-content/uploads/2020/02/FAA09132.jpg?resize=1024%2C683&ssl=1"),
+        
+        MeetingPoint(name: "Central Park", emoji: "🌳", category: "Park",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7943199, longitude: -73.9548079),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"),
+        
+        MeetingPoint(name: "The Oasis Cafe", emoji: "☕", category: "Coffee shop",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7671355, longitude: -73.9866929),
+                     imageUrl: "https://lh5.googleusercontent.com/p/AF1QipPCLsIFjbErCOILrg-jnMWBFmNG3RdSuEKsWd8E=w800-h500-k-no"),
+        
+        MeetingPoint(name: "Museum of Art", emoji: "🎨", category: "Museum",
+                     coordinate: CLLocationCoordinate2D(latitude: 40.7794, longitude: -73.9632),
+                     imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg/500px-Metropolitan_Museum_of_Art_%28The_Met%29_-_Central_Park%2C_NYC.jpg")
+    ]
+    
     
     @Published var categories: [Category] = [
         Category(emoji: "", name: "All", hidden: false),
@@ -77,11 +105,13 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "fitness center": ("Gym", "🏋️"),
         "winery": ("Winery", "🍷")
     ]
+   
+    // Using a comma-separated query for better compatibility.
+    private let searchQuery = "restaurant"
     
     
-    private let searchQuery = """
-    restaurant OR bar OR cafe OR park OR museum OR library OR bakery OR brewery OR winery OR stadium OR art gallery OR gym OR fitness center OR shopping mall OR supermarket OR grocery store OR hotel OR train station OR bus station OR airport OR zoo OR amusement park OR aquarium OR beach OR marina OR spa OR casino OR farmers market OR bookstore OR music venue OR theater OR deli OR diner OR food court
-    """
+    
+    @Published var searchRadius: Double = 0.005  // Adjust this value as needed
     
     
     /// Returns the category name for a given emoji.
@@ -117,9 +147,11 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     // MARK: - Annotations
+    @Published var sampleAnnotations: [MeepAnnotation] = []
+    
     @Published var searchResults: [MeepAnnotation] = []
     
-    /// Combines user, friend, midpoint, and search result annotations.
+    /// Combines user, friend, midpoint, and place annotations.
     var annotations: [MeepAnnotation] {
         var results: [MeepAnnotation] = []
         // Midpoint Annotation
@@ -132,7 +164,13 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         if let fLoc = friendLocation {
             results.append(MeepAnnotation(coordinate: fLoc, title: sharableFriendLocation, type: .friend))
         }
-        // Place Annotations from search results
+        // Use meetingPoints as fallback for place annotations.
+        results.append(contentsOf: meetingPoints.map {
+            MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+        })
+        
+        
+        results.append(contentsOf: sampleAnnotations)
         results.append(contentsOf: searchResults)
         return results
     }
@@ -148,14 +186,14 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         Publishers.CombineLatest4($userLocation, $friendLocation, $userTransportMode, $friendTransportMode)
             .sink { [weak self] userLoc, friendLoc, userMode, friendMode in
                 print("Combine triggered – userLoc: \(String(describing: userLoc)), friendLoc: \(String(describing: friendLoc)), userMode: \(userMode), friendMode: \(friendMode)")
-                self?.sortMeetingPointsByMidpoint()
-                self?.centerMapOnMidpoint()
-                self?.calculateOptimalMeetingPoint()
-                self?.searchNearbyPlaces()
+                DispatchQueue.main.async {
+                    self?.sortMeetingPointsByMidpoint()
+                    self?.centerMapOnMidpoint()
+                    self?.calculateOptimalMeetingPoint()
+                }
             }
             .store(in: &cancellables)
     }
-
     
     // MARK: - Helpers
     private func sortMeetingPointsByMidpoint() {
@@ -187,16 +225,20 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             longitude: (userLoc.longitude + friendLoc.longitude) / 2
         )
         
-        fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode) { [weak self] userTime in
+        print("Calculating travel time from \(userLoc) and \(friendLoc) to midpoint \(initialMidpoint)")
+        self.fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode) { [weak self] userTime in
             self?.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self?.friendTransportMode ?? .walk) { friendTime in
-                if abs(userTime - friendTime) < 3 * 60 { // Allow a 3-minute difference
-                    self?.meetingPoint = initialMidpoint
-                } else {
-                    let weight = userTime / (userTime + friendTime)
-                    self?.meetingPoint = CLLocationCoordinate2D(
-                        latitude: userLoc.latitude * weight + friendLoc.latitude * (1 - weight),
-                        longitude: userLoc.longitude * weight + friendLoc.longitude * (1 - weight)
-                    )
+                DispatchQueue.main.async {
+                    if abs(userTime - friendTime) < 3 * 60 {
+                        self?.meetingPoint = initialMidpoint
+                    } else {
+                        let weight = userTime / (userTime + friendTime)
+                        self?.meetingPoint = CLLocationCoordinate2D(
+                            latitude: userLoc.latitude * weight + friendLoc.latitude * (1 - weight),
+                            longitude: userLoc.longitude * weight + friendLoc.longitude * (1 - weight)
+                        )
+                    }
+                    print("Calculated meeting point: \(String(describing: self?.meetingPoint))")
                 }
             }
         }
@@ -208,81 +250,115 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
         
         switch mode {
-        case .walk: request.transportType = .walking
-        case .car: request.transportType = .automobile
+        case .walk:
+            request.transportType = .walking
+        case .car:
+            request.transportType = .automobile
         case .bike:
             request.transportType = .walking // Approximate cycling with walking time
             request.requestsAlternateRoutes = true
-        case .train: request.transportType = .transit
+        case .train:
+            request.transportType = .transit
         }
         
+        print("Fetching travel time from \(origin) to \(destination) using mode \(mode)")
         MKDirections(request: request).calculate { response, error in
-            guard let travelTime = response?.routes.first?.expectedTravelTime, error == nil else {
-                print("❌ Error fetching travel time: \(error?.localizedDescription ?? "Unknown")")
-                completion(15 * 60) // Default 15 minutes
-                return
+            if let travelTime = response?.routes.first?.expectedTravelTime, error == nil {
+                let adjustedTime = mode == .bike ? travelTime / 3 : travelTime
+                print("Travel time fetched: \(adjustedTime) seconds")
+                completion(adjustedTime)
+            } else {
+                let nsError = error as NSError?
+                print("❌ Error fetching travel time: \(error?.localizedDescription ?? "Unknown") (code: \(nsError?.code ?? 0))")
+                // Fallback: if using train and route not found, try automobile.
+                if mode == .train, nsError?.code == 5 {
+                    print("Fallback: Transit route not found. Trying automobile route.")
+                    let fallbackRequest = MKDirections.Request()
+                    fallbackRequest.source = request.source
+                    fallbackRequest.destination = request.destination
+                    fallbackRequest.transportType = .automobile
+                    MKDirections(request: fallbackRequest).calculate { response, error in
+                        if let fallbackTime = response?.routes.first?.expectedTravelTime, error == nil {
+                            print("Fallback travel time fetched: \(fallbackTime) seconds")
+                            completion(fallbackTime)
+                        } else {
+                            print("Fallback failed: \(error?.localizedDescription ?? "Unknown error")")
+                            completion(15 * 60) // Default to 15 minutes
+                        }
+                    }
+                } else {
+                    completion(15 * 60) // Default to 15 minutes if error occurs
+                }
             }
-            
-            let adjustedTime = mode == .bike ? travelTime / 3 : travelTime
-            completion(adjustedTime)
         }
     }
     
     // MARK: - Search Nearby Places
     /// Searches for nearby places based on the current midpoint.
+    
     func searchNearbyPlaces() {
-        // Ensure both user and friend locations are available.
-        guard let _ = userLocation, let _ = friendLocation else {
-            print("User or friend location is nil. Skipping searchNearbyPlaces.")
-            return
-        }
+        print("🔍 searchNearbyPlaces called")
+        print("Searching with midpoint: \(midpoint)")
         
+        // Use the configurable searchRadius value.
+        let radiusDelta = searchRadius
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchQuery
-        // For testing, we use a larger region (0.05) so more results may be returned.
         request.region = MKCoordinateRegion(
             center: midpoint,
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            span: MKCoordinateSpan(latitudeDelta: radiusDelta, longitudeDelta: radiusDelta)
         )
+        print("Search request: \(request)")
         
-        let search = MKLocalSearch(request: request)
-        search.start { [weak self] response, error in
-            guard let self = self else { return }
-            if let error = error {
-                print("Search error: \(error.localizedDescription)")
-                return
-            }
-            guard let response = response else {
-                print("Search returned no response.")
-                return
-            }
-            
-            print("🔍 Found \(response.mapItems.count) places near midpoint.")
-            
-            // Convert map items to meeting points.
-            let meetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
-            meetingPoints.forEach { point in
-                print("📍 Place found: \(point.name) - Category: \(point.category)")
-            }
-            
-            // Sort the meeting points based on distance from the midpoint.
-            let sortedPoints = meetingPoints.sorted {
-                let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
-                let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
-                let midLoc = CLLocation(latitude: self.midpoint.latitude, longitude: self.midpoint.longitude)
-                return locA.distance(from: midLoc) < locB.distance(from: midLoc)
-            }
-            
-            DispatchQueue.main.async {
-                self.meetingPoints = sortedPoints
-                self.searchResults = sortedPoints.map {
-                    MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+        // Delay the start slightly to ensure we're outside of view update cycles.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let search = MKLocalSearch(request: request)
+            search.start { [weak self] response, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    let nsError = error as NSError
+                    print("Search error 🙈: \(error.localizedDescription) (code: \(nsError.code))")
+                    // If error code is 5, try a fallback: expand the search radius and retry.
+                    if nsError.code == 5 {
+                        print("Error code 5 encountered. Retrying with a larger search radius.")
+                        self.searchRadius *= 2  // Double the radius
+                        self.searchNearbyPlaces()  // Retry
+                    }
+                    return
                 }
-                print("📍 Updated annotations with \(self.searchResults.count) search results.")
+                
+                guard let response = response else {
+                    print("Search returned no response.")
+                    return
+                }
+                
+                print("🔍 Found \(response.mapItems.count) places near midpoint.")
+                
+                // Convert map items to meeting points.
+                let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
+                for point in fetchedMeetingPoints {
+                    print("📍 Place found: \(point.name) - Category: \(point.category)")
+                }
+                
+                // Sort the meeting points based on distance from the midpoint.
+                let sortedPoints = fetchedMeetingPoints.sorted {
+                    let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                    let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
+                    let midLoc = CLLocation(latitude: self.midpoint.latitude, longitude: self.midpoint.longitude)
+                    return locA.distance(from: midLoc) < locB.distance(from: midLoc)
+                }
+                
+                DispatchQueue.main.async {
+                    self.meetingPoints = sortedPoints
+                    self.searchResults = sortedPoints.map {
+                        MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+                    }
+                    print("📍 Updated annotations with \(self.searchResults.count) search results.")
+                }
             }
         }
     }
-
     /// Converts an MKMapItem into a MeetingPoint.
     private func convert(mapItem: MKMapItem) -> MeetingPoint? {
         guard let coordinate = mapItem.placemark.location?.coordinate else { return nil }
@@ -298,7 +374,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             imageUrl: mapItem.url?.absoluteString ?? ""
         )
     }
-    
     
     // MARK: - Location Permissions & Updates
     func requestUserLocation() {
@@ -323,14 +398,15 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         print("Location updated: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
-        userLocation = loc.coordinate
-        mapRegion = MKCoordinateRegion(
-            center: loc.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
-        )
+        DispatchQueue.main.async {
+            self.userLocation = loc.coordinate
+            self.mapRegion = MKCoordinateRegion(
+                center: loc.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+            )
+        }
         locationManager?.stopUpdatingLocation()
     }
-
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location error: \(error.localizedDescription)")
@@ -391,55 +467,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
             let coord = placemarks?.first?.location?.coordinate
             completion(coord)
-        }
-    }
-    
-    func geocodeAndSetLocations(userAddress: String, friendAddress: String) {
-        let geocoder = CLGeocoder()
-        var userCoord: CLLocationCoordinate2D?
-        var friendCoord: CLLocationCoordinate2D?
-        
-        let group = DispatchGroup()
-        print("Starting geocoding for: \(userAddress) and \(friendAddress)")
-        
-        group.enter()
-        geocoder.geocodeAddressString(userAddress) { placemarks, error in
-            if let error = error {
-                print("User location geocode failed: \(error.localizedDescription)")
-            }
-            if let placemark = placemarks?.first, let coord = placemark.location?.coordinate {
-                userCoord = coord
-                print("User location geocoded: \(coord.latitude), \(coord.longitude)")
-            } else {
-                print("User address not found.")
-            }
-            group.leave()
-        }
-        
-        group.enter()
-        geocoder.geocodeAddressString(friendAddress) { placemarks, error in
-            if let error = error {
-                print("Friend location geocode failed: \(error.localizedDescription)")
-            }
-            if let placemark = placemarks?.first, let coord = placemark.location?.coordinate {
-                friendCoord = coord
-                print("Friend location geocoded: \(coord.latitude), \(coord.longitude)")
-            } else {
-                print("Friend address not found.")
-            }
-            group.leave()
-        }
-        
-        group.notify(queue: .main) {
-            if let userCoord = userCoord, let friendCoord = friendCoord {
-                print("Both locations geocoded successfully.")
-                self.userLocation = userCoord
-                self.friendLocation = friendCoord
-                self.centerMapOnMidpoint()
-                self.searchNearbyPlaces()
-            } else {
-                print("Geocoding failed for at least one location.")
-            }
         }
     }
 }
