@@ -4,12 +4,18 @@
 //
 //  Created by Chima onyekwere on 1/21/25.
 //
+//
+//  MeepAppView.swift
+//  Meep-Foundation
+//
+//  Created by Chima onyekwere on 1/21/25.
+//
 
 import SwiftUI
 import MapKit
 
 enum UIState {
-    case onboarding, searching, results,floatingResults
+    case onboarding, searching, results, floatingResults
 }
 
 struct MeepAppView: View {
@@ -22,7 +28,6 @@ struct MeepAppView: View {
     
     // Separate state variable to control the fullScreenCover presentation.
     @State private var isProfilePresented: Bool = false
-
     
     @State private var isAdvancedFiltersPresented: Bool  = false
     
@@ -42,8 +47,6 @@ struct MeepAppView: View {
     @State private var friendTransit: TransportMode = .train
     @State private var searchRadius: Double = 10
     
-    
-    
     @State private var selectedAnnotation: MeepAnnotation? = nil
     
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
@@ -54,19 +57,17 @@ struct MeepAppView: View {
             emoji = "📍"
         }
 
-        let category = viewModel.getCategory(for: emoji) // ✅ Dynamically get category
+        let category = viewModel.getCategory(for: emoji) // Dynamically get category
 
         viewModel.selectedPoint = MeetingPoint(
             name: annotation.title,
             emoji: emoji,
-            category: category, // ✅ Uses dynamic category lookup
+            category: category,
             coordinate: annotation.coordinate,
             imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
         )
         viewModel.isFloatingCardVisible = true
     }
-
-    
 
     var body: some View {
         ZStack {
@@ -80,7 +81,6 @@ struct MeepAppView: View {
                             get: { selectedAnnotation?.id == annotation.id },
                             set: { newValue in
                                 withAnimation(.spring()) {
-                                    print("Parent binding setter called with:", newValue)
                                     if newValue {
                                         selectedAnnotation = annotation
                                         setSelectedMeetingPoint(for: annotation)
@@ -90,24 +90,19 @@ struct MeepAppView: View {
                                     }
                                 }
                             }
-
                         ))
                     }
                 }
-
-
             .ignoresSafeArea()
-            .onAppear {
-                viewModel.loadSampleAnnotations()
-            }
-
+            // Removed loadSampleAnnotations() call since the method no longer exists.
+            //.onAppear { viewModel.loadSampleAnnotations() }
             
             // MARK: Top Search Bars Based on UIState
             VStack {
                 if uiState == .results {
                     SearchBarWithAction(
                         title: "35 Meeting Points",
-                        subtitle: "\(viewModel.SharableUserLocation) · \(viewModel.SharableFriendLocation)",
+                        subtitle: "\(viewModel.sharableUserLocation) · \(viewModel.sharableFriendLocation)",
                         leadingIcon: "chevron.left",
                         trailingIcon: "slider.horizontal.3",
                         isDirty: true,
@@ -122,19 +117,16 @@ struct MeepAppView: View {
                     .background(Color.white)
                     .cornerRadius(34)
                     .shadow(radius: 16)
-                    
-
-
                 }
                 
                 if uiState == .onboarding {
                     SearchBarWithAction(
                         title: "Find where to meet",
-                        subtitle: "\(viewModel.SharableUserLocation) · \(viewModel.SharableFriendLocation)",
+                        subtitle: "\(viewModel.sharableUserLocation) · \(viewModel.sharableFriendLocation)",
                         leadingIcon: "magnifyingglass",
                         trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
-                        onLeadingIconTap: { isSearching = true },   
+                        onLeadingIconTap: { isSearching = true },
                         onTrailingIconTap: {
                             isProfilePresented.toggle()
                             print("User profile tapped")
@@ -175,7 +167,7 @@ struct MeepAppView: View {
             // MARK: Meeting Results Sheet (Draggable)
             if uiState == .results {
                 MeetingResultsSheetView(viewModel: viewModel)
-                    .background(Color(.tertiarySystemBackground) )
+                    .background(Color(.tertiarySystemBackground))
                     .cornerRadius(meetingResultsOffset == sheetMin ? 0 : 24)
                     .shadow(color: Color.black.opacity(0.24),
                             radius: meetingResultsOffset == sheetMin ? 0 : 30, x: 0, y: 3)
@@ -191,19 +183,17 @@ struct MeepAppView: View {
             // MARK: Floating Card for Selected Point
             if let selectedPoint = viewModel.selectedPoint, viewModel.isFloatingCardVisible {
                 Spacer()
-                    FloatingCardView(meetingPoint: selectedPoint) {
-                        withAnimation {
-                            viewModel.isFloatingCardVisible = false
-                            viewModel.selectedPoint = nil
-                            selectedAnnotation = nil // Deselect annotation when closing
-                        }
+                FloatingCardView(meetingPoint: selectedPoint) {
+                    withAnimation {
+                        viewModel.isFloatingCardVisible = false
+                        viewModel.selectedPoint = nil
+                        selectedAnnotation = nil // Deselect annotation when closing
                     }
-                    .padding(.horizontal)
-                    .transition(.move(edge: .bottom))
-                    .zIndex(3)
                 }
-
-
+                .padding(.horizontal)
+                .transition(.move(edge: .bottom))
+                .zIndex(3)
+            }
         }
         // MARK: Full-Screen Search Sheet
         .fullScreenCover(isPresented: $isSearching) {
@@ -211,21 +201,16 @@ struct MeepAppView: View {
                 viewModel: viewModel,
                 isSearchActive: .constant(true),
                 onDismiss: {
-                    // When dismissing manually, switch to onboarding.
                     isSearching = false
                     uiState = .onboarding
                     
-                    
-                    // Reset the viewModel's locations to clear map annotations.
+                    // Reset view model locations and shareable strings.
                     viewModel.userLocation = nil
                     viewModel.friendLocation = nil
-
-                    // Reset the shareable location strings to their original values.
-                    viewModel.SharableUserLocation = "My Location"
-                    viewModel.SharableFriendLocation = "Friend's Location"
+                    viewModel.sharableUserLocation = "My Location"
+                    viewModel.sharableFriendLocation = "Friend's Location"
                 },
                 onDone: {
-                    // When done, switch to results.
                     isSearching = false
                     uiState = .results
                 }
@@ -247,7 +232,6 @@ struct MeepAppView: View {
             )
             .presentationDetents([.fraction(0.85)])
         }
-        
     }
 }
 
