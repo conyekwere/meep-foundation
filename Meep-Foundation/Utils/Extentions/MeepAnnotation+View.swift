@@ -212,8 +212,15 @@ private struct PlaceAnnotationView: View {
                 .overlay(RoundedRectangle(cornerRadius: 100).stroke(Color(.white), lineWidth: 2))
                 .zIndex(1)
                 .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
+                .onTapGesture {
+
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                       isSelected.toggle()
+                       print("PlaceAnnotationView is \(isSelected)")
+                    }
+                }
+
             } else {
-                
                 ZStack(alignment: .center) {
                     Text(emoji)
                         .font(.callout)
@@ -224,17 +231,19 @@ private struct PlaceAnnotationView: View {
                 .clipShape(Circle())
                 .zIndex(1)
                 .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
+                .onTapGesture {
 
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                       isSelected.toggle()
+                       print("PlaceAnnotationView is \(isSelected)")
+                    }
+                }
+                
                 PinPointer()
             }
         }
         .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 2)
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { 
-                isSelected.toggle()
-                print("PlaceAnnotationView is \(isSelected)")
-            }
-        }
+
     }
 }
 
