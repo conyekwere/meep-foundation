@@ -253,6 +253,8 @@ struct MeetingSearchSheetView: View {
                                         
                                         viewModel.reverseGeocodeFriendLocation()
                                         
+                                        viewModel.searchNearbyPlaces()
+                                  
                                         onDone()
                                     }
                                     
