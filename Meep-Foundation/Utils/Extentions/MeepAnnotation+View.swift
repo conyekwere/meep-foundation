@@ -124,62 +124,6 @@ private struct MidpointAnnotationView: View {
 }
 
 
-//private struct PlaceAnnotationView: View {
-//    let title: String
-//    let emoji: String
-//    @Binding var isSelected: Bool
-//
-//    @Namespace private var animationNamespace
-//
-//    var body: some View {
-//        VStack(spacing: 0) {
-//            if isSelected {
-//                // 🔵 Active State (Expanded with title)
-//                HStack(alignment: .center, spacing: 6) {
-//                    Text(emoji)
-//                        .font(.callout)
-//                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
-//
-//                    Text(title)
-//                        .font(.footnote)
-//                        .foregroundColor(Color(.white))
-//                        .fontWeight(.regular)
-//                        .lineLimit(1)
-//                        .truncationMode(.tail)
-//                        .matchedGeometryEffect(id: "title-\(title)", in: animationNamespace)
-//                }
-//                .padding(.horizontal, 12)
-//                .frame(minHeight: 32)
-//                .background(Color(.label).opacity(0.9))
-//                .clipShape(RoundedRectangle(cornerRadius: 100))
-//                .overlay(RoundedRectangle(cornerRadius: 100).stroke(Color(.white), lineWidth: 2))
-//                .zIndex(1)
-//                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
-//            } else {
-//                // ⚪ Default State (Just Emoji)
-//                ZStack(alignment: .center) {
-//                    Text(emoji)
-//                        .font(.callout)
-//                        .matchedGeometryEffect(id: "emoji-\(title)", in: animationNamespace)
-//                }
-//                .frame(width: 32, height: 32)
-//                .background(Color.white)
-//                .clipShape(Circle())
-//                .zIndex(1)
-//                .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
-//
-//                PinPointer()
-//            }
-//        }
-//        .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 2)
-//        .onTapGesture {
-//            withAnimation(.spring()) {
-//                isSelected.toggle() 
-//            }
-//        }
-//    }
-//}
-
 
 private struct PlaceAnnotationView: View {
     let title: String
