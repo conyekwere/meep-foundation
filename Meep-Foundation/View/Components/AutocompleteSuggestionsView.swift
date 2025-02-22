@@ -4,8 +4,6 @@
 //
 //  Created by Chima onyekwere on 2/2/25.
 //
-
-
 import SwiftUI
 import MapKit
 
@@ -18,11 +16,13 @@ struct AutocompleteSuggestionsView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 24) {
-                ForEach(completions, id: \.title) { completion in
+                ForEach(Array(completions.enumerated()), id: \.offset) { index, completion in
                     Button(action: {
-                        // Update the bound text with the suggestion.
-                        text = "\(completion.title) \(completion.subtitle)".trimmingCharacters(in: .whitespaces)
-                        onSuggestionSelected()
+                        // Wrap state update in async dispatch.
+                        DispatchQueue.main.async {
+                            text = "\(completion.title) \(completion.subtitle)".trimmingCharacters(in: .whitespaces)
+                            onSuggestionSelected()
+                        }
                     }) {
                         HStack(spacing: 16) {
                             Image(systemName: "mappin.circle")
@@ -50,5 +50,12 @@ struct AutocompleteSuggestionsView: View {
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity)
         .padding(.top, 24)
+    }
+}
+
+struct AutocompleteSuggestionsView_Previews: PreviewProvider {
+    static var previews: some View {
+        // For preview purposes, we're using an empty completions array.
+        AutocompleteSuggestionsView(completions: [], text: .constant("Sample text"), onSuggestionSelected: {})
     }
 }
