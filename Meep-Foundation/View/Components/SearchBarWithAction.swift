@@ -14,6 +14,7 @@ struct SearchBarWithAction: View {
     let leadingIcon: String
     let trailingIcon: String
     let isDirty: Bool
+    let filterCount: Int
     let onLeadingIconTap: () -> Void
     let onTrailingIconTap: () -> Void
     let onContainerTap: () -> Void
@@ -56,12 +57,25 @@ struct SearchBarWithAction: View {
                     onTrailingIconTap()
                 }) {
                     if isDirty {
-                        Image(systemName: trailingIcon)
-                            .foregroundColor(Color(.gray))
-                            .frame(width: 34, height: 34)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
-                            .rotationEffect(.degrees(-90))
+                        ZStack{
+                            Image(systemName: trailingIcon)
+                                .foregroundColor(Color(.gray))
+                                .frame(width: 34, height: 34)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                                .rotationEffect(.degrees(-90))
+                            
+                            if filterCount > 0 { // ✅ Only show badge if filters are applied
+                                Text("\(filterCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(width: 16, height: 16)
+                                    .background(Color.black)
+                                    .clipShape(Circle())
+                                    .offset(x: 14, y: -16) // ✅ Position Badge on Top-Right Corner
+                            }
+                        }
                        
                     }
                     else{
@@ -83,6 +97,8 @@ struct SearchBarWithAction: View {
 }
 
 
+
+
 #Preview {
     SearchBarWithAction(
         title: "35 Meeting Points",
@@ -90,6 +106,7 @@ struct SearchBarWithAction: View {
         leadingIcon: "chevron.left",
         trailingIcon: "slider.horizontal.3",
         isDirty: true,
+        filterCount: 3, // ✅ Added this
         onLeadingIconTap: {
             print("Back button tapped")
         },
@@ -107,6 +124,7 @@ struct SearchBarWithAction: View {
         leadingIcon: "magnifyingglass",
         trailingIcon:"https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
         isDirty: false,
+        filterCount: 0, // ✅ Added this
         onLeadingIconTap: {
             print("Search button tapped")
         },
