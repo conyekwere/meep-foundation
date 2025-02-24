@@ -4,7 +4,6 @@
 //
 //  Created by Chima Onyekwere on 2/8/25.
 //
-//
 
 import SwiftUI
 
@@ -12,15 +11,18 @@ struct AdvancedFiltersBottomSheet: View {
     @Binding var myTransit: TransportMode
     @Binding var friendTransit: TransportMode
     @Binding var searchRadius: Double
-    // New binding for departureTime – nil means "Now"
     @Binding var departureTime: Date?
-    
+
     @Environment(\.dismiss) var dismiss
 
     @State private var isNowSelected = true // Default to "Now"
     @State private var startDate = Date()
     @State private var showDatePicker = false // Controls overlay visibility
 
+    
+    @ObservedObject var viewModel: MeepViewModel 
+    
+    
     let dateRange: ClosedRange<Date> = {
         let calendar = Calendar.current
         let startComponents = DateComponents(year: 2025, month: 1, day: 1)
@@ -30,7 +32,6 @@ struct AdvancedFiltersBottomSheet: View {
 
     var body: some View {
         NavigationStack {
-            
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
@@ -40,7 +41,7 @@ struct AdvancedFiltersBottomSheet: View {
                             .font(.headline)
                             .fontWeight(.regular)
                             .fontWidth(.expanded)
-                        
+
                         HStack(spacing: 10) {
                             Button(action: {
                                 isNowSelected = true
@@ -76,8 +77,7 @@ struct AdvancedFiltersBottomSheet: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        
-                        // Show Selected Time if "Leave" is selected
+
                         if !isNowSelected {
                             Button(action: { showDatePicker.toggle() }) {
                                 HStack {
@@ -104,10 +104,10 @@ struct AdvancedFiltersBottomSheet: View {
                     }
 
                     // My Transit Selection
-                      TransportModePicker(title: "My Transit", selectedMode: $myTransit)
+                    TransportModePicker(title: "My Transit", selectedMode: $myTransit)
 
-                      // Friend's Transit Selection
-                      TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
+                    // Friend's Transit Selection
+                    TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
 
                     // Search Range Slider
                     VStack(alignment: .leading, spacing: 12) {
@@ -115,7 +115,7 @@ struct AdvancedFiltersBottomSheet: View {
                             .font(.headline)
                             .fontWeight(.regular)
                             .fontWidth(.expanded)
-                        
+
                         CustomRangeSlider(value: $searchRadius, range: 1...20, step: 1)
                     }
                     .padding(.top, 4)
@@ -128,19 +128,31 @@ struct AdvancedFiltersBottomSheet: View {
                 .padding(.top, -40)
                 Spacer()
             }
-            
+
             Divider()
             HStack {
                 Button("Clear All") {
+                    myTransit = .train
+                    friendTransit = .train
+                    searchRadius = 2 // Set to 2 miles as default
+                    departureTime = nil
+                    isNowSelected = true
+                    
+                    viewModel.activeFilterCount = 0
+                    
                     dismiss()
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
                 .foregroundColor(.black)
-              
                 .cornerRadius(10)
 
                 Button("Show results") {
+                    viewModel.updateActiveFilterCount(myTransit: myTransit, friendTransit: friendTransit, searchRadius: searchRadius, departureTime: departureTime)
+
+                    viewModel.searchRadius = searchRadius // ✅ Sync with ViewModel
+                    viewModel.searchNearbyPlaces()       // ✅ Trigger New Search
+
                     dismiss()
                 }
                 .frame(maxWidth: .infinity)
@@ -151,8 +163,8 @@ struct AdvancedFiltersBottomSheet: View {
             }
             .padding(.bottom, -20)
             .padding()
-            .padding(.horizontal,16)
-            
+            .padding(.horizontal, 16)
+
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: { dismiss() }) {
@@ -172,18 +184,17 @@ struct AdvancedFiltersBottomSheet: View {
                 }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
-                              Text("Filters")
-                                  .font(.headline)
-                                  .fontWeight(.semibold)
-                                  .fontWidth(.expanded)
-                                  .foregroundColor(.primary).opacity(0.7)
-                          }
+                        Text("Filters")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .fontWidth(.expanded)
+                            .foregroundColor(.primary).opacity(0.7)
+                    }
                 }
             }
             .sheet(isPresented: $showDatePicker) {
                 DatePickerTransitSheet(startDate: $startDate)
                     .onDisappear {
-                        // Update departureTime when the date picker closes.
                         if !isNowSelected {
                             departureTime = startDate
                         }
@@ -193,17 +204,16 @@ struct AdvancedFiltersBottomSheet: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    // ✅ **Helper Function to Format Date Dynamically**
     func formatDate(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
             let formatter = DateFormatter()
-            formatter.timeStyle = .short // Show only time if today
+            formatter.timeStyle = .short
             return formatter.string(from: date)
         } else {
             let formatter = DateFormatter()
-            formatter.dateStyle = .medium // Show date
-            formatter.timeStyle = .short // Show time
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
             return formatter.string(from: date)
         }
     }
@@ -213,7 +223,7 @@ struct AdvancedFiltersBottomSheet: View {
     AdvancedFiltersBottomSheet(
         myTransit: .constant(.train),
         friendTransit: .constant(.train),
-        searchRadius: .constant(10),
-        departureTime: .constant(nil)
+        searchRadius: .constant(2), // Default 2 miles
+        departureTime: .constant(nil), viewModel: MeepViewModel()
     )
 }
