@@ -5,13 +5,7 @@
 //  Refactored for scalability and enhanced searchNearbyPlaces functionality.
 //  Created by Chima onyekwere on 1/21/25.
 //
-//
-//  MeepViewModel.swift
-//  Meep-Foundation
-//  Handles all location, geocoding, and midpoint logic.
-//  Refactored for scalability and enhanced searchNearbyPlaces functionality.
-//  Created by Chima onyekwere on 1/21/25.
-//
+
 
 import SwiftUI
 import MapKit
@@ -109,7 +103,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // Using a comma-separated query for better compatibility.
     private let searchQuery = "restaurant"
     
-    
+    @Published var activeFilterCount: Int = 0
     
     @Published var searchRadius: Double = 0.005  // Adjust this value as needed
     
@@ -148,7 +142,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     
-    
+    @Published var isUserInteractingWithMap = false
     
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
@@ -156,28 +150,25 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var searchResults: [MeepAnnotation] = []
     
     /// Combines user, friend, midpoint, and place annotations.
+    
     var annotations: [MeepAnnotation] {
+        guard !isUserInteractingWithMap else { return [] } // ✅ Prevent unnecessary re-renders while panning
         var results: [MeepAnnotation] = []
-        // Midpoint Annotation
+        
         results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
-        // User Annotation
+        
         if let uLoc = userLocation {
             results.append(MeepAnnotation(coordinate: uLoc, title: sharableUserLocation, type: .user))
         }
-        // Friend Annotation
         if let fLoc = friendLocation {
             results.append(MeepAnnotation(coordinate: fLoc, title: sharableFriendLocation, type: .friend))
         }
-        // Use meetingPoints as fallback for place annotations.
-        results.append(contentsOf: meetingPoints.map {
-            MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
-        })
         
-        
-        results.append(contentsOf: sampleAnnotations)
         results.append(contentsOf: searchResults)
+        
         return results
     }
+    
     
     // MARK: - Combine
     private var cancellables = Set<AnyCancellable>()
@@ -210,6 +201,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     private func centerMapOnMidpoint() {
+        guard !isUserInteractingWithMap else { return } // ✅ Prevent updates while user moves the map
         withAnimation {
             mapRegion = MKCoordinateRegion(
                 center: midpoint,
@@ -248,6 +240,17 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
 
+    func updateActiveFilterCount(myTransit: TransportMode, friendTransit: TransportMode, searchRadius: Double, departureTime: Date?) {
+        var count = 0
+
+        if myTransit != .train { count += 1 } // Example: Default is `train`, so any change counts as a filter
+        if friendTransit != .train { count += 1 }
+        if searchRadius != 2 { count += 1 } // Default search radius is 2 miles
+        if departureTime != nil { count += 1 }
+
+        activeFilterCount = count
+    }
+    
     
     
     /// Modified fetchTravelTime that uses an optional departureTime (for transit routes)

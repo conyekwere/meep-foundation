@@ -4,12 +4,7 @@
 //
 //  Created by Chima onyekwere on 1/21/25.
 //
-//
-//  MeepAppView.swift
-//  Meep-Foundation
-//
-//  Created by Chima onyekwere on 1/21/25.
-//
+
 
 import SwiftUI
 import MapKit
@@ -20,6 +15,9 @@ enum UIState {
 
 struct MeepAppView: View {
     @StateObject private var viewModel = MeepViewModel()
+    
+    
+    @State private var departureTime: Date? = nil // ✅ Fix: Add departureTime
     
     // Overall UI state for top search bars etc.
     @State private var uiState: UIState = .onboarding
@@ -45,7 +43,7 @@ struct MeepAppView: View {
     
     @State private var myTransit: TransportMode = .train
     @State private var friendTransit: TransportMode = .train
-    @State private var searchRadius: Double = 10
+    @State private var searchRadius: Double = 2
     
     @State private var selectedAnnotation: MeepAnnotation? = nil
     
@@ -91,6 +89,16 @@ struct MeepAppView: View {
                         ))
                     }
                 }
+                .gesture(
+                    DragGesture()
+                        .onChanged { _ in viewModel.isUserInteractingWithMap = true } // ✅ Start Tracking Drag
+                        .onEnded { _ in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                viewModel.isUserInteractingWithMap = false // ✅ Only Recalculate AFTER Drag Stops
+                                viewModel.searchNearbyPlaces() // ✅ Refresh Search When Drag Ends
+                            }
+                        }
+                )
             .ignoresSafeArea()
             // Removed loadSampleAnnotations() call since the method no longer exists.
             //.onAppear { viewModel.loadSampleAnnotations() }
@@ -99,16 +107,17 @@ struct MeepAppView: View {
             VStack {
                 if uiState == .results {
                     SearchBarWithAction(
-                        title: "35 Meeting Points",
+                        title: "\(viewModel.meetingPoints.count) Meeting Points",
                         subtitle: "\(viewModel.sharableUserLocation) · \(viewModel.sharableFriendLocation)",
                         leadingIcon: "chevron.left",
                         trailingIcon: "slider.horizontal.3",
                         isDirty: true,
-                        onLeadingIconTap: { isSearching = true }, // Trigger fullScreenCover
-                        onTrailingIconTap: {
-                            isAdvancedFiltersPresented.toggle()
-                        },
-                        onContainerTap: { isSearching = true }  // Trigger fullScreenCover
+                        filterCount: viewModel.activeFilterCount, // ✅ Add this to track filter count
+                        onLeadingIconTap: { isSearching = true
+                            viewModel.activeFilterCount = 0 },
+                        onTrailingIconTap: { isAdvancedFiltersPresented.toggle() },
+                        onContainerTap: { isSearching = true
+                            viewModel.activeFilterCount = 0 }
                     )
                     .padding()
                     .frame(height: 60)
@@ -124,6 +133,7 @@ struct MeepAppView: View {
                         leadingIcon: "magnifyingglass",
                         trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
+                        filterCount: viewModel.activeFilterCount,
                         onLeadingIconTap: { isSearching = true },
                         onTrailingIconTap: {
                             isProfilePresented.toggle()
@@ -223,12 +233,14 @@ struct MeepAppView: View {
                 .presentationDragIndicator(.hidden)
         }
         
+        
         .sheet(isPresented: $isAdvancedFiltersPresented) {
             AdvancedFiltersBottomSheet(
                 myTransit: $myTransit,
                 friendTransit: $friendTransit,
                 searchRadius: $searchRadius,
-                departureTime: $viewModel.departureTime
+                departureTime: $departureTime,
+                viewModel: viewModel // ✅ Pass ViewModel from Parent
             )
             .presentationDetents([.fraction(0.85)])
         }
