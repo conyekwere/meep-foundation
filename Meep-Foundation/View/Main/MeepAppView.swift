@@ -52,13 +52,11 @@ struct MeepAppView: View {
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
         let emoji: String
         if case let .place(emojiValue) = annotation.type {
-            emoji = emojiValue
+            emoji = emojiValue.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
             emoji = "📍"
         }
-
         let category = viewModel.getCategory(for: emoji) // Dynamically get category
-
         viewModel.selectedPoint = MeetingPoint(
             name: annotation.title,
             emoji: emoji,
@@ -195,6 +193,7 @@ struct MeepAppView: View {
                 .zIndex(3)
             }
         }
+        
         // MARK: Full-Screen Search Sheet
         .fullScreenCover(isPresented: $isSearching) {
             MeetingSearchSheetView(
@@ -228,7 +227,8 @@ struct MeepAppView: View {
             AdvancedFiltersBottomSheet(
                 myTransit: $myTransit,
                 friendTransit: $friendTransit,
-                searchRadius: $searchRadius
+                searchRadius: $searchRadius,
+                departureTime: $viewModel.departureTime
             )
             .presentationDetents([.fraction(0.85)])
         }
