@@ -113,11 +113,12 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     @Published var searchRadius: Double = 0.005  // Adjust this value as needed
     
+    @Published var departureTime: Date? = nil    // nil means "Now"
     
     /// Returns the category name for a given emoji.
     func getCategory(for emoji: String) -> String {
-        return (categories + hiddenCategories)
-            .first(where: { $0.emoji == emoji })?.name ?? "📍 Unknown"
+        let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (categories + hiddenCategories).first(where: { $0.emoji == trimmedEmoji })?.name ?? "📍 Unknown"
     }
     
     // MARK: - Filtering & Floating Card
@@ -145,6 +146,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         return CLLocationCoordinate2D(latitude: (uLat + fLat) / 2,
                                       longitude: (uLon + fLon) / 2)
     }
+    
+    
+    
     
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
@@ -225,9 +229,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             longitude: (userLoc.longitude + friendLoc.longitude) / 2
         )
         
-        print("Calculating travel time from \(userLoc) and \(friendLoc) to midpoint \(initialMidpoint)")
-        self.fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode) { [weak self] userTime in
-            self?.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self?.friendTransportMode ?? .walk) { friendTime in
+        // Pass the departureTime from the advanced filters
+        fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode, departureTime: departureTime) { [weak self] userTime in
+            self?.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self?.friendTransportMode ?? .walk, departureTime: self?.departureTime) { friendTime in
                 DispatchQueue.main.async {
                     if abs(userTime - friendTime) < 3 * 60 {
                         self?.meetingPoint = initialMidpoint
@@ -238,13 +242,20 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                             longitude: userLoc.longitude * weight + friendLoc.longitude * (1 - weight)
                         )
                     }
-                    print("Calculated meeting point: \(String(describing: self?.meetingPoint))")
                 }
             }
         }
     }
     
-    private func fetchTravelTime(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D, mode: TransportMode, completion: @escaping (TimeInterval) -> Void) {
+
+    
+    
+    /// Modified fetchTravelTime that uses an optional departureTime (for transit routes)
+    private func fetchTravelTime(from origin: CLLocationCoordinate2D,
+                                 to destination: CLLocationCoordinate2D,
+                                 mode: TransportMode,
+                                 departureTime: Date? = nil,
+                                 completion: @escaping (TimeInterval) -> Void) {
         let request = MKDirections.Request()
         request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
@@ -259,36 +270,18 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             request.requestsAlternateRoutes = true
         case .train:
             request.transportType = .transit
+            // Use the selected departure time if provided (for transit directions)
+            if let depTime = departureTime {
+                request.departureDate = depTime
+            }
         }
         
-        print("Fetching travel time from \(origin) to \(destination) using mode \(mode)")
         MKDirections(request: request).calculate { response, error in
             if let travelTime = response?.routes.first?.expectedTravelTime, error == nil {
-                let adjustedTime = mode == .bike ? travelTime / 3 : travelTime
-                print("Travel time fetched: \(adjustedTime) seconds")
-                completion(adjustedTime)
+                let adjustedTravelTime = mode == .bike ? travelTime / 3 : travelTime
+                completion(adjustedTravelTime)
             } else {
-                let nsError = error as NSError?
-                print("❌ Error fetching travel time: \(error?.localizedDescription ?? "Unknown") (code: \(nsError?.code ?? 0))")
-                // Fallback: if using train and route not found, try automobile.
-                if mode == .train, nsError?.code == 5 {
-                    print("Fallback: Transit route not found. Trying automobile route.")
-                    let fallbackRequest = MKDirections.Request()
-                    fallbackRequest.source = request.source
-                    fallbackRequest.destination = request.destination
-                    fallbackRequest.transportType = .automobile
-                    MKDirections(request: fallbackRequest).calculate { response, error in
-                        if let fallbackTime = response?.routes.first?.expectedTravelTime, error == nil {
-                            print("Fallback travel time fetched: \(fallbackTime) seconds")
-                            completion(fallbackTime)
-                        } else {
-                            print("Fallback failed: \(error?.localizedDescription ?? "Unknown error")")
-                            completion(15 * 60) // Default to 15 minutes
-                        }
-                    }
-                } else {
-                    completion(15 * 60) // Default to 15 minutes if error occurs
-                }
+                completion(15 * 60) // default fallback: 15 minutes
             }
         }
     }
@@ -301,16 +294,15 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("Searching with midpoint: \(midpoint)")
         
         // Use the configurable searchRadius value.
-        let radiusDelta = searchRadius
+        let delta = searchRadius * 0.0145  // Rough approximation: 1 mile ≈ 0.0145 degrees
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchQuery
         request.region = MKCoordinateRegion(
             center: midpoint,
-            span: MKCoordinateSpan(latitudeDelta: radiusDelta, longitudeDelta: radiusDelta)
+            span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
         )
         print("Search request: \(request)")
         
-        // Delay the start slightly to ensure we're outside of view update cycles.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let search = MKLocalSearch(request: request)
             search.start { [weak self] response, error in
@@ -319,11 +311,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 if let error = error {
                     let nsError = error as NSError
                     print("Search error 🙈: \(error.localizedDescription) (code: \(nsError.code))")
-                    // If error code is 5, try a fallback: expand the search radius and retry.
                     if nsError.code == 5 {
                         print("Error code 5 encountered. Retrying with a larger search radius.")
                         self.searchRadius *= 2  // Double the radius
-                        self.searchNearbyPlaces()  // Retry
+                        self.searchNearbyPlaces()  // Retry search
                     }
                     return
                 }
@@ -335,13 +326,11 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 
                 print("🔍 Found \(response.mapItems.count) places near midpoint.")
                 
-                // Convert map items to meeting points.
                 let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
                 for point in fetchedMeetingPoints {
                     print("📍 Place found: \(point.name) - Category: \(point.category)")
                 }
                 
-                // Sort the meeting points based on distance from the midpoint.
                 let sortedPoints = fetchedMeetingPoints.sorted {
                     let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
                     let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
@@ -359,9 +348,14 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
-    /// Converts an MKMapItem into a MeetingPoint.
+    
+    
+    
     private func convert(mapItem: MKMapItem) -> MeetingPoint? {
-        guard let coordinate = mapItem.placemark.location?.coordinate else { return nil }
+        guard let coordinate = mapItem.placemark.location?.coordinate else {
+            print("Skipping map item; no coordinate available.")
+            return nil
+        }
         let placeType = mapItem.pointOfInterestCategory?.rawValue.lowercased() ?? "unknown"
         let mappedCategory = categoryMapping[placeType]?.category ?? "Other"
         let mappedEmoji = categoryMapping[placeType]?.emoji ?? "📍"
@@ -374,6 +368,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             imageUrl: mapItem.url?.absoluteString ?? ""
         )
     }
+    
     
     // MARK: - Location Permissions & Updates
     func requestUserLocation() {
