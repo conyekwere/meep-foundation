@@ -4,12 +4,17 @@
 //
 //  Created by Chima Onyekwere on 2/8/25.
 //
+//
+
 import SwiftUI
 
 struct AdvancedFiltersBottomSheet: View {
     @Binding var myTransit: TransportMode
     @Binding var friendTransit: TransportMode
     @Binding var searchRadius: Double
+    // New binding for departureTime – nil means "Now"
+    @Binding var departureTime: Date?
+    
     @Environment(\.dismiss) var dismiss
 
     @State private var isNowSelected = true // Default to "Now"
@@ -25,6 +30,7 @@ struct AdvancedFiltersBottomSheet: View {
 
     var body: some View {
         NavigationStack {
+            
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
@@ -36,22 +42,26 @@ struct AdvancedFiltersBottomSheet: View {
                             .fontWidth(.expanded)
                         
                         HStack(spacing: 10) {
-                            Button(action: { isNowSelected = true }) {
+                            Button(action: {
+                                isNowSelected = true
+                                departureTime = nil  // "Now" selected
+                            }) {
                                 Text("Now")
                                     .fontWeight(.regular)
-                                    .fontWidth(.expanded)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(isNowSelected ? Color.gray.opacity(0.1) : Color.white)
-                                    .foregroundColor(isNowSelected ? Color(.label) : .black)
-                                    .fontWeight(isNowSelected ? .medium : .regular)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                   .fontWidth(.expanded)
+                                   .frame(maxWidth: .infinity)
+                                   .padding(.vertical, 12)
+                                   .background(isNowSelected ? Color.gray.opacity(0.1) : Color.white)
+                                   .foregroundColor(isNowSelected ? Color(.label) : .black)
+                                   .fontWeight(isNowSelected ? .medium : .regular)
+                                   .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                                   .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
 
                             Button(action: {
                                 isNowSelected = false
                                 showDatePicker.toggle()
+                                departureTime = startDate
                             }) {
                                 Text("Leave")
                                     .fontWeight(.regular)
@@ -66,7 +76,7 @@ struct AdvancedFiltersBottomSheet: View {
                             }
                         }
                         .frame(maxWidth: .infinity)
-
+                        
                         // Show Selected Time if "Leave" is selected
                         if !isNowSelected {
                             Button(action: { showDatePicker.toggle() }) {
@@ -76,17 +86,14 @@ struct AdvancedFiltersBottomSheet: View {
                                         .foregroundColor(.black)
                                         .fontWeight(.regular)
                                         .fontWidth(.expanded)
-
                                     Spacer()
-
-                                    // ✅ Show both date and time if the selected date is NOT today
                                     Text(formatDate(startDate))
                                         .fontWeight(.regular)
-                                        .fontWidth(.expanded)
-                                        .padding(8)
-                                        .foregroundColor(.black)
-                                        .background(Color(.lightGray).opacity(0.2))
-                                        .cornerRadius(8)
+                                      .fontWidth(.expanded)
+                                      .padding(8)
+                                      .foregroundColor(.black)
+                                      .background(Color(.lightGray).opacity(0.2))
+                                      .cornerRadius(8)
                                 }
                                 .padding()
                                 .background(Color.white)
@@ -97,18 +104,18 @@ struct AdvancedFiltersBottomSheet: View {
                     }
 
                     // My Transit Selection
-                    TransportModePicker(title: "My Transit", selectedMode: $myTransit)
+                      TransportModePicker(title: "My Transit", selectedMode: $myTransit)
 
-                    // Friend's Transit Selection
-                    TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
+                      // Friend's Transit Selection
+                      TransportModePicker(title: "Friend's Transit", selectedMode: $friendTransit)
 
-                    // Search Range Interactive Indicator (Acts as Slider)
+                    // Search Range Slider
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Search Range (\(Int(searchRadius)) miles)")
                             .font(.headline)
                             .fontWeight(.regular)
                             .fontWidth(.expanded)
-
+                        
                         CustomRangeSlider(value: $searchRadius, range: 1...20, step: 1)
                     }
                     .padding(.top, 4)
@@ -116,12 +123,36 @@ struct AdvancedFiltersBottomSheet: View {
                     .background(Color.white)
                     .cornerRadius(12)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
-
                 }
                 .padding()
-                .padding(.top, -32)
+                .padding(.top, -40)
                 Spacer()
             }
+            
+            Divider()
+            HStack {
+                Button("Clear All") {
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .foregroundColor(.black)
+              
+                .cornerRadius(10)
+
+                Button("Show results") {
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.bottom, -20)
+            .padding()
+            .padding(.horizontal,16)
+            
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: { dismiss() }) {
@@ -141,18 +172,25 @@ struct AdvancedFiltersBottomSheet: View {
                 }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
-                        Text("Filters")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .fontWidth(.expanded)
-                            .foregroundColor(.primary).opacity(0.7)
-                    }
+                              Text("Filters")
+                                  .font(.headline)
+                                  .fontWeight(.semibold)
+                                  .fontWidth(.expanded)
+                                  .foregroundColor(.primary).opacity(0.7)
+                          }
                 }
             }
             .sheet(isPresented: $showDatePicker) {
                 DatePickerTransitSheet(startDate: $startDate)
+                    .onDisappear {
+                        // Update departureTime when the date picker closes.
+                        if !isNowSelected {
+                            departureTime = startDate
+                        }
+                    }
             }
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     // ✅ **Helper Function to Format Date Dynamically**
@@ -171,15 +209,11 @@ struct AdvancedFiltersBottomSheet: View {
     }
 }
 
-
 #Preview {
-    @State var myTransit: TransportMode = .train
-    @State var friendTransit: TransportMode = .train
-    @State var searchRadius: Double = 10
-
-    return AdvancedFiltersBottomSheet(
-        myTransit: $myTransit,
-        friendTransit: $friendTransit,
-        searchRadius: $searchRadius
+    AdvancedFiltersBottomSheet(
+        myTransit: .constant(.train),
+        friendTransit: .constant(.train),
+        searchRadius: .constant(10),
+        departureTime: .constant(nil)
     )
 }
