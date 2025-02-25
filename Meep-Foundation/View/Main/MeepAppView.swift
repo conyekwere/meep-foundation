@@ -68,27 +68,13 @@ struct MeepAppView: View {
     var body: some View {
         ZStack {
             // MARK: Map View with Annotations
-            Map(coordinateRegion: $viewModel.mapRegion,
-                interactionModes: .all,
-                showsUserLocation: true,
-                annotationItems: viewModel.annotations) { annotation in
-                    MapAnnotation(coordinate: annotation.coordinate) {
-                        annotation.annotationView(isSelected: Binding(
-                            get: { selectedAnnotation?.id == annotation.id },
-                            set: { newValue in
-                                withAnimation(.spring()) {
-                                    if newValue {
-                                        selectedAnnotation = annotation
-                                        setSelectedMeetingPoint(for: annotation)
-                                    } else {
-                                        selectedAnnotation = nil
-                                        viewModel.isFloatingCardVisible = false
-                                    }
-                                }
-                            }
-                        ))
-                    }
-                }
+
+            
+          // is this what I replace what happens to annotations   MeepMapView() and all the other date
+            MeepMapView(viewModel: viewModel)
+                .ignoresSafeArea()
+            
+            
                 .gesture(
                     DragGesture()
                         .onChanged { _ in viewModel.isUserInteractingWithMap = true } // ✅ Start Tracking Drag
