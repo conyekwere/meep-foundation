@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		133E651E2D6DA5690008DA18 /* Config.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 133E651D2D6DA5690008DA18 /* Config.xcconfig */; };
 		4B2D9A55210B6831195EB82D /* Pods_Meep_FoundationTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDA7C12B5BE71CC9F81A1F63 /* Pods_Meep_FoundationTests.framework */; };
 		67205F60A865FF3BE942F26E /* Pods_Meep_Foundation_Meep_FoundationUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */; };
 		6D6DB5BCBF6BCB37EFFCFE67 /* Pods_Meep_Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B632C42BB14B94DB21E67555 /* Pods_Meep_Foundation.framework */; };
@@ -30,6 +31,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		133E651D2D6DA5690008DA18 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		1F815A418823B9FA82B2A5B9 /* Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; path = "Target Support Files/Pods-Meep-Foundation-Meep-FoundationUITests/Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; sourceTree = "<group>"; };
 		39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Meep_Foundation_Meep_FoundationUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D2E051E2D40AD8E00A2E0DF /* Meep-Foundation.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Meep-Foundation.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,15 +67,11 @@
 		};
 		5D2E05312D40AD9200A2E0DF /* Meep-FoundationTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "Meep-FoundationTests";
 			sourceTree = "<group>";
 		};
 		5D2E053B2D40AD9200A2E0DF /* Meep-FoundationUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = "Meep-FoundationUITests";
 			sourceTree = "<group>";
 		};
@@ -117,7 +115,6 @@
 				C729CDA6895C747BA55E1AEE /* Pods-Meep-FoundationTests.debug.xcconfig */,
 				70A69D77C8F8260E3D0E1F82 /* Pods-Meep-FoundationTests.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -130,6 +127,7 @@
 				5D2E051F2D40AD8E00A2E0DF /* Products */,
 				487852E4921AF55061ECB35F /* Pods */,
 				6F654688B7FA5782E76E6D79 /* Frameworks */,
+				133E651D2D6DA5690008DA18 /* Config.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -277,6 +275,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				133E651E2D6DA5690008DA18 /* Config.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -473,6 +472,7 @@
 /* Begin XCBuildConfiguration section */
 		5D2E05402D40AD9200A2E0DF /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 133E651D2D6DA5690008DA18 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -508,7 +508,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -536,6 +536,7 @@
 		};
 		5D2E05412D40AD9200A2E0DF /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 133E651D2D6DA5690008DA18 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -571,7 +572,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
