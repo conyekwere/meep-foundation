@@ -14,7 +14,7 @@ struct MeetingPoint: Identifiable {
     let emoji: String                           // Emoji representing the category
     let category: String                        // Category of the meeting point
     let coordinate: CLLocationCoordinate2D      // Geographic coordinates
-    let imageUrl: String                        // ✅ Store image URLs
+    var imageUrl: String                        // ✅ Store image URLs
     
     
     func distance(from userLocation: CLLocationCoordinate2D?) -> Double {
