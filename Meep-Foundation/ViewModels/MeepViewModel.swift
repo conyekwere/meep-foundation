@@ -6,13 +6,6 @@
 //  Created by Chima onyekwere on 1/21/25.
 //
 
-//
-//  MeepViewModel.swift
-//  Meep-Foundation
-//  Handles all location, geocoding, and midpoint logic.
-//  Refactored for scalability and enhanced searchNearbyPlaces functionality.
-//  Created by Chima onyekwere on 1/21/25.
-//
 
 import SwiftUI
 import MapKit
@@ -120,6 +113,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var searchRadius: Double = 0.02  // ~2km
     
     @Published var departureTime: Date? = nil    // nil means "Now"
+    
+    @Published var selectedAnnotation: MeepAnnotation? = nil
     
     /// Returns the category name for a given emoji.
     func getCategory(for emoji: String) -> String {

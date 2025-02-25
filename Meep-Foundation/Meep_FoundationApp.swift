@@ -6,21 +6,32 @@
 //
 
 import SwiftUI
-import GooglePlaces
 import GoogleMaps
+import GooglePlaces
 
 @main
-struct Meep_FoundationApp: App {
-    
+struct MeepApp: App {
     init() {
-        print("✅ Initializing Google Places and Google Maps")
-        GMSPlacesClient.provideAPIKey("YOUR_GOOGLE_PLACES_API_KEY")
-        GMSServices.provideAPIKey("YOUR_GOOGLE_MAPS_API_KEY")
+        if let mapsAPIKey = Bundle.main.object(forInfoDictionaryKey: "GMS_MAPS_API_KEY") as? String,
+           !mapsAPIKey.isEmpty {
+            GMSServices.provideAPIKey(mapsAPIKey)
+            print("✅ Google Maps API Key Loaded")
+        } else {
+            fatalError("❌ Google Maps API Key is missing or invalid")
+        }
+
+        if let placesAPIKey = Bundle.main.object(forInfoDictionaryKey: "GMS_PLACES_API_KEY") as? String,
+           !placesAPIKey.isEmpty {
+            GMSPlacesClient.provideAPIKey(placesAPIKey)
+            print("✅ Google Places API Key Loaded")
+        } else {
+            fatalError("❌ Google Places API Key is missing or invalid")
+        }
     }
-    
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MeepAppView()
         }
     }
 }
