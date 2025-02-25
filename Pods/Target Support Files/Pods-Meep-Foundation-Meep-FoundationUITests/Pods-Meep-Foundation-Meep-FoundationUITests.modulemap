@@ -1,0 +1,6 @@
+framework module Pods_Meep_Foundation_Meep_FoundationUITests {
+  umbrella header "Pods-Meep-Foundation-Meep-FoundationUITests-umbrella.h"
+
+  export *
+  module * { export * }
+}
