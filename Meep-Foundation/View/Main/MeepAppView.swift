@@ -47,33 +47,93 @@ struct MeepAppView: View {
     
     @State private var selectedAnnotation: MeepAnnotation? = nil
     
+    
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
+        // Extract emoji from annotation
         let emoji: String
         if case let .place(emojiValue) = annotation.type {
             emoji = emojiValue.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
             emoji = "📍"
         }
-        let category = viewModel.getCategory(for: emoji) // Dynamically get category
-        viewModel.selectedPoint = MeetingPoint(
-            name: annotation.title,
-            emoji: emoji,
-            category: category,
-            coordinate: annotation.coordinate,
-            imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
-        )
-        viewModel.isFloatingCardVisible = true
+        
+        // Dynamically get category, ensuring we show the raw name for unknown categories
+        let category = viewModel.getCategory(for: emoji)
+        
+        // Look for matching meeting point in viewModel's data to get its image URL
+        if let existingPoint = viewModel.meetingPoints.first(where: {
+            // Match by name and approximate coordinate (within small radius)
+            $0.name == annotation.title &&
+            abs($0.coordinate.latitude - annotation.coordinate.latitude) < 0.0001 &&
+            abs($0.coordinate.longitude - annotation.coordinate.longitude) < 0.0001
+        }) {
+            // Use the existing point with its real image URL
+            viewModel.selectedPoint = existingPoint
+            viewModel.isFloatingCardVisible = true
+            print("✅ Found existing meeting point: \(existingPoint.name) with image: \(existingPoint.imageUrl)")
+        } else {
+            // Create a new point with placeholder image
+            viewModel.selectedPoint = MeetingPoint(
+                name: annotation.title,
+                emoji: emoji,
+                category: category,
+                coordinate: annotation.coordinate,
+                imageUrl: "https://via.placeholder.com/400x300?text=Loading+Image"
+            )
+            viewModel.isFloatingCardVisible = true
+            
+            // Try to fetch image from Google Places API
+            print("🔍 New meeting point - attempting to fetch image for: \(annotation.title)")
+            
+            // Create a temporary array with just this point
+            let tempPoint = viewModel.selectedPoint!
+            viewModel.fetchGooglePlacesMetadata(for: [tempPoint])
+            
+            // After a delay, update the selected point with any new image that was found
+            // Using a capture list without 'weak' since MeepAppView is a struct
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [viewModel] in
+                // Find the meeting point in the array that matches our selected point
+                if let updatedPoint = viewModel.meetingPoints.first(where: {
+                    $0.name == tempPoint.name &&
+                    abs($0.coordinate.latitude - tempPoint.coordinate.latitude) < 0.0001 &&
+                    abs($0.coordinate.longitude - tempPoint.coordinate.longitude) < 0.0001
+                }) {
+                    // Update our selected point with the new image URL
+                    viewModel.selectedPoint?.imageUrl = updatedPoint.imageUrl
+                    print("✅ Updated selected point image to: \(updatedPoint.imageUrl)")
+                }
+            }
+        }
     }
+    
 
     var body: some View {
         ZStack {
-            // MARK: Map View with Annotations
 
-            
-          // is this what I replace what happens to annotations   MeepMapView() and all the other date
-            MeepMapView(viewModel: viewModel)
-                .ignoresSafeArea()
-            
+            Map(coordinateRegion: $viewModel.mapRegion,
+                interactionModes: .all,
+                showsUserLocation: true,
+                annotationItems: viewModel.annotations) { annotation in
+                    MapAnnotation(coordinate: annotation.coordinate) {
+                        annotation.annotationView(isSelected: Binding(
+                            get: { selectedAnnotation?.id == annotation.id },
+                            set: { newValue in
+                                withAnimation(.spring()) {
+                                    if newValue {
+                                        selectedAnnotation = annotation
+                                        setSelectedMeetingPoint(for: annotation)
+                                    } else {
+                                        selectedAnnotation = nil
+                                        viewModel.isFloatingCardVisible = false
+                                    }
+                                }
+                            }
+                        ))
+                    }
+                }
+                .mapStyle(.standard(elevation: .flat,
+                                                pointsOfInterest: .excludingAll,
+                                                showsTraffic: false))
             
                 .gesture(
                     DragGesture()
@@ -86,8 +146,7 @@ struct MeepAppView: View {
                         }
                 )
             .ignoresSafeArea()
-            // Removed loadSampleAnnotations() call since the method no longer exists.
-            //.onAppear { viewModel.loadSampleAnnotations() }
+
             
             // MARK: Top Search Bars Based on UIState
             VStack {
