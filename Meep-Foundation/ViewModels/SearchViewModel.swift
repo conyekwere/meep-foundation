@@ -18,9 +18,12 @@ class SearchViewModel: ObservableObject {
         "restaurant": ("Restaurant", "🍴"),
         "bar": ("Bar", "🍺"),
         "brewery": ("Bar", "🍺"),
+        "nightlife": ("Bar", "🍺"),
         "cafe": ("Coffee shop", "☕"),
         "bakery": ("Bakery", "🍞"),
         "night club": ("Nightlife", "🪩"),
+        "nightlife": ("Nightlife", "🪩"),   // Added for MKPOICategoryNightlife
+        "mkpoicategorynightlife": ("Nightlife", "🪩"),  // Added specifically for your case
         "movie theater": ("Theater", "🎭"),
         "stadium": ("Stadium", "🏟"),
         "museum": ("Museum", "🎨"),

@@ -57,7 +57,7 @@ struct MeepAppView: View {
             emoji = "📍"
         }
         
-        // Dynamically get category, ensuring we show the raw name for unknown categories
+        // Dynamically get category
         let category = viewModel.getCategory(for: emoji)
         
         // Look for matching meeting point in viewModel's data to get its image URL
@@ -98,8 +98,22 @@ struct MeepAppView: View {
                     abs($0.coordinate.latitude - tempPoint.coordinate.latitude) < 0.0001 &&
                     abs($0.coordinate.longitude - tempPoint.coordinate.longitude) < 0.0001
                 }) {
-                    // Update our selected point with the new image URL
+                    // Update our selected point with the new image URL and other metadata
                     viewModel.selectedPoint?.imageUrl = updatedPoint.imageUrl
+                    
+                    // Also update other metadata if available
+                    if let placeID = updatedPoint.googlePlaceID {
+                        viewModel.selectedPoint?.googlePlaceID = placeID
+                    }
+                    
+                    if let originalType = updatedPoint.originalPlaceType {
+                        viewModel.selectedPoint?.originalPlaceType = originalType
+                    }
+                    
+                    if let hours = updatedPoint.openingHours {
+                        viewModel.selectedPoint?.openingHours = hours
+                    }
+                    
                     print("✅ Updated selected point image to: \(updatedPoint.imageUrl)")
                 }
             }
