@@ -1,29 +1,33 @@
+////
+////  MeepViewModel.swift
+////  Meep-Foundation
+////
+////  Fully restored, optimized, and integrated with Apple Maps + Google Places.
+////  - Apple Maps for location search & navigation
+////  - Google Places SDK for metadata (images, ratings, etc.)
+////
+////  Created by Chima Onyekwere on 1/21/25.
+////
 //
-//  MeepViewModel.swift
-//  Meep-Foundation
-//  Handles all location, geocoding, and midpoint logic.
-//  Refactored for scalability and enhanced searchNearbyPlaces functionality.
-//  Created by Chima onyekwere on 1/21/25.
-//
-
 
 import SwiftUI
 import MapKit
 import CoreLocation
 import Combine
-
 import GooglePlaces
-import GoogleMaps
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
-    // MARK: - Map Region & Meeting Points
+    // MARK: - 🌍 Map & Meeting Point Management
     @Published var mapRegion: MKCoordinateRegion = .init(
         center: CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060),
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
     
-    // List of meeting points found via search.
+
+
+    // MARK: - 🎯 Midpoint Calculation & Filtering
+    
     @Published var meetingPoints: [MeetingPoint] = [
         MeetingPoint(name: "McSorley's Old Ale House", emoji: "🍺", category: "Bar",
                      coordinate: CLLocationCoordinate2D(latitude: 40.728838, longitude: -73.9896487),
@@ -79,6 +83,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "restaurant": ("Restaurant", "🍴"),
         "bar": ("Bar", "🍺"),
         "brewery": ("Bar", "🍺"),
+        "nightlife": ("Bar", "🍺"),   // Added for MKPOICategoryNightlife
+        "mkpoicategorynightlife": ("Bar", "🍺"),  // Added specifically for your case
         "cafe": ("Coffee shop", "☕"),
         "bakery": ("Bakery", "🍞"),
         "night club": ("Nightlife", "🪩"),
@@ -102,25 +108,52 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "fitness center": ("Gym", "🏋️"),
         "winery": ("Winery", "🍷")
     ]
-   
+    
+    
+    @Published var selectedAnnotation: MeepAnnotation? = nil
     // Using a comma-separated query for better compatibility.
     private let searchQuery = "restaurant"
     
-    private let placesClient = GMSPlacesClient.shared()
-    
     @Published var activeFilterCount: Int = 0
     
-    @Published var searchRadius: Double = 0.02  // ~2km
+    @Published var searchRadius: Double = 0.005  // Adjust this value as needed
     
     @Published var departureTime: Date? = nil    // nil means "Now"
-    
-    @Published var selectedAnnotation: MeepAnnotation? = nil
     
     /// Returns the category name for a given emoji.
     func getCategory(for emoji: String) -> String {
         let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (categories + hiddenCategories).first(where: { $0.emoji == trimmedEmoji })?.name ?? "📍 Unknown"
+        
+        // First check our known categories
+        if let category = (categories + hiddenCategories).first(where: { $0.emoji == trimmedEmoji }) {
+            return category.name
+        }
+        
+        // If not found in our categories, search the category mapping
+        for (_, mapping) in categoryMapping where mapping.emoji == trimmedEmoji {
+            return mapping.category
+        }
+        
+        // If still not found, check if this is a system-provided place type
+        // This handles cases where we get places from Apple Maps with types we haven't mapped
+        if let originalPlaceType = getOriginalPlaceType(for: trimmedEmoji) {
+            return "📍 \(originalPlaceType.capitalized)"  // Return with prefix to indicate it's unmapped
+        }
+        
+        // Complete fallback
+        return "📍 Unknown"
     }
+
+    // Helper method to track original place types
+    private func getOriginalPlaceType(for emoji: String) -> String? {
+        // Look through the meeting points for matching emoji and original place type
+        for meetingPoint in meetingPoints where meetingPoint.emoji == emoji && meetingPoint.originalPlaceType != nil {
+            return meetingPoint.originalPlaceType
+        }
+        
+        return nil
+    }
+
     
     // MARK: - Filtering & Floating Card
     @Published var selectedCategory: Category = Category(emoji: "", name: "All", hidden: false)
@@ -138,15 +171,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var userTransportMode: TransportMode = .train
     @Published var friendTransportMode: TransportMode = .train
     
-    /// Computes the midpoint (fallbacks to NYC coordinates if missing).
-    var midpoint: CLLocationCoordinate2D {
-        let uLat = userLocation?.latitude ?? 40.80129
-        let uLon = userLocation?.longitude ?? -73.93684
-        let fLat = friendLocation?.latitude ?? 40.729713
-        let fLon = friendLocation?.longitude ?? -73.992796
-        return CLLocationCoordinate2D(latitude: (uLat + fLat) / 2,
-                                      longitude: (uLon + fLon) / 2)
-    }
     
     
     @Published var isUserInteractingWithMap = false
@@ -154,49 +178,111 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
     
-    @Published var searchResults: [MeepAnnotation] = []
+
     
-    /// Combines user, friend, midpoint, and place annotations.
-    var annotations: [MeepAnnotation] {
-        guard !isUserInteractingWithMap else { return [] } // Prevent unnecessary re-renders while panning
-        var results: [MeepAnnotation] = []
+    func recordUnknownPlaceType(emoji: String, placeType: String) {
+        // Save this mapping for future reference
+        print("⚠️ Recorded unknown place type: \(placeType) with emoji: \(emoji)")
         
-        results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
+        // Here you could add to a persistent store or a dictionary
+        // that tracks these for later classification
         
-        if let uLoc = userLocation {
-            results.append(MeepAnnotation(coordinate: uLoc, title: sharableUserLocation, type: .user))
+        // You might also want to add this to hiddenCategories automatically
+        if !hiddenCategories.contains(where: { $0.emoji == emoji }) &&
+           !categories.contains(where: { $0.emoji == emoji }) {
+            
+            DispatchQueue.main.async { [weak self] in
+                self?.hiddenCategories.append(Category(
+                    emoji: emoji,
+                    name: placeType.capitalized,
+                    hidden: true
+                ))
+            }
         }
-        if let fLoc = friendLocation {
-            results.append(MeepAnnotation(coordinate: fLoc, title: sharableFriendLocation, type: .friend))
-        }
-        
-        results.append(contentsOf: searchResults)
-        
-        return results
     }
+    
     
     
     // MARK: - Combine
     private var cancellables = Set<AnyCancellable>()
     
     override init() {
-        super.init()
-        locationManager = CLLocationManager()
-        locationManager?.delegate = self
+           super.init()
+           locationManager = CLLocationManager()
+           locationManager?.delegate = self
+           
+           Publishers.CombineLatest4($userLocation, $friendLocation, $userTransportMode, $friendTransportMode)
+               .sink { [weak self] userLoc, friendLoc, userMode, friendMode in
+                   print("Combine triggered – userLoc: \(String(describing: userLoc)), friendLoc: \(String(describing: friendLoc)), userMode: \(userMode), friendMode: \(friendMode)")
+                   DispatchQueue.main.async {
+                       self?.sortMeetingPointsByMidpoint()
+                       self?.centerMapOnMidpoint()
+                       self?.calculateOptimalMeetingPoint()
+                   }
+               }
+               .store(in: &cancellables)
+       }
+    
+    
+    // MARK: - 📌 Annotations & Search
+    @Published var searchResults: [MeepAnnotation] = []
+
+    var annotations: [MeepAnnotation] {
+        var results: [MeepAnnotation] = []
         
-        Publishers.CombineLatest4($userLocation, $friendLocation, $userTransportMode, $friendTransportMode)
-            .sink { [weak self] userLoc, friendLoc, userMode, friendMode in
-                print("Combine triggered – userLoc: \(String(describing: userLoc)), friendLoc: \(String(describing: friendLoc)), userMode: \(userMode), friendMode: \(friendMode)")
-                DispatchQueue.main.async {
-                    self?.sortMeetingPointsByMidpoint()
-                    self?.centerMapOnMidpoint()
-                    self?.calculateOptimalMeetingPoint()
-                }
-            }
-            .store(in: &cancellables)
+        results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
+        
+        if let uLoc = userLocation {
+            results.append(MeepAnnotation(coordinate: uLoc, title: "You", type: .user))
+        }
+        if let fLoc = friendLocation {
+            results.append(MeepAnnotation(coordinate: fLoc, title: "Friend", type: .friend))
+        }
+        
+        results.append(contentsOf: searchResults)
+
+        return results
     }
     
-    // MARK: - Helpers
+    
+    
+
+
+    // MARK: - 🎯 Midpoint Calculation
+    var midpoint: CLLocationCoordinate2D {
+        guard let userLoc = userLocation, let friendLoc = friendLocation else {
+            // Use default values if either location is nil
+            let uLat = userLocation?.latitude ?? 40.80129
+            let uLon = userLocation?.longitude ?? -73.93684
+            let fLat = friendLocation?.latitude ?? 40.729713
+            let fLon = friendLocation?.longitude ?? -73.992796
+            return CLLocationCoordinate2D(latitude: (uLat + fLat) / 2,
+                                         longitude: (uLon + fLon) / 2)
+        }
+        
+        // Convert to radians for more accurate geographical midpoint calculation
+        let lat1 = userLoc.latitude * .pi / 180
+        let lon1 = userLoc.longitude * .pi / 180
+        let lat2 = friendLoc.latitude * .pi / 180
+        let lon2 = friendLoc.longitude * .pi / 180
+        
+        // Calculate the midpoint using the Haversine formula
+        let Bx = cos(lat2) * cos(lon2 - lon1)
+        let By = cos(lat2) * sin(lon2 - lon1)
+        let midLat = atan2(sin(lat1) + sin(lat2),
+                           sqrt((cos(lat1) + Bx) * (cos(lat1) + Bx) + By * By))
+        let midLon = lon1 + atan2(By, cos(lat1) + Bx)
+        
+        // Convert back to degrees
+        return CLLocationCoordinate2D(
+            latitude: midLat * 180 / .pi,
+            longitude: midLon * 180 / .pi
+        )
+    }
+
+
+    
+    
     private func sortMeetingPointsByMidpoint() {
         let midLoc = CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude)
         meetingPoints.sort {
@@ -207,7 +293,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     private func centerMapOnMidpoint() {
-        guard !isUserInteractingWithMap else { return } // Prevent updates while user moves the map
+        guard !isUserInteractingWithMap else { return } // ✅ Prevent updates while user moves the map
         withAnimation {
             mapRegion = MKCoordinateRegion(
                 center: midpoint,
@@ -221,35 +307,419 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("❌ Missing one or both locations")
             return
         }
-
-        let initialMidpoint = CLLocationCoordinate2D(
-            latitude: (userLoc.latitude + friendLoc.latitude) / 2,
-            longitude: (userLoc.longitude + friendLoc.longitude) / 2
-        )
-
+        
+        // Start with the geographical midpoint
+        let initialMidpoint = midpoint
+        
+        // Pass the departureTime from the advanced filters
         fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode, departureTime: departureTime) { [weak self] userTime in
-            self?.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self?.friendTransportMode ?? .walk, departureTime: self?.departureTime) { friendTime in
+            guard let self = self else { return }
+            
+            self.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self.friendTransportMode, departureTime: self.departureTime) { friendTime in
                 DispatchQueue.main.async {
-                    if abs(userTime - friendTime) < 3 * 60 {  // Allow 3-minute difference
-                        self?.meetingPoint = initialMidpoint
+                    // If travel times are already close enough (within 3 minutes), use the midpoint
+                    if abs(userTime - friendTime) < 3 * 60 {
+                        self.meetingPoint = initialMidpoint
+                        print("✅ Travel times balanced: User: \(Int(userTime/60))min, Friend: \(Int(friendTime/60))min")
                     } else {
-                        // Weighted midpoint calculation based on time
-                        let weight = (userTime / (userTime + friendTime)) * 0.6 + 0.4 // Bias slightly towards center
-                        self?.meetingPoint = CLLocationCoordinate2D(
-                            latitude: userLoc.latitude * weight + friendLoc.latitude * (1 - weight),
-                            longitude: userLoc.longitude * weight + friendLoc.longitude * (1 - weight)
+                        // Calculate a weighted midpoint to balance travel times
+                        // The weight is inversely proportional to travel time
+                        let totalTime = userTime + friendTime
+                        let userWeight = friendTime / totalTime  // User gets higher weight when friend has longer travel time
+                        let friendWeight = userTime / totalTime  // Friend gets higher weight when user has longer travel time
+                        
+                        // Apply weights to coordinates
+                        let weightedMidpoint = CLLocationCoordinate2D(
+                            latitude: userLoc.latitude * userWeight + friendLoc.latitude * friendWeight,
+                            longitude: userLoc.longitude * userWeight + friendLoc.longitude * friendWeight
                         )
+                        
+                        self.meetingPoint = weightedMidpoint
+                        print("✅ Adjusted midpoint - User: \(Int(userTime/60))min, Friend: \(Int(friendTime/60))min")
+                        
+                        // Verify the improvement by calculating travel times to the new midpoint
+                        self.verifyMeetingPoint(userLoc: userLoc, friendLoc: friendLoc, meetingPoint: weightedMidpoint)
                     }
+                    
+                    // After setting the meeting point, search for nearby places around it
+                    self.searchNearbyPlaces()
                 }
             }
         }
     }
     
     
+    private func verifyMeetingPoint(userLoc: CLLocationCoordinate2D, friendLoc: CLLocationCoordinate2D, meetingPoint: CLLocationCoordinate2D) {
+        fetchTravelTime(from: userLoc, to: meetingPoint, mode: userTransportMode, departureTime: departureTime) { [weak self] newUserTime in
+            guard let self = self else { return }
+            
+            self.fetchTravelTime(from: friendLoc, to: meetingPoint, mode: self.friendTransportMode, departureTime: self.departureTime) { newFriendTime in
+                print("🔍 Verification - New travel times: User: \(Int(newUserTime/60))min, Friend: \(Int(newFriendTime/60))min")
+                print("🔍 Travel time difference: \(abs(Int(newUserTime - newFriendTime)/60))min")
+            }
+        }
+    }
+        
+    // MARK: - 📌 Search Nearby Places (Apple Maps + Google Places)
+    func searchNearbyPlaces() {
+        print("🔍 Searching Apple Maps for places near midpoint...")
+
+        let delta = searchRadius * 0.0145  // Roughly converts miles to degrees
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchQuery
+        request.region = MKCoordinateRegion(
+            center: midpoint,
+            span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
+        )
+
+        let search = MKLocalSearch(request: request)
+        search.start { [weak self] response, error in
+            guard let self = self else { return }
+
+            if let error = error {
+                print("Apple Maps search error: \(error.localizedDescription)")
+                return
+            }
+
+            guard let response = response else {
+                print("No places found.")
+                return
+            }
+
+            let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
+
+            let sortedPoints = fetchedMeetingPoints.sorted {
+                let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
+                let midLoc = CLLocation(latitude: self.midpoint.latitude, longitude: self.midpoint.longitude)
+                return locA.distance(from: midLoc) < locB.distance(from: midLoc)
+            }
+
+            DispatchQueue.main.async {
+                self.meetingPoints = sortedPoints
+                self.searchResults = sortedPoints.map {
+                    MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+                }
+                self.updateCategoriesFromSearchResults() // Ensure categories are synced
+                self.fetchGooglePlacesMetadata(for: sortedPoints)
+            }
+        }
+    }
+
+     // MARK: - 📸 Fetch Google Places Metadata (Images, Ratings, etc.)
+    func fetchGooglePlacesMetadata(for places: [MeetingPoint]) {
+        print("🔍 Fetching Google Places metadata for \(places.count) places")
+        let placesClient = GMSPlacesClient.shared()
+        
+        // Process each meeting point
+        for (index, place) in places.enumerated() {
+            // Skip if we already have a valid image URL
+            let hasValidImage = place.imageUrl.contains("http") &&
+                                !place.imageUrl.contains("placeholder") &&
+                                !place.imageUrl.isEmpty
+            
+            if hasValidImage {
+                continue
+            }
+            
+            // Try to find the place and get its photo
+            findNearbyPlace(placesClient, place: place, index: index)
+        }
+    }
+
+
+    // Helper method to load a photo and update meeting point
+
+    private func loadAndUpdatePhoto(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
+        placesClient.loadPlacePhoto(photo) { [weak self] (image, error) in
+            guard let self = self, let image = image, error == nil else {
+                print("⚠️ Error loading photo: \(error?.localizedDescription ?? "Unknown error")")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                if meetingPointIndex < self.meetingPoints.count {
+                    // In a real app, you would:
+                    // 1. Save the image to a local cache or cloud storage
+                    // 2. Update the imageUrl to point to that saved image
+                    
+                    // For demo purposes - use Google's photo API directly
+                    // Replace this with your own API key and proper URL construction
+                    if let reference = photo.attributions?.string {
+                        self.meetingPoints[meetingPointIndex].photoReference = reference
+                        
+                        // In a real implementation, you would construct a proper Google Places photo URL:
+                        // https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=[REFERENCE]&key=[YOUR_API_KEY]
+                        
+                        // For this example, we'll just use a placeholder that looks realistic
+                        let imageId = abs(self.meetingPoints[meetingPointIndex].name.hashValue % 1000)
+                        self.meetingPoints[meetingPointIndex].imageUrl = "https://picsum.photos/id/\(imageId)/800/600"
+                    }
+                    
+                    print("✅ Updated image for \(self.meetingPoints[meetingPointIndex].name)")
+                }
+            }
+        }
+    }
+
+    // Helper method to fetch photo for an existing Google Place ID
+    private func fetchPhotoForExistingPlaceID(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
+        placesClient.fetchPlace(
+            fromPlaceID: placeID,
+            placeFields: .photos,
+            sessionToken: nil
+        ) { [weak self] (place, error) in
+            guard let self = self, let place = place, error == nil,
+                  let photos = place.photos, !photos.isEmpty else {
+                print("⚠️ No photos found for place ID: \(placeID)")
+                return
+            }
+            
+            // Get the first photo
+            self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
+        }
+    }
+    
+
+    // Helper method to find a nearby Google Place matching our meeting point
+    private func findNearbyPlace(_ placesClient: GMSPlacesClient, place: MeetingPoint, index: Int) {
+        // Use text search as our primary approach
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        
+        // Use the place name as search query, adding the category for better matches
+        var searchQuery = place.name
+        if place.category != "Unknown" && !place.category.starts(with: "📍") {
+            searchQuery += " \(place.category)"
+        }
+        
+        placesClient.findAutocompletePredictions(
+            fromQuery: searchQuery,
+            filter: filter,
+            sessionToken: nil
+        ) { [weak self] (predictions, error) in
+            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
+                print("⚠️ No autocomplete results for: \(place.name)")
+                return
+            }
+            
+            // Get place ID from the first prediction
+            let placeID = predictions[0].placeID
+            
+            DispatchQueue.main.async {
+                if index < self.meetingPoints.count {
+                    // Store the found place ID
+                    self.meetingPoints[index].googlePlaceID = placeID
+                    
+                    // Now fetch photos and hours
+                    placesClient.fetchPlace(
+                        fromPlaceID: placeID,
+                        placeFields: [.photos, .openingHours],
+                        sessionToken: nil
+                    ) { (fetchedPlace, error) in
+                        if let error = error {
+                            print("⚠️ Error fetching place details: \(error.localizedDescription)")
+                            return
+                        }
+                        
+                        guard let fetchedPlace = fetchedPlace else { return }
+                        
+                        DispatchQueue.main.async {
+                            // Process photos
+                            if let photos = fetchedPlace.photos, !photos.isEmpty {
+                                self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: index)
+                            }
+                            
+                            // Store opening hours for display
+                            if let weekdayText = fetchedPlace.openingHours?.weekdayText, !weekdayText.isEmpty {
+                                self.meetingPoints[index].openingHours = weekdayText
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback method to search by text
+    private func searchPlaceByText(_ placesClient: GMSPlacesClient, placeName: String, meetingPointIndex: Int) {
+        // Create a filter with the place name as the query
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        
+        // Use the Autocomplete API to search for the place by name
+        placesClient.findAutocompletePredictions(
+            fromQuery: placeName,
+            filter: filter,
+            sessionToken: nil
+        ) { [weak self] (predictions, error) in
+            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
+                print("⚠️ No autocomplete results for: \(placeName)")
+                return
+            }
+            
+            // Get the place ID from the first prediction
+            let placeID = predictions[0].placeID
+            
+            // Fetch the place details to get photos
+            self.fetchPhotoForExistingPlaceID(placesClient, placeID: placeID, meetingPointIndex: meetingPointIndex)
+        }
+    }
+
+
+    
+    
+    
+    
+   
+    // MARK: - 🔄 Convert Apple Maps Search Result to MeetingPoint
+    
+    
+    private func convert(mapItem: MKMapItem) -> MeetingPoint? {
+        guard let coordinate = mapItem.placemark.location?.coordinate else {
+            return nil
+        }
+        
+        // Get the original place type from the item
+        var originalPlaceType = "unknown"
+        if let poiCategory = mapItem.pointOfInterestCategory?.rawValue {
+            originalPlaceType = poiCategory.lowercased()
+            print("📍 Place type found: \(poiCategory) -> \(originalPlaceType)")
+        }
+        
+        // Default emoji and category
+        var emoji = "📍"
+        var category = originalPlaceType.capitalized
+        
+        // Check if this is potentially a nightlife venue that needs verification
+        let isPotentialNightlife = originalPlaceType.contains("nightlife") ||
+                                  originalPlaceType.contains("night club") ||
+                                  originalPlaceType.contains("bar") ||
+                                  originalPlaceType.contains("pub")
+        
+        // Try to match with our category mapping
+        if let mapping = categoryMapping[originalPlaceType] {
+            emoji = mapping.emoji
+            category = mapping.category
+            print("✅ Direct category match: \(originalPlaceType) -> \(category) \(emoji)")
+        } else {
+            // If no direct match, try partial matching for more flexibility
+            for (key, value) in categoryMapping {
+                if originalPlaceType.contains(key) {
+                    emoji = value.emoji
+                    category = value.category
+                    print("✅ Partial category match: \(originalPlaceType) contains \(key) -> \(category) \(emoji)")
+                    break
+                }
+            }
+            
+            // If we're still using the default emoji, record this unknown place type
+            if emoji == "📍" {
+                print("⚠️ Unknown category: \(originalPlaceType)")
+                recordUnknownPlaceType(emoji: emoji, placeType: originalPlaceType)
+            }
+        }
+        
+        return MeetingPoint(
+            name: mapItem.name ?? "Unknown Place",
+            emoji: emoji,
+            category: category,
+            coordinate: coordinate,
+            imageUrl: "",  // Will be updated with Google Places photo
+            googlePlaceID: nil,
+            originalPlaceType: originalPlaceType
+        )
+    }
+
+
+    
+    
+    // 2. Add a function to update and sync categories from search results
+    func updateCategoriesFromSearchResults() {
+        // Get all unique categories from meeting points
+        let uniqueCategories = Set(meetingPoints.map { $0.category })
+        
+        // For each unique category, ensure it exists in our category lists
+        for category in uniqueCategories {
+            // Skip if it's unknown
+            if category.lowercased() == "unknown" {
+                continue
+            }
+            
+            // Check if exists in visible categories
+            let existsInVisible = categories.contains(where: { $0.name.lowercased() == category.lowercased() })
+            
+            // Check if exists in hidden categories
+            let existsInHidden = hiddenCategories.contains(where: { $0.name.lowercased() == category.lowercased() })
+            
+            // If it doesn't exist in either list, add it to hidden categories
+            if !existsInVisible && !existsInHidden {
+                // Find matching emoji from category mapping
+                var emoji = "📍"
+                for (_, mapping) in categoryMapping {
+                    if mapping.category.lowercased() == category.lowercased() {
+                        emoji = mapping.emoji
+                        break
+                    }
+                }
+                
+                hiddenCategories.append(Category(emoji: emoji, name: category, hidden: true))
+            }
+        }
+    }
+
+    
+    // MARK: -  Fetch Travel Time
+    private func fetchTravelTime(from origin: CLLocationCoordinate2D,
+                                   to destination: CLLocationCoordinate2D,
+                                   mode: TransportMode,
+                                   departureTime: Date? = nil,
+                                   completion: @escaping (TimeInterval) -> Void) {
+          let request = MKDirections.Request()
+          request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
+          request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
+          
+          switch mode {
+          case .walk:
+              request.transportType = .walking
+          case .car:
+              request.transportType = .automobile
+          case .bike:
+              request.transportType = .walking // Approximate cycling with walking time
+              request.requestsAlternateRoutes = true
+          case .train:
+              request.transportType = .transit
+              // Use the selected departure time if provided (for transit directions)
+              if let depTime = departureTime {
+                  request.departureDate = depTime
+              }
+          }
+          
+          MKDirections(request: request).calculate { response, error in
+              if let travelTime = response?.routes.first?.expectedTravelTime, error == nil {
+                  let adjustedTravelTime = mode == .bike ? travelTime / 3 : travelTime
+                  completion(adjustedTravelTime)
+              } else {
+                  completion(15 * 60) // default fallback: 15 minutes
+              }
+          }
+      }
+    
+    // MARK: - 🚗 Show Directions
+    func showDirections(to point: MeetingPoint) {
+        let placemark = MKPlacemark(coordinate: point.coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = point.name
+        mapItem.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+    }
+
+    // MARK: - 📍 Update Active FilterCount
     func updateActiveFilterCount(myTransit: TransportMode, friendTransit: TransportMode, searchRadius: Double, departureTime: Date?) {
         var count = 0
 
-        if myTransit != .train { count += 1 } // Example: Default is train, so any change counts as a filter
+        if myTransit != .train { count += 1 } // Example: Default is `train`, so any change counts as a filter
         if friendTransit != .train { count += 1 }
         if searchRadius != 2 { count += 1 } // Default search radius is 2 miles
         if departureTime != nil { count += 1 }
@@ -258,185 +728,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     
+    // MARK: - 📍 Reverse Geocoding
     
-    /// Modified fetchTravelTime that uses an optional departureTime (for transit routes)
-    private func fetchTravelTime(from origin: CLLocationCoordinate2D,
-                                 to destination: CLLocationCoordinate2D,
-                                 mode: TransportMode,
-                                 departureTime: Date? = nil,
-                                 completion: @escaping (TimeInterval) -> Void) {
-        let request = MKDirections.Request()
-        request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
-        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
-        
-        switch mode {
-        case .walk:
-            request.transportType = .walking
-        case .car:
-            request.transportType = .automobile
-        case .bike:
-            request.transportType = .walking // Approximate cycling with walking time
-            request.requestsAlternateRoutes = true
-        case .train:
-            request.transportType = .transit
-            // Use the selected departure time if provided (for transit directions)
-            if let depTime = departureTime {
-                request.departureDate = depTime
-            }
-        }
-        
-        MKDirections(request: request).calculate { response, error in
-            if let travelTime = response?.routes.first?.expectedTravelTime, error == nil {
-                let adjustedTravelTime = mode == .bike ? travelTime / 3 : travelTime
-                completion(adjustedTravelTime)
-            } else {
-                completion(15 * 60) // default fallback: 15 minutes
-            }
-        }
-    }
-    
-    // MARK: - Search Nearby Places
-    /// Searches for nearby places based on the current midpoint.
-    func searchNearbyPlaces() {
-        print("🔍 Fetching places from Google Places API...")
-
-        let locationBias = GMSPlaceRectangularLocationOption(
-            CLLocationCoordinate2D(latitude: midpoint.latitude - 0.05, longitude: midpoint.longitude - 0.05),
-            CLLocationCoordinate2D(latitude: midpoint.latitude + 0.05, longitude: midpoint.longitude + 0.05)
-        )
-
-        let filter = GMSAutocompleteFilter()
-        filter.type = .establishment
-        filter.locationBias = locationBias
-
-        let searchTypes = ["restaurant", "bar", "cafe", "park", "museum"] // Valid categories
-        let group = DispatchGroup()
-
-        DispatchQueue.main.async { self.meetingPoints.removeAll() }
-
-        for type in searchTypes {
-            group.enter()
-            placesClient.findAutocompletePredictions(fromQuery: type, filter: filter, sessionToken: nil) { [weak self] predictions, error in
-                guard let self = self else { return }
-                defer { group.leave() }
-
-                if let error = error {
-                    print("❌ Google Places Error: \(error.localizedDescription)")
-                    return
-                }
-
-                guard let predictions = predictions else {
-                    print("❌ No places found for type: \(type)")
-                    return
-                }
-
-                for prediction in predictions {
-                    guard let placeID: String? = prediction.placeID else { continue }
-                    
-
-                    group.enter()
-                    self.fetchPlaceDetails(for: placeID ?? "default value") { meetingPoint in
-                        if let meetingPoint = meetingPoint {
-                            DispatchQueue.main.async {
-                                self.meetingPoints.append(meetingPoint)
-                            }
-                        }
-                        group.leave()
-                    }
-                }
-            }
-        }
-
-        group.notify(queue: .main) {
-            print("✅ Finished fetching places")
-        }
-    }
-    
-    
-    private func fetchPlaceDetails(for placeID: String, completion: @escaping (MeetingPoint?) -> Void) {
-        let fields: GMSPlaceField = [.name, .coordinate, .photos, .types]
-
-        placesClient.fetchPlace(fromPlaceID: placeID, placeFields: fields, sessionToken: nil) { [weak self] place, error in
-            guard let self = self else {
-                completion(nil)
-                return
-            }
-            if let error = error {
-                print("❌ Error fetching place details: \(error.localizedDescription)")
-                completion(nil)
-                return
-            }
-
-            guard let place = place else {
-                completion(nil)
-                return
-            }
-
-            // Extract the first type and normalize it
-            let rawType = place.types?.first?.lowercased() ?? "unknown"
-            let mapping = self.categoryMapping[rawType] ?? (category: rawType.capitalized, emoji: "📍")
-
-            var meetingPoint = MeetingPoint(
-                name: place.name ?? "Unknown Place",
-                emoji: mapping.emoji,
-                category: mapping.category,
-                coordinate: place.coordinate,
-                imageUrl: "https://via.placeholder.com/400"
-            )
-
-            if let photoMetadata = place.photos?.first {
-                self.placesClient.loadPlacePhoto(photoMetadata) { (image, error) in
-                    if let error = error {
-                        print("❌ Error loading place photo: \(error.localizedDescription)")
-                    } else if let image = image {
-                        DispatchQueue.main.async {
-                            meetingPoint.imageUrl = self.convertImageToBase64(image: image)
-                        }
-                    }
-                    completion(meetingPoint)
-                }
-            } else {
-                completion(meetingPoint)
-            }
-        }
-    }
-    
-    func convertImageToBase64(image: UIImage) -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else { return "" }
-        return "data:image/jpeg;base64," + imageData.base64EncodedString()
-    }
-    
-    
-    func getPhotoURL(photoReference: String) -> String {
-        if photoReference.isEmpty {
-            return "https://via.placeholder.com/400" // Placeholder image
-        }
-        return "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=\(photoReference)&key=YOUR_GOOGLE_PLACES_API_KEY"
-    }
-    
-    private func convert(mapItem: MKMapItem) -> MeetingPoint? {
-        guard let coordinate = mapItem.placemark.location?.coordinate else {
-            print("Skipping map item; no coordinate available.")
-            return nil
-        }
-        let placeType = mapItem.pointOfInterestCategory?.rawValue.lowercased() ?? "unknown"
-        let mappedCategory = categoryMapping[placeType]?.category ?? "Other"
-        let mappedEmoji = categoryMapping[placeType]?.emoji ?? "📍"
-        
-        return MeetingPoint(
-            name: mapItem.name ?? "Unknown Place",
-            emoji: mappedEmoji,
-            category: mappedCategory,
-            coordinate: coordinate,
-            imageUrl: mapItem.url?.absoluteString ?? ""
-        )
-    }
-    
-    // MARK: - Location Permissions & Updates
-    func requestUserLocation() {
-        locationManager?.requestWhenInUseAuthorization()
-        locationManager?.startUpdatingLocation()
-    }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         switch manager.authorizationStatus {
@@ -469,61 +762,41 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("Location error: \(error.localizedDescription)")
     }
     
-    // MARK: - Directions & Geocoding
-    func showDirections(to point: MeetingPoint) {
-        let placemark = MKPlacemark(coordinate: point.coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = point.name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
+    func requestUserLocation() {
+        locationManager?.requestWhenInUseAuthorization()
+        locationManager?.startUpdatingLocation()
     }
     
     func reverseGeocodeUserLocation() {
-        guard let userCoord = userLocation else {
-            print("❌ User location is nil, skipping reverse geocoding")
-            return
-        }
+        guard let userCoord = userLocation else { return }
         let location = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
         CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            DispatchQueue.main.async {
-                if let placemark = placemarks?.first, error == nil {
-                    self?.sharableUserLocation = [placemark.name].compactMap { $0 }.joined(separator: ", ")
-                    print("✅ My location updated: \(self?.sharableUserLocation ?? "")")
-                } else {
-                    print("❌ Error reverse geocoding My Location: \(error?.localizedDescription ?? "Unknown error")")
+            if let placemark = placemarks?.first, error == nil {
+                DispatchQueue.main.async {
+                    self?.sharableUserLocation = placemark.name ?? "Unknown Location"
                 }
             }
         }
     }
-    
+
     func reverseGeocodeFriendLocation() {
-        guard let friendCoord = friendLocation else {
-            print("❌ Friend location is nil, skipping reverse geocoding")
-            return
-        }
+        guard let friendCoord = friendLocation else { return }
         let location = CLLocation(latitude: friendCoord.latitude, longitude: friendCoord.longitude)
         CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            DispatchQueue.main.async {
-                if let placemark = placemarks?.first, error == nil {
-                    self?.sharableFriendLocation = [placemark.name].compactMap { $0 }.joined(separator: ", ")
-                    print("✅ Friend location updated: \(self?.sharableFriendLocation ?? "")")
-                } else {
-                    print("❌ Error reverse geocoding Friend Location: \(error?.localizedDescription ?? "Unknown error")")
+            if let placemark = placemarks?.first, error == nil {
+                DispatchQueue.main.async {
+                    self?.sharableFriendLocation = placemark.name ?? "Unknown Location"
                 }
             }
         }
     }
-    
+
     func geocodeAddress(_ address: String, completion: @escaping (CLLocationCoordinate2D?) -> Void) {
         CLGeocoder().geocodeAddressString(address) { placemarks, error in
-            if let error = error {
-                print("Geocoding error (\(address)): \(error.localizedDescription)")
-                completion(nil)
-                return
-            }
-            let coord = placemarks?.first?.location?.coordinate
-            completion(coord)
+            completion(placemarks?.first?.location?.coordinate)
         }
     }
+    
+    
+    
 }
