@@ -83,6 +83,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "restaurant": ("Restaurant", "🍴"),
         "bar": ("Bar", "🍺"),
         "brewery": ("Bar", "🍺"),
+        "nightlife": ("Bar", "🍺"),   // Added for MKPOICategoryNightlife
+        "mkpoicategorynightlife": ("Bar", "🍺"),  // Added specifically for your case
         "cafe": ("Coffee shop", "☕"),
         "bakery": ("Bakery", "🍞"),
         "night club": ("Nightlife", "🪩"),
@@ -106,6 +108,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "fitness center": ("Gym", "🏋️"),
         "winery": ("Winery", "🍷")
     ]
+    
+    
     @Published var selectedAnnotation: MeepAnnotation? = nil
     // Using a comma-separated query for better compatibility.
     private let searchQuery = "restaurant"
@@ -140,6 +144,16 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         return "📍 Unknown"
     }
 
+    // Helper method to track original place types
+    private func getOriginalPlaceType(for emoji: String) -> String? {
+        // Look through the meeting points for matching emoji and original place type
+        for meetingPoint in meetingPoints where meetingPoint.emoji == emoji && meetingPoint.originalPlaceType != nil {
+            return meetingPoint.originalPlaceType
+        }
+        
+        return nil
+    }
+
     
     // MARK: - Filtering & Floating Card
     @Published var selectedCategory: Category = Category(emoji: "", name: "All", hidden: false)
@@ -164,18 +178,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
     
-    // MARK: - OriginalPlaceType
-    private func getOriginalPlaceType(for emoji: String) -> String? {
-        // This would ideally be populated from your place search results
-        // You could maintain a dictionary mapping emojis to their original raw place types
-        
-        // Look through the meeting points for matching emoji and original place type
-        for meetingPoint in meetingPoints where meetingPoint.emoji == emoji && meetingPoint.originalPlaceType != nil {
-            return meetingPoint.originalPlaceType
-        }
-        
-        return nil
-    }
 
     
     func recordUnknownPlaceType(emoji: String, placeType: String) {
@@ -198,6 +200,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
+    
+    
     
     // MARK: - Combine
     private var cancellables = Set<AnyCancellable>()
@@ -409,118 +413,23 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // Process each meeting point
         for (index, place) in places.enumerated() {
-            // Skip if we already have a valid image URL (not placeholder)
-            if place.imageUrl.contains("http") &&
-               !place.imageUrl.contains("placeholder") &&
-               !place.imageUrl.isEmpty {
+            // Skip if we already have a valid image URL
+            let hasValidImage = place.imageUrl.contains("http") &&
+                                !place.imageUrl.contains("placeholder") &&
+                                !place.imageUrl.isEmpty
+            
+            if hasValidImage {
                 continue
             }
             
-            // Approach 1: If we already have a Google Place ID, use it directly
-            if let placeID = place.googlePlaceID, !placeID.isEmpty {
-                fetchPhotoForExistingPlaceID(placesClient, placeID: placeID, meetingPointIndex: index)
-            }
-            // Approach 2: Otherwise, try to find nearby places that match our criteria
-            else {
-                findNearbyPlace(placesClient, place: place, meetingPointIndex: index)
-            }
+            // Try to find the place and get its photo
+            findNearbyPlace(placesClient, place: place, index: index)
         }
     }
 
-    // Helper method to fetch photo for an existing Google Place ID
-    private func fetchPhotoForExistingPlaceID(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
-        placesClient.fetchPlace(
-            fromPlaceID: placeID,
-            placeFields: .photos,
-            sessionToken: nil
-        ) { [weak self] (place, error) in
-            guard let self = self, let place = place, error == nil,
-                  let photos = place.photos, !photos.isEmpty else {
-                print("⚠️ No photos found for place ID: \(placeID)")
-                return
-            }
-            
-            // Get the first photo
-            self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
-        }
-    }
-
-    // Helper method to find a nearby Google Place matching our meeting point
-    private func findNearbyPlace(_ placesClient: GMSPlacesClient, place: MeetingPoint, meetingPointIndex: Int) {
-        // Create a location to search around
-        let location = CLLocation(latitude: place.coordinate.latitude, longitude: place.coordinate.longitude)
-        
-        // Create a GMSPlaceField bitmask for the fields we want to retrieve
-        let fields: GMSPlaceField = [.name, .placeID, .photos]
-        
-        // Use nearby search with location bias
-        placesClient.findPlaceLikelihoodsFromCurrentLocation(withPlaceFields: fields) { [weak self] (placeLikelihoods, error) in
-            guard let self = self, let placeLikelihoods = placeLikelihoods, error == nil else {
-                print("⚠️ Error finding nearby places: \(error?.localizedDescription ?? "Unknown error")")
-                return
-            }
-            
-            // Find the best match based on name and distance
-            for likelihood in placeLikelihoods {
-                let gmsPlace = likelihood.place
-                
-                // Check if the name matches or contains our meeting point name
-                let nameMatches = gmsPlace.name?.lowercased().contains(place.name.lowercased()) ?? false
-                let reverseNameMatches = place.name.lowercased().contains(gmsPlace.name?.lowercased() ?? "")
-                
-                if nameMatches || reverseNameMatches {
-                    // We found a matching place!
-                    print("✅ Found matching Google Place: \(gmsPlace.name ?? "Unnamed") for \(place.name)")
-                    
-                    // Save the Google Place ID for future use
-                    DispatchQueue.main.async {
-                        if meetingPointIndex < self.meetingPoints.count {
-                            self.meetingPoints[meetingPointIndex].googlePlaceID = gmsPlace.placeID
-                        }
-                    }
-                    
-                    // Get photos if available
-                    if let photos = gmsPlace.photos, !photos.isEmpty {
-                        self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
-                    }
-                    
-                    return // Exit after finding first match
-                }
-            }
-            
-            print("⚠️ No matching place found for: \(place.name)")
-            
-            // Try text search as fallback
-            self.searchPlaceByText(placesClient, placeName: place.name, meetingPointIndex: meetingPointIndex)
-        }
-    }
-
-    // Fallback method to search by text
-    private func searchPlaceByText(_ placesClient: GMSPlacesClient, placeName: String, meetingPointIndex: Int) {
-        // Create a filter with the place name as the query
-        let filter = GMSAutocompleteFilter()
-        filter.type = .establishment
-        
-        // Use the Autocomplete API to search for the place by name
-        placesClient.findAutocompletePredictions(
-            fromQuery: placeName,
-            filter: filter,
-            sessionToken: nil
-        ) { [weak self] (predictions, error) in
-            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
-                print("⚠️ No autocomplete results for: \(placeName)")
-                return
-            }
-            
-            // Get the place ID from the first prediction
-            let placeID = predictions[0].placeID
-            
-            // Fetch the place details to get photos
-            self.fetchPhotoForExistingPlaceID(placesClient, placeID: placeID, meetingPointIndex: meetingPointIndex)
-        }
-    }
 
     // Helper method to load a photo and update meeting point
+
     private func loadAndUpdatePhoto(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
         placesClient.loadPlacePhoto(photo) { [weak self] (image, error) in
             guard let self = self, let image = image, error == nil else {
@@ -552,6 +461,112 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
+
+    // Helper method to fetch photo for an existing Google Place ID
+    private func fetchPhotoForExistingPlaceID(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
+        placesClient.fetchPlace(
+            fromPlaceID: placeID,
+            placeFields: .photos,
+            sessionToken: nil
+        ) { [weak self] (place, error) in
+            guard let self = self, let place = place, error == nil,
+                  let photos = place.photos, !photos.isEmpty else {
+                print("⚠️ No photos found for place ID: \(placeID)")
+                return
+            }
+            
+            // Get the first photo
+            self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
+        }
+    }
+    
+
+    // Helper method to find a nearby Google Place matching our meeting point
+    private func findNearbyPlace(_ placesClient: GMSPlacesClient, place: MeetingPoint, index: Int) {
+        // Use text search as our primary approach
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        
+        // Use the place name as search query, adding the category for better matches
+        var searchQuery = place.name
+        if place.category != "Unknown" && !place.category.starts(with: "📍") {
+            searchQuery += " \(place.category)"
+        }
+        
+        placesClient.findAutocompletePredictions(
+            fromQuery: searchQuery,
+            filter: filter,
+            sessionToken: nil
+        ) { [weak self] (predictions, error) in
+            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
+                print("⚠️ No autocomplete results for: \(place.name)")
+                return
+            }
+            
+            // Get place ID from the first prediction
+            let placeID = predictions[0].placeID
+            
+            DispatchQueue.main.async {
+                if index < self.meetingPoints.count {
+                    // Store the found place ID
+                    self.meetingPoints[index].googlePlaceID = placeID
+                    
+                    // Now fetch photos and hours
+                    placesClient.fetchPlace(
+                        fromPlaceID: placeID,
+                        placeFields: [.photos, .openingHours],
+                        sessionToken: nil
+                    ) { (fetchedPlace, error) in
+                        if let error = error {
+                            print("⚠️ Error fetching place details: \(error.localizedDescription)")
+                            return
+                        }
+                        
+                        guard let fetchedPlace = fetchedPlace else { return }
+                        
+                        DispatchQueue.main.async {
+                            // Process photos
+                            if let photos = fetchedPlace.photos, !photos.isEmpty {
+                                self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: index)
+                            }
+                            
+                            // Store opening hours for display
+                            if let weekdayText = fetchedPlace.openingHours?.weekdayText, !weekdayText.isEmpty {
+                                self.meetingPoints[index].openingHours = weekdayText
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback method to search by text
+    private func searchPlaceByText(_ placesClient: GMSPlacesClient, placeName: String, meetingPointIndex: Int) {
+        // Create a filter with the place name as the query
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        
+        // Use the Autocomplete API to search for the place by name
+        placesClient.findAutocompletePredictions(
+            fromQuery: placeName,
+            filter: filter,
+            sessionToken: nil
+        ) { [weak self] (predictions, error) in
+            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
+                print("⚠️ No autocomplete results for: \(placeName)")
+                return
+            }
+            
+            // Get the place ID from the first prediction
+            let placeID = predictions[0].placeID
+            
+            // Fetch the place details to get photos
+            self.fetchPhotoForExistingPlaceID(placesClient, placeID: placeID, meetingPointIndex: meetingPointIndex)
+        }
+    }
+
+
     
     
     
@@ -569,43 +584,41 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         var originalPlaceType = "unknown"
         if let poiCategory = mapItem.pointOfInterestCategory?.rawValue {
             originalPlaceType = poiCategory.lowercased()
+            print("📍 Place type found: \(poiCategory) -> \(originalPlaceType)")
         }
         
         // Default emoji and category
         var emoji = "📍"
         var category = originalPlaceType.capitalized
         
+        // Check if this is potentially a nightlife venue that needs verification
+        let isPotentialNightlife = originalPlaceType.contains("nightlife") ||
+                                  originalPlaceType.contains("night club") ||
+                                  originalPlaceType.contains("bar") ||
+                                  originalPlaceType.contains("pub")
+        
         // Try to match with our category mapping
         if let mapping = categoryMapping[originalPlaceType] {
             emoji = mapping.emoji
             category = mapping.category
+            print("✅ Direct category match: \(originalPlaceType) -> \(category) \(emoji)")
         } else {
             // If no direct match, try partial matching for more flexibility
             for (key, value) in categoryMapping {
                 if originalPlaceType.contains(key) {
                     emoji = value.emoji
                     category = value.category
+                    print("✅ Partial category match: \(originalPlaceType) contains \(key) -> \(category) \(emoji)")
                     break
                 }
             }
             
             // If we're still using the default emoji, record this unknown place type
             if emoji == "📍" {
+                print("⚠️ Unknown category: \(originalPlaceType)")
                 recordUnknownPlaceType(emoji: emoji, placeType: originalPlaceType)
             }
         }
-        
-        // Ensure the category exists in our lists
-        let allCategories = categories + hiddenCategories
-        let categoryExists = allCategories.contains(where: { $0.name == category })
-        
-        // If category doesn't exist in our lists, add it to hidden categories
-        if !categoryExists && category != "Unknown" {
-            DispatchQueue.main.async { [weak self] in
-                self?.hiddenCategories.append(Category(emoji: emoji, name: category, hidden: true))
-            }
-        }
-        
         
         return MeetingPoint(
             name: mapItem.name ?? "Unknown Place",
@@ -617,6 +630,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             originalPlaceType: originalPlaceType
         )
     }
+
 
     
     
