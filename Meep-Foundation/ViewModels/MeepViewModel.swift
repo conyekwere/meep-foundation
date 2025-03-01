@@ -406,140 +406,63 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
-     // MARK: - 📸 Fetch Google Places Metadata (Images, Ratings, etc.)
-    func fetchGooglePlacesMetadata(for places: [MeetingPoint]) {
-        print("🔍 Fetching Google Places metadata for \(places.count) places")
-        let placesClient = GMSPlacesClient.shared()
+
+    
+    func fetchPhotoWithReference(photoReference: String, maxWidth: Int = 800, completion: @escaping (UIImage?) -> Void) {
+        // Replace "YOUR_API_KEY" with your actual Google Places API key
+        // This is typically passed in from your app configuration
+        guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "GooglePlacesAPIKey") as? String else {
+            print("❌ Missing Google Places API Key")
+            completion(nil)
+            return
+        }
         
-        // Process each meeting point
-        for (index, place) in places.enumerated() {
-            // Skip if we already have a valid image URL
-            let hasValidImage = place.imageUrl.contains("http") &&
-                                !place.imageUrl.contains("placeholder") &&
-                                !place.imageUrl.isEmpty
-            
-            if hasValidImage {
-                continue
+        let urlString = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=\(maxWidth)&photoreference=\(photoReference)&key=\(apiKey)"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid URL")
+            completion(nil)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data, error == nil else {
+                print("❌ Photo download error: \(error?.localizedDescription ?? "Unknown error")")
+                completion(nil)
+                return
             }
             
-            // Try to find the place and get its photo
-            findNearbyPlace(placesClient, place: place, index: index)
-        }
+            if let image = UIImage(data: data) {
+                completion(image)
+            } else {
+                print("❌ Could not create image from data")
+                completion(nil)
+            }
+        }.resume()
     }
-
-
-    // Helper method to load a photo and update meeting point
-
-    private func loadAndUpdatePhoto(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
+    
+    // Helper method to load photos directly from Google Places
+    private func loadPhotoDirectly(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
         placesClient.loadPlacePhoto(photo) { [weak self] (image, error) in
             guard let self = self, let image = image, error == nil else {
                 print("⚠️ Error loading photo: \(error?.localizedDescription ?? "Unknown error")")
                 return
             }
             
-            DispatchQueue.main.async {
-                if meetingPointIndex < self.meetingPoints.count {
-                    // In a real app, you would:
-                    // 1. Save the image to a local cache or cloud storage
-                    // 2. Update the imageUrl to point to that saved image
-                    
-                    // For demo purposes - use Google's photo API directly
-                    // Replace this with your own API key and proper URL construction
-                    if let reference = photo.attributions?.string {
-                        self.meetingPoints[meetingPointIndex].photoReference = reference
-                        
-                        // In a real implementation, you would construct a proper Google Places photo URL:
-                        // https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=[REFERENCE]&key=[YOUR_API_KEY]
-                        
-                        // For this example, we'll just use a placeholder that looks realistic
-                        let imageId = abs(self.meetingPoints[meetingPointIndex].name.hashValue % 1000)
-                        self.meetingPoints[meetingPointIndex].imageUrl = "https://picsum.photos/id/\(imageId)/800/600"
-                    }
-                    
-                    print("✅ Updated image for \(self.meetingPoints[meetingPointIndex].name)")
-                }
-            }
-        }
-    }
-
-    // Helper method to fetch photo for an existing Google Place ID
-    private func fetchPhotoForExistingPlaceID(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
-        placesClient.fetchPlace(
-            fromPlaceID: placeID,
-            placeFields: .photos,
-            sessionToken: nil
-        ) { [weak self] (place, error) in
-            guard let self = self, let place = place, error == nil,
-                  let photos = place.photos, !photos.isEmpty else {
-                print("⚠️ No photos found for place ID: \(placeID)")
-                return
-            }
-            
-            // Get the first photo
-            self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
-        }
-    }
-    
-
-    // Helper method to find a nearby Google Place matching our meeting point
-    private func findNearbyPlace(_ placesClient: GMSPlacesClient, place: MeetingPoint, index: Int) {
-        // Use text search as our primary approach
-        let filter = GMSAutocompleteFilter()
-        filter.type = .establishment
-        
-        // Use the place name as search query, adding the category for better matches
-        var searchQuery = place.name
-        if place.category != "Unknown" && !place.category.starts(with: "📍") {
-            searchQuery += " \(place.category)"
-        }
-        
-        placesClient.findAutocompletePredictions(
-            fromQuery: searchQuery,
-            filter: filter,
-            sessionToken: nil
-        ) { [weak self] (predictions, error) in
-            guard let self = self, let predictions = predictions, !predictions.isEmpty, error == nil else {
-                print("⚠️ No autocomplete results for: \(place.name)")
-                return
-            }
-            
-            // Get place ID from the first prediction
-            let placeID = predictions[0].placeID
-            
-            DispatchQueue.main.async {
-                if index < self.meetingPoints.count {
-                    // Store the found place ID
-                    self.meetingPoints[index].googlePlaceID = placeID
-                    
-                    // Now fetch photos and hours
-                    placesClient.fetchPlace(
-                        fromPlaceID: placeID,
-                        placeFields: [.photos, .openingHours],
-                        sessionToken: nil
-                    ) { (fetchedPlace, error) in
-                        if let error = error {
-                            print("⚠️ Error fetching place details: \(error.localizedDescription)")
-                            return
-                        }
-                        
-                        guard let fetchedPlace = fetchedPlace else { return }
-                        
-                        DispatchQueue.main.async {
-                            // Process photos
-                            if let photos = fetchedPlace.photos, !photos.isEmpty {
-                                self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: index)
-                            }
-                            
-                            // Store opening hours for display
-                            if let weekdayText = fetchedPlace.openingHours?.weekdayText, !weekdayText.isEmpty {
-                                self.meetingPoints[index].openingHours = weekdayText
-                            }
-                        }
+            // Convert UIImage to data and create a data URL for immediate display
+            if let imageData = image.jpegData(compressionQuality: 0.7) {
+                let base64String = imageData.base64EncodedString()
+                
+                DispatchQueue.main.async {
+                    if meetingPointIndex < self.meetingPoints.count {
+                        self.meetingPoints[meetingPointIndex].imageUrl = "data:image/jpeg;base64,\(base64String)"
+                        print("✅ Loaded direct photo for \(self.meetingPoints[meetingPointIndex].name)")
                     }
                 }
             }
         }
     }
+
 
     // Fallback method to search by text
     private func searchPlaceByText(_ placesClient: GMSPlacesClient, placeName: String, meetingPointIndex: Int) {
@@ -797,6 +720,210 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    
+
+
+
+    // MARK: - 📸 Google Places Photo Handling
+
+    // Main function to load and update photos
+    func loadAndUpdatePhoto(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
+        // Load the actual photo
+        placesClient.loadPlacePhoto(photo) { [weak self] (image, error) in
+            if let error = error {
+                print("⚠️ Error loading photo: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let self = self, let downloadedImage = image else {
+                return
+            }
+            
+            // Update on main thread with the downloaded image
+            OperationQueue.main.addOperation {
+                guard meetingPointIndex < self.meetingPoints.count else { return }
+                
+                // Convert the image to a data URL for immediate display
+                if let imageData = downloadedImage.jpegData(compressionQuality: 0.7) {
+                    let base64String = imageData.base64EncodedString()
+                    let dataURL = "data:image/jpeg;base64,\(base64String)"
+                    
+                    // Update the image URL
+                    self.meetingPoints[meetingPointIndex].imageUrl = dataURL
+                    
+                    print("✅ Updated with direct image for \(self.meetingPoints[meetingPointIndex].name)")
+                }
+            }
+        }
+    }
+
+    // Enhanced function to fetch place details including photos
+    func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
+        // Request fields we're interested in
+        let fields: GMSPlaceField = [.name, .photos, .formattedAddress]
+        
+        placesClient.fetchPlace(
+            fromPlaceID: placeID,
+            placeFields: fields,
+            sessionToken: nil
+        ) { [weak self] (place, error) in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("⚠️ Error fetching place details: \(error.localizedDescription)")
+                return
+            }
+            
+            guard let place = place else {
+                print("⚠️ No place details found")
+                return
+            }
+            
+            // Update on main thread
+            OperationQueue.main.addOperation {
+                guard meetingPointIndex < self.meetingPoints.count else { return }
+                
+                // Update address if available
+                if let address = place.formattedAddress {
+                    // If you have an address field in MeetingPoint, use it
+                    // self.meetingPoints[meetingPointIndex].address = address
+                    print("📍 Address: \(address)")
+                }
+                
+                // Load photo if available
+                if let photos = place.photos, !photos.isEmpty {
+                    self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
+                }
+            }
+        }
+    }
+
+    // Helper to find place and fetch its details
+    func findNearbyPlace(_ placesClient: GMSPlacesClient, place: MeetingPoint, index: Int) {
+        // Use text search for better matching
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        
+        // Create a more specific search query with both name and category
+        var searchQuery = place.name
+        if place.category != "Unknown" && !place.category.starts(with: "📍") {
+            searchQuery += " \(place.category)"
+        }
+        
+        // Try to add location context if possible
+        let midpointLoc = CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude)
+        CLGeocoder().reverseGeocodeLocation(midpointLoc) { [weak self] placemarks, error in
+            guard let self = self else { return }
+            
+            var updatedQuery = searchQuery
+            if let city = placemarks?.first?.locality {
+                updatedQuery += " \(city)"
+            }
+            
+            // Search for the place
+            placesClient.findAutocompletePredictions(
+                fromQuery: updatedQuery,
+                filter: filter,
+                sessionToken: nil
+            ) { [weak self] (predictions, error) in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("⚠️ Error finding place: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let predictions = predictions, !predictions.isEmpty else {
+                    print("⚠️ No autocomplete results for: \(place.name)")
+                    return
+                }
+                
+                // Get place ID from the first prediction
+                let placeID = predictions[0].placeID
+                
+                // Store the ID and fetch details
+                OperationQueue.main.addOperation {
+                    if index < self.meetingPoints.count {
+                        self.meetingPoints[index].googlePlaceID = placeID
+                    }
+                    
+                    // Fetch place details including photos
+                    self.fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: index)
+                }
+            }
+        }
+    }
+
+    // Main function to fetch metadata for all meeting points
+    func fetchGooglePlacesMetadata(for places: [MeetingPoint]) {
+        print("🔍 Fetching Google Places metadata for \(places.count) places")
+        let placesClient = GMSPlacesClient.shared()
+        
+        // Process each meeting point
+        for (index, place) in places.enumerated() {
+            // If we already have a Google Place ID, use it directly
+            if let placeID = place.googlePlaceID {
+                fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: index)
+            } else {
+                // Otherwise search for the place first
+                findNearbyPlace(placesClient, place: place, index: index)
+            }
+        }
+    }
+
+    // Helper method to fetch photo for an existing Google Place ID
+    func fetchPhotoForExistingPlaceID(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
+        placesClient.fetchPlace(
+            fromPlaceID: placeID,
+            placeFields: .photos,
+            sessionToken: nil
+        ) { [weak self] (place, error) in
+            guard let self = self, let place = place, error == nil,
+                  let photos = place.photos, !photos.isEmpty else {
+                print("⚠️ No photos found for place ID: \(placeID)")
+                return
+            }
+            
+            // Get the first photo
+            self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
+        }
+    }
+
+
+    // Direct Google Places Photos API implementation
+    func fetchPhotoWithReference(photoReference: String, completion: @escaping (UIImage?) -> Void) {
+        // Get your API key from Info.plist
+        guard let apiKey = Bundle.main.object(forInfoDictionaryKey: "GooglePlacesAPIKey") as? String else {
+            print("❌ Missing Google Places API Key in Info.plist")
+            completion(nil)
+            return
+        }
+        
+        // Construct the Photos API URL
+        let urlString = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=\(photoReference)&key=\(apiKey)"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid URL for photo reference")
+            completion(nil)
+            return
+        }
+        
+        // Create and execute the network request
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data, error == nil else {
+                print("❌ Photo download error: \(error?.localizedDescription ?? "Unknown error")")
+                completion(nil)
+                return
+            }
+            
+            if let image = UIImage(data: data) {
+                completion(image)
+            } else {
+                print("❌ Could not create image from data")
+                completion(nil)
+            }
+        }.resume()
+    }
     
     
 }
