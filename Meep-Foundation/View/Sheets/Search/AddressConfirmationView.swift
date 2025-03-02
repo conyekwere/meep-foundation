@@ -62,14 +62,14 @@ struct AddressConfirmationView: View {
                 }
                 .padding()
                 
-                // Map view with a static annotation
-//                Map(coordinateRegion: $region,
-//                    annotationItems: [LocationMapAnnotation(coordinate: coordinate)]) { location in
-//                    MapMarker(coordinate: location.coordinate, tint: addressType.iconColor)
-//                }
-//                .frame(height: 250)
-//                .cornerRadius(12)
-//                .padding()
+//                 Map view with a static annotation
+                Map(coordinateRegion: $region,
+                    annotationItems: [LocationMapAnnotation(coordinate: coordinate)]) { location in
+                    MapMarker(coordinate: location.coordinate, tint: addressType.iconColor)
+                }
+                .frame(height: 250)
+                .cornerRadius(12)
+                .padding()
                 
                 // Address text
                 Text(address)
