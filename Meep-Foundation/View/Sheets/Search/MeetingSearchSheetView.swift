@@ -15,6 +15,7 @@ struct MeetingSearchSheetView: View {
     @State private var friendLocation: String = ""
     
     @ObservedObject var viewModel: MeepViewModel
+    @ObservedObject private var locationsManager = UserLocationsManager.shared
     @Binding var isSearchActive: Bool
     
     // Focus states for the two text fields.
@@ -40,8 +41,42 @@ struct MeetingSearchSheetView: View {
     // Flag to detect whether the friend’s transport was manually changed.
        @State private var friendTransportManuallyChanged: Bool = false
 
+    // Sheet states
+    @State private var showSaveLocationSheet = false
+    @State private var showCustomLocationsSheet = false
+    @State private var showAddHomeAddressSheet = false
+    @State private var showAddWorkAddressSheet = false
+    @State private var showAddCustomAddressSheet = false
+    @State private var locationToSave = ""
+    @State private var tempCoordinate: CLLocationCoordinate2D? = nil
+    @State private var longPressTimer: Timer? = nil
     
-
+    private func handleSavedLocation(_ savedLocation: SavedLocation) {
+        // Set the location based on the current focus
+        if isMyLocationFocused {
+            myLocation = savedLocation.address
+            isMyLocationValid = true
+            viewModel.userLocation = savedLocation.coordinate
+            
+            // Move focus to friend location field
+            isMyLocationFocused = false
+            isFriendsLocationFocused = true
+        } else if isFriendsLocationFocused {
+            friendLocation = savedLocation.address
+            isFriendsLocationValid = true
+            viewModel.friendLocation = savedLocation.coordinate
+            
+            // Remove focus from location fields
+            isFriendsLocationFocused = false
+            isMyLocationFocused = false
+        }
+        
+        // Close any open sheets
+        showAddHomeAddressSheet = false
+        showAddWorkAddressSheet = false
+        showAddCustomAddressSheet = false
+    }
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -64,6 +99,20 @@ struct MeetingSearchSheetView: View {
                             .frame(height: 2),
                         alignment: .bottom
                     )
+                    .onLongPressGesture(minimumDuration: 0.5) {
+                        // Only show save sheet if there's a valid location
+                        if isMyLocationValid && !myLocation.isEmpty {
+                            locationToSave = myLocation
+                            
+                            // Geocode the address to get coordinates
+                            viewModel.geocodeAddress(myLocation) { coordinate in
+                                if let coordinate = coordinate {
+                                    tempCoordinate = coordinate
+                                    showSaveLocationSheet = true
+                                }
+                            }
+                        }
+                    }
                     
                     // "Friend's Location" Input Row
                     SearchTextFieldRow(
@@ -76,6 +125,20 @@ struct MeetingSearchSheetView: View {
                     )
                     .focused($isFriendsLocationFocused)
                     .onSubmit { isFriendsLocationFocused = false }
+                    .onLongPressGesture(minimumDuration: 0.5) {
+                        // Only show save sheet if there's a valid location
+                        if isFriendsLocationValid && !friendLocation.isEmpty {
+                            locationToSave = friendLocation
+                            
+                            // Geocode the address to get coordinates
+                            viewModel.geocodeAddress(friendLocation) { coordinate in
+                                if let coordinate = coordinate {
+                                    tempCoordinate = coordinate
+                                    showSaveLocationSheet = true
+                                }
+                            }
+                        }
+                    }
                 }
                 .cornerRadius(12)
                 .overlay(
@@ -117,9 +180,55 @@ struct MeetingSearchSheetView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 24) {
                             if isMyLocationFocused {
-                                SuggestionButton(icon: "house", title: "Set location", label: "Home", action: { print("Home tapped") })
-                                SuggestionButton(icon: "briefcase", title: "Set location", label: "Work", action: { print("Work tapped") })
-                                SuggestionButton(icon: "ellipsis", title: "", label: "More", action: { print("More tapped") })
+                                SuggestionButton(
+                                    icon: "house",
+                                    title: locationsManager.homeLocation?.address ?? "Set location",
+                                    label: "Home",
+                                    action: {
+                                        guard let home = locationsManager.homeLocation,
+                                              home.isValidCoordinate() else {
+                                            // Show add home location screen
+                                            showAddHomeAddressSheet = true
+                                            return
+                                        }
+                                        
+                                        myLocation = home.address
+                                        isMyLocationValid = true
+                                        viewModel.userLocation = home.coordinate
+                                        
+                                        // Move focus to friend location field
+                                        isMyLocationFocused = false
+                                        isFriendsLocationFocused = true
+                                    }
+                                )
+                                SuggestionButton(
+                                    icon: "briefcase",
+                                    title: locationsManager.workLocation?.address ?? "Set location",
+                                    label: "Work",
+                                    action: {
+                                        if let work = locationsManager.workLocation {
+                                            myLocation = work.address
+                                            isMyLocationValid = true
+                                            viewModel.userLocation = work.coordinate
+                                            
+                                            // Move focus to friend location field
+                                            isMyLocationFocused = false
+                                            isFriendsLocationFocused = true
+                                        } else {
+                                            // Show add work location screen
+                                            showAddWorkAddressSheet = true
+                                        }
+                                    }
+                                )
+                                SuggestionButton(
+                                    icon: "ellipsis",
+                                    title: "",
+                                    label: "More",
+                                    action: {
+                                        // Show custom locations modal
+                                        showCustomLocationsSheet = true
+                                    }
+                                )
                             }
                            else if isFriendsLocationFocused {
                                 SuggestionButton(icon: "plus", title: "Add another friend", label: "More friends?", action: { print("Add friend tapped") })
@@ -337,6 +446,23 @@ struct MeetingSearchSheetView: View {
                     friendTransportManuallyChanged = true
                 } else {
                     friendTransportManuallyChanged = false
+                }
+            }
+            .fullScreenCover(isPresented: $showAddHomeAddressSheet) {
+                AddressInputView(addressType: .home) { savedLocation in
+                    handleSavedLocation(savedLocation)
+                }
+            }
+            
+            .fullScreenCover(isPresented: $showAddWorkAddressSheet) {
+                AddressInputView(addressType: .work) { savedLocation in
+                    handleSavedLocation(savedLocation)
+                }
+            }
+            
+            .fullScreenCover(isPresented: $showAddCustomAddressSheet) {
+                AddressInputView(addressType: .custom) { savedLocation in
+                    handleSavedLocation(savedLocation)
                 }
             }
         }
