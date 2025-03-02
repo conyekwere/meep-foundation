@@ -17,7 +17,7 @@ struct AddressInputView: View {
     @StateObject private var locationManager = UserLocationsManager.shared
     @StateObject private var searchCompleter = LocalSearchCompleterDelegate()
     
-    @ObservedObject var viewModel: MeepViewModel
+    //@ObservedObject var viewModel: MeepViewModel
     
     
     @State private var addressText = ""
@@ -123,7 +123,7 @@ struct AddressInputView: View {
 
                         Button(action: {
                             print("Current Location selected")
-                            viewModel.requestUserLocation()
+                         //   viewModel.requestUserLocation()
                         }) {
                             HStack(spacing: 16) {
                                 Image(systemName: "location")
@@ -249,7 +249,7 @@ struct AddressInputView: View {
 }
 
 #Preview {
-    AddressInputView( viewModel: MeepViewModel(),
+    AddressInputView(
         addressType: .home,
         onSave: { savedLocation in
             // Preview handler does nothing

@@ -1,5 +1,5 @@
 //
-//  AddressType.swift
+//  AddressConfirmationView.swift
 //  Meep-Foundation
 //
 //  Created by Chima Onyekwere on 3/1/25.
@@ -23,6 +23,12 @@ struct AddressConfirmationView: View {
     let onSuggestEdit: () -> Void
     
     @State private var region: MKCoordinateRegion
+    
+    
+    struct LocationMapAnnotation: Identifiable {
+         let id = UUID()
+         let coordinate: CLLocationCoordinate2D
+     }
     
     init(addressType: AddressType, address: String, coordinate: CLLocationCoordinate2D, customName: String, onDone: @escaping () -> Void, onSuggestEdit: @escaping () -> Void) {
         self.addressType = addressType
@@ -57,12 +63,13 @@ struct AddressConfirmationView: View {
                 .padding()
                 
                 // Map view with a static annotation
-                Map(coordinateRegion: $region, annotationItems: [MapAnnotation(id: "location", coordinate: coordinate)]) { item in
-                    MapMarker(coordinate: item.coordinate, tint: addressType.iconColor)
-                }
-                .frame(height: 250)
-                .cornerRadius(12)
-                .padding()
+//                Map(coordinateRegion: $region,
+//                    annotationItems: [LocationMapAnnotation(coordinate: coordinate)]) { location in
+//                    MapMarker(coordinate: location.coordinate, tint: addressType.iconColor)
+//                }
+//                .frame(height: 250)
+//                .cornerRadius(12)
+//                .padding()
                 
                 // Address text
                 Text(address)
