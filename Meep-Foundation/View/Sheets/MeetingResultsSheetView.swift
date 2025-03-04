@@ -5,12 +5,6 @@
 //  Created by Chima onyekwere on 1/22/25.
 //
 
-//
-//  MeetingResultsSheetView.swift
-//  Meep-Foundation
-//
-//  Created by Chima onyekwere on 1/22/25.
-//
 
 import SwiftUI
 
