@@ -448,20 +448,88 @@ struct MeetingSearchSheetView: View {
                     friendTransportManuallyChanged = false
                 }
             }
+            
+            
+            // Show save location sheet
+               .sheet(isPresented: $showSaveLocationSheet) {
+                   if let coordinate = tempCoordinate {
+                       SaveLocationOptionSheet(
+                           address: locationToSave,
+                           onSaveHome: {
+                               locationsManager.saveHomeLocation(address: locationToSave, coordinate: coordinate)
+                               showSaveLocationSheet = false
+                           },
+                           onSaveWork: {
+                               locationsManager.saveWorkLocation(address: locationToSave, coordinate: coordinate)
+                               showSaveLocationSheet = false
+                           },
+                           onSaveCustom: { name in
+                               let customLocation = SavedLocation(
+                                   id: UUID().uuidString,
+                                   name: name,
+                                   address: locationToSave,
+                                   latitude: coordinate.latitude,
+                                   longitude: coordinate.longitude
+                               )
+                               locationsManager.addCustomLocation(customLocation)
+                               showSaveLocationSheet = false
+                           },
+                           onCancel: {
+                               showSaveLocationSheet = false
+                           }
+                       )
+                   }
+               }
+               .sheet(isPresented: $showCustomLocationsSheet) {
+                   CustomLocationSheet(
+                       isPresented: $showCustomLocationsSheet,
+                       onLocationSelected: { location in
+                           // Update the active field with the selected location
+                           if isMyLocationFocused {
+                               myLocation = location.address
+                               isMyLocationValid = true
+                               viewModel.userLocation = location.coordinate
+                               
+                               // Move focus to next field
+                               isMyLocationFocused = false
+                               isFriendsLocationFocused = true
+                           } else if isFriendsLocationFocused {
+                               friendLocation = location.address
+                               isFriendsLocationValid = true
+                               viewModel.friendLocation = location.coordinate
+                               
+                               // Hide keyboard
+                               isFriendsLocationFocused = false
+                           }
+                       }
+                   )
+               }
+            
             .fullScreenCover(isPresented: $showAddHomeAddressSheet) {
-                AddressInputView(addressType: .home) { savedLocation in
+                AddressInputView(
+                    viewModel: viewModel,
+                    addressType: .home
+                )
+                { savedLocation in
                     handleSavedLocation(savedLocation)
                 }
             }
             
             .fullScreenCover(isPresented: $showAddWorkAddressSheet) {
-                AddressInputView(addressType: .work) { savedLocation in
+                AddressInputView(
+                    viewModel: viewModel,
+                    addressType: .work
+                )
+                { savedLocation in
                     handleSavedLocation(savedLocation)
                 }
             }
             
             .fullScreenCover(isPresented: $showAddCustomAddressSheet) {
-                AddressInputView(addressType: .custom) { savedLocation in
+                AddressInputView(
+                    viewModel: viewModel,
+                    addressType: .custom
+                ) { savedLocation in
                     handleSavedLocation(savedLocation)
                 }
             }

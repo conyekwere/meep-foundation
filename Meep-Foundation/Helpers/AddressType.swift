@@ -12,24 +12,46 @@ import CoreLocation
 
 
 // Define AddressType directly in this file
-enum AddressType: String, CaseIterable {
+
+enum AddressType: String {
     case home = "Home"
     case work = "Work"
     case custom = "Custom"
     
-    var icon: String {
+    var iconColor: Color {
+        switch self {
+        case .home: return .blue
+        case .work: return .green
+        case .custom: return .orange
+        }
+    }
+    
+    var iconName: String {
         switch self {
         case .home: return "house.fill"
         case .work: return "briefcase.fill"
         case .custom: return "mappin.circle.fill"
         }
     }
-    
-    var iconColor: Color {
-        switch self {
-        case .home: return .blue
-        case .work: return .orange
-        case .custom: return .red
-        }
-    }
 }
+//enum AddressType: String, CaseIterable {
+//    case home = "Home"
+//    case work = "Work"
+//    case custom = "Custom"
+//    
+//    var icon: String {
+//        switch self {
+//        case .home: return "house.fill"
+//        case .work: return "briefcase.fill"
+//        case .custom: return "mappin.circle.fill"
+//        }
+//    }
+//    
+//    var iconColor: Color {
+//        switch self {
+//        case .home: return .blue
+//        case .work: return .orange
+//        case .custom: return .red
+//        }
+//    }
+//}
