@@ -17,7 +17,7 @@ struct AddressInputView: View {
     @StateObject private var locationManager = UserLocationsManager.shared
     @StateObject private var searchCompleter = LocalSearchCompleterDelegate()
     
-    //@ObservedObject var viewModel: MeepViewModel
+    @ObservedObject var viewModel: MeepViewModel
     
     
     @State private var addressText = ""
@@ -33,8 +33,9 @@ struct AddressInputView: View {
     var body: some View {
         ZStack {
             if showSuccessScreen, let coordinate = geocodedLocation {
-                // Line 66 - fixed by removing extra arguments
+
                 AddressConfirmationView(
+                    viewModel: viewModel,
                     addressType: addressType,
                     address: fullAddress,
                     coordinate: coordinate,
@@ -123,7 +124,7 @@ struct AddressInputView: View {
 
                         Button(action: {
                             print("Current Location selected")
-                         //   viewModel.requestUserLocation()
+                            viewModel.requestUserLocation()
                         }) {
                             HStack(spacing: 16) {
                                 Image(systemName: "location")
@@ -195,11 +196,9 @@ struct AddressInputView: View {
                                         
                                         // Format the full address
                                         var addressComponents: [String?] = [
-                                            placemark.thoroughfare,
+                                            placemark.name,
                                             placemark.locality,
                                             placemark.administrativeArea,
-                                            placemark.postalCode,
-                                            placemark.country
                                         ]
                                         self.fullAddress = addressComponents.compactMap { $0 }.joined(separator: ", ")
                                         
@@ -235,6 +234,7 @@ struct AddressInputView: View {
                 placemark.thoroughfare,
                 placemark.locality,
                 placemark.administrativeArea
+                
             ]
             self.fullAddress = addressComponents.compactMap { $0 }.joined(separator: ", ")
             
@@ -250,7 +250,8 @@ struct AddressInputView: View {
 
 #Preview {
     AddressInputView(
-        addressType: .home,
+         viewModel: MeepViewModel(),
+         addressType: .home,
         onSave: { savedLocation in
             // Preview handler does nothing
             print("Saved location: \(savedLocation.address)")
