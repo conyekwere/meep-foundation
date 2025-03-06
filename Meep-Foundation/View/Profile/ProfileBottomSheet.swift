@@ -36,7 +36,7 @@ struct ProfileBottomSheet: View {
                     Text("Ashley Dee")
                         .font(.title3)
                         .fontWeight(.semibold)
-                        .foregroundColor(Color(.gray))
+                        .foregroundColor(Color(.darkGray))
                         .fontWidth(.expanded)
                     
                     Text("@Adhdee")

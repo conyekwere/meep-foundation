@@ -27,35 +27,27 @@ struct CustomLocationSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header with drag indicator
-                VStack(spacing: 8) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 40, height: 5)
-                    
-                    Text("Saved Locations")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .fontWidth(.expanded)
-                }
-                .padding(.top, 12)
-                .padding(.bottom, 16)
                 
                 if locationsManager.customLocations.isEmpty {
                     // Empty state
+                    
+                    Spacer()
                     VStack(spacing: 16) {
+               
                         Image(systemName: "mappin.circle")
                             .font(.system(size: 50))
-                            .foregroundColor(.blue.opacity(0.6))
-                            .padding(.top, 60)
+                            .foregroundColor(.blue.opacity(0.9))
+                            
                         
                         Text("No saved locations")
                             .font(.headline)
+                            .foregroundColor(Color(.label)).opacity(0.9)
                             .foregroundColor(.secondary)
+                           
                         
                         Text("Add places you visit frequently")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(.label)).opacity(0.8)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
                         
@@ -71,11 +63,10 @@ struct CustomLocationSheet: View {
                             .foregroundColor(.blue)
                             .cornerRadius(12)
                         }
-                        .padding(.top, 20)
-                        
-                        Spacer()
                     }
-                    .padding()
+                    .padding(.top, -80)
+                   
+                    Spacer()
                 } else {
                     // List of custom locations
                     List {
@@ -148,17 +139,42 @@ struct CustomLocationSheet: View {
                     .listStyle(InsetGroupedListStyle())
                 }
             }
+
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                ToolbarItem(placement:.navigationBarLeading) {
+                    Button(action: {
+                        print("DEBUG: Back Button Tapped")
                         isPresented = false
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(12)
+                            .frame(width: 40, height: 40)
+                            .foregroundColor(Color(.gray))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 30)
+                                    .stroke(Color(.systemGray6), lineWidth: 2)
+                            )
+                            .clipShape(Circle())
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("Saved Locations")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .fontWidth(.expanded)
+                            .foregroundColor(Color(.darkGray))
+                    }
+                    .padding(.top, 8)
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if !locationsManager.customLocations.isEmpty {
                         EditButton()
                     }
+                    
                 }
                 
                 ToolbarItem(placement: .bottomBar) {
@@ -175,6 +191,8 @@ struct CustomLocationSheet: View {
                         .padding()
                     }
                 }
+                
+                
             }
             .environment(\.editMode, $editMode)
         }
@@ -288,15 +306,37 @@ struct AddLocationView: View {
                     }
                 }
             }
-            .navigationTitle("Add New Location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                ToolbarItem(placement:.navigationBarLeading) {
+                    Button(action: {
+                        print("DEBUG: Back Button Tapped")
                         isPresented = false
+                    }) {
+                        Image(systemName: "xmark")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(12)
+                            .frame(width: 40, height: 40)
+                            .foregroundColor(Color(.gray))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 30)
+                                    .stroke(Color(.systemGray6), lineWidth: 2)
+                            )
+                            .clipShape(Circle())
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("Add New Location")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .fontWidth(.expanded)
+                            .foregroundColor(Color(.darkGray))
+                    }
+                    .padding(.top, 8)
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         if !locationName.isEmpty && !locationAddress.isEmpty {
@@ -320,7 +360,10 @@ struct AddLocationView: View {
                         }
                     }
                     .disabled(locationName.isEmpty || locationAddress.isEmpty)
+                    
                 }
+                
+                
             }
             .onAppear {
                 focusedField = .name
