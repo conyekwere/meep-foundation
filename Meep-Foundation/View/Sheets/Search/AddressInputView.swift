@@ -11,7 +11,6 @@ import MapKit
 import CoreLocation
 
 
-
 struct AddressInputView: View {
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var locationManager = UserLocationsManager.shared
@@ -68,7 +67,7 @@ struct AddressInputView: View {
                 )
             } else {
                 NavigationStack {
-                    VStack(spacing: 0) {
+                    VStack( alignment:.center, spacing: 0) {
                         // Search field
                         VStack(spacing: 0) {
                             HStack {
@@ -121,6 +120,19 @@ struct AddressInputView: View {
                         }
                         .padding(.vertical, 16)
                         
+                        
+                        
+                        // Autocomplete suggestions
+                        if !searchCompleter.completions.isEmpty {
+                            AutocompleteSuggestionsView(
+                                completions: searchCompleter.completions,
+                                text: $addressText,
+                                selectedAddress: $selectedAddress,
+                                geocodeAddress: geocodeAddress
+                            )
+                        }
+                        
+                        Spacer()
 
                         Button(action: {
                             print("Current Location selected")
@@ -138,82 +150,43 @@ struct AddressInputView: View {
                                     .font(.body)
                             }
                             .padding(.horizontal, 16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .center)
                         }
-                        
-                        
-                        // Autocomplete suggestions
-                        if !searchCompleter.completions.isEmpty {
-                            List {
-                                ForEach(searchCompleter.completions, id: \.self) { completion in
-                                    Button(action: {
-                                        // Handle selection of autocomplete suggestion
-                                        selectedAddress = completion
-                                        addressText = "\(completion.title) \(completion.subtitle)".trimmingCharacters(in: .whitespaces)
-                                        
-                                        // Geocode the address to get coordinates
-                                        geocodeAddress(completion)
-                                    }) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "mappin.circle.fill")
-                                                .foregroundColor(.red)
-                                                .font(.title3)
-                                            
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(completion.title)
-                                                    .foregroundColor(.primary)
-                                                
-                                                Text(completion.subtitle)
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .listStyle(PlainListStyle())
-                        }
-                        
-                        Spacer()
                     }
-                    .navigationBarTitle("", displayMode: .inline)
-                    .navigationBarItems(
-                        leading: Button(action: {
-                            presentationMode.wrappedValue.dismiss()
-                        }) {
-                            Image(systemName: "chevron.left")
-                                .foregroundColor(.primary)
-                        },
-                        trailing: Button("Done") {
-                            if let selected = selectedAddress {
-                                geocodeAddress(selected)
-                            } else if !addressText.isEmpty {
-                                // Geocode manually entered text
-                                let geocoder = CLGeocoder()
-                                geocoder.geocodeAddressString(addressText) { placemarks, error in
-                                    if let placemark = placemarks?.first, let location = placemark.location {
-                                        self.geocodedLocation = location.coordinate
-                                        
-                                        // Format the full address
-                                        var addressComponents: [String?] = [
-                                            placemark.name,
-                                            placemark.locality,
-                                            placemark.administrativeArea,
-                                        ]
-                                        self.fullAddress = addressComponents.compactMap { $0 }.joined(separator: ", ")
-                                        
-                                        showSuccessScreen = true
-                                    }
-                                }
-                            }
-                        }
-                        .disabled(addressText.isEmpty || (addressType == .custom && customLocationName.isEmpty))
-                    )
                 }
             }
         }
         .onChange(of: addressText) { newValue in
             searchCompleter.updateQuery(newValue)
+        }
+        .toolbar {
+            ToolbarItem(placement: .bottomBar) {
+//                Button("Done") {
+//                if let selected = selectedAddress {
+//                    geocodeAddress(selected)
+//                } else if !addressText.isEmpty {
+//                    // Geocode manually entered text
+//                    let geocoder = CLGeocoder()
+//                    geocoder.geocodeAddressString(addressText) { placemarks, error in
+//                        if let placemark = placemarks?.first, let location = placemark.location {
+//                            self.geocodedLocation = location.coordinate
+//                            
+//                            // Format the full address
+//                            var addressComponents: [String?] = [
+//                                placemark.name,
+//                                placemark.locality,
+//                                placemark.administrativeArea,
+//                            ]
+//                            self.fullAddress = addressComponents.compactMap { $0 }.joined(separator: ", ")
+//                            
+//                            showSuccessScreen = true
+//                        }
+//                    }
+//                }
+//            }
+//                .buttonStyle(PlainButtonStyle())
+//            .disabled(addressText.isEmpty || (addressType == .custom && customLocationName.isEmpty))
+            }
         }
     }
     

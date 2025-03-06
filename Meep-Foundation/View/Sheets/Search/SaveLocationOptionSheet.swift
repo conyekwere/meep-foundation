@@ -125,13 +125,13 @@ struct SaveLocationOptionSheet: View {
         .presentationDragIndicator(.visible)
     }
 }
-//
-//#Preview {
-//    SaveLocationOptionSheet(
-//        address: "123 Main St, New York, NY 10001",
-//        onSaveHome: {},
-//        onSaveWork: {},
-//        onSaveCustom: { _ in },
-//        onCancel: {}
-//    )
-//}
+
+#Preview {
+    SaveLocationOptionSheet(
+        address: "123 Main St, New York, NY 10001",
+        onSaveHome: {},
+        onSaveWork: {},
+        onSaveCustom: { _ in },
+        onCancel: {}
+    )
+}
