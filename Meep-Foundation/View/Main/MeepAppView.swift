@@ -270,13 +270,22 @@ struct MeepAppView: View {
                 isSearchActive: .constant(true),
                 onDismiss: {
                     isSearching = false
-                    uiState = .onboarding
                     
-                    // Reset view model locations and shareable strings.
-                    viewModel.userLocation = nil
-                    viewModel.friendLocation = nil
-                    viewModel.sharableUserLocation = "My Location"
-                    viewModel.sharableFriendLocation = "Friend's Location"
+                    // Only reset the view model if explicitly requested or if the search sheet is canceled
+                    // without setting any locations
+                    if viewModel.userLocation == nil && viewModel.friendLocation == nil {
+                        uiState = .onboarding
+                        
+                        // Reset view model locations and shareable strings.
+                        viewModel.userLocation = nil
+                        viewModel.friendLocation = nil
+                        viewModel.sharableUserLocation = "My Location"
+                        viewModel.sharableFriendLocation = "Friend's Location"
+                    } else {
+                        // Maintain the current UI state
+                        // This will preserve the results view when returning from search
+                        // with existing locations
+                    }
                 },
                 onDone: {
                     isSearching = false
