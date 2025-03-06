@@ -51,6 +51,88 @@ struct MeetingSearchSheetView: View {
     @State private var tempCoordinate: CLLocationCoordinate2D? = nil
     @State private var longPressTimer: Timer? = nil
     
+
+    // Replace your current validateAddress method with:
+    private func validateAddress(_ address: String, using completer: LocalSearchCompleterDelegate) -> Bool {
+        let allSavedLocations = [locationsManager.homeLocation, locationsManager.workLocation]
+            .compactMap { $0 }
+            + locationsManager.customLocations
+        
+        return LocationHelpers.validateAddress(
+            address,
+            completer: completer,
+            savedLocations: allSavedLocations,
+            existingCoordinate: address == myLocation ? viewModel.userLocation : viewModel.friendLocation
+        )
+    }
+    
+    private func processBothLocations(completion: @escaping () -> Void) {
+        // Ensure we have coordinates for both locations before proceeding
+        let processLocationResults = {
+                if self.viewModel.userLocation != nil && self.viewModel.friendLocation != nil {
+                    // Update the shareable strings with the actual addresses
+                    self.viewModel.sharableUserLocation = self.myLocation
+                    self.viewModel.sharableFriendLocation = self.friendLocation
+                    
+                    // Then proceed with the rest
+                    self.viewModel.reverseGeocodeUserLocation()
+                    self.viewModel.reverseGeocodeFriendLocation()
+                    self.viewModel.searchNearbyPlaces()
+                    completion()
+                }
+            }
+        
+        // First check if we need to geocode the user location
+        if viewModel.userLocation == nil {
+            LocationHelpers.geocodeAddress(myLocation) { coordinate, _ in
+                guard let userCoord = coordinate else {
+                    print("❌ Failed to geocode My Location: \(self.myLocation)")
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    self.viewModel.userLocation = userCoord
+                    
+                    // Now check if we need to geocode the friend location
+                    if self.viewModel.friendLocation == nil {
+                        LocationHelpers.geocodeAddress(self.friendLocation) { coordinate, _ in
+                            guard let friendCoord = coordinate else {
+                                print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
+                                return
+                            }
+                            
+                            DispatchQueue.main.async {
+                                self.viewModel.friendLocation = friendCoord
+                                processLocationResults()
+                            }
+                        }
+                    } else {
+                        processLocationResults()
+                    }
+                }
+            }
+        }
+        // If user location is already known, check friend location
+        else if viewModel.friendLocation == nil {
+            LocationHelpers.geocodeAddress(friendLocation) { coordinate, _ in
+                guard let friendCoord = coordinate else {
+                    print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    self.viewModel.friendLocation = friendCoord
+                    processLocationResults()
+                }
+            }
+        }
+        // Both locations already have coordinates
+        else {
+            processLocationResults()
+        }
+    }
+    
+    
     private func handleSavedLocation(_ savedLocation: SavedLocation) {
         // Set the location based on the current focus
         if isMyLocationFocused {
@@ -78,95 +160,29 @@ struct MeetingSearchSheetView: View {
     }
     
     
-    // Helper function to add to your MeetingSearchSheetView
-    private func validateAddress(_ address: String, using completer: LocalSearchCompleterDelegate) -> Bool {
-        // Empty addresses are not valid
-        if address.isEmpty {
-            return false
-        }
-        
-        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Check if this is a known saved location
-        if let homeLocation = locationsManager.homeLocation,
-           homeLocation.address.lowercased() == trimmed.lowercased() {
-            return true
-        }
-        
-        if let workLocation = locationsManager.workLocation,
-           workLocation.address.lowercased() == trimmed.lowercased() {
-            return true
-        }
-        
-        // Check if it matches any custom location
-        for location in locationsManager.customLocations {
-            if location.address.lowercased() == trimmed.lowercased() {
-                return true
-            }
-        }
-        
-        // Check against autocomplete suggestions - perfect match
-        let perfectMatch = completer.completions.contains { suggestion in
-            let suggestionAddress = "\(suggestion.title) \(suggestion.subtitle)"
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
-            return suggestionAddress.lowercased() == trimmed.lowercased()
-        }
-        
-        if perfectMatch {
-            return true
-        }
-        
-        // Check against autocomplete suggestions - partial match (if long enough)
-        if trimmed.count >= 5 && !completer.completions.isEmpty {
-            let partialMatch = completer.completions.contains { suggestion in
-                let suggestionTitle = suggestion.title
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .lowercased()
-                
-                let suggestionAddress = "\(suggestion.title) \(suggestion.subtitle)"
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .lowercased()
-                    
-                return suggestionAddress.contains(trimmed) ||
-                       trimmed.contains(suggestionTitle) ||
-                       (suggestion.subtitle.lowercased().contains(trimmed) && trimmed.count > 8)
-            }
-            
-            if partialMatch {
-                return true
-            }
-        }
-        
-        // If there's coordinates associated with this address in the viewModel, it's valid
-        if address == myLocation && viewModel.userLocation != nil {
-            return true
-        }
-        
-        if address == friendLocation && viewModel.friendLocation != nil {
-            return true
-        }
-        
-        // Could add more validation here: check if it looks like an address format
-        // e.g., contains street numbers, known street types, city names, etc.
-        
-        return false
-    }
+
 
     // Function to proactively geocode an address if it's valid but doesn't have coordinates yet
     private func geocodeIfNeeded(_ address: String, isMyLocation: Bool) {
         let isValid = isMyLocation ? isMyLocationValid : isFriendsLocationValid
         let hasCoordinates = isMyLocation ? (viewModel.userLocation != nil) : (viewModel.friendLocation != nil)
         
-        // Only geocode if the address is valid but doesn't have coordinates yet
         if isValid && !hasCoordinates {
-            viewModel.geocodeAddress(address) { coordinate in
-                if let coordinate = coordinate {
-                    DispatchQueue.main.async {
+            LocationHelpers.geocodeAddress(address) { coordinate, formattedAddress in
+                DispatchQueue.main.async {
+                    if let coordinate = coordinate {
                         if isMyLocation {
-                            viewModel.userLocation = coordinate
+                            self.viewModel.userLocation = coordinate
                         } else {
-                            viewModel.friendLocation = coordinate
+                            self.viewModel.friendLocation = coordinate
+                        }
+                    }
+                    
+                    if let formattedAddress = formattedAddress {
+                        if isMyLocation {
+                            self.myLocation = formattedAddress
+                        } else {
+                            self.friendLocation = formattedAddress
                         }
                     }
                 }
@@ -285,32 +301,18 @@ struct MeetingSearchSheetView: View {
                             completions: friendSearchCompleter.completions,
                             text: $friendLocation,
                             geocodeAddress: { completion in
-                                // Geocode the address
-                                let searchRequest = MKLocalSearch.Request(completion: completion)
-                                let search = MKLocalSearch(request: searchRequest)
-                                
-                                search.start { response, error in
-                                    guard let response = response, let item = response.mapItems.first else {
-                                        return
-                                    }
-                                    
-                                    // Update friend location
-                                    viewModel.friendLocation = item.placemark.coordinate
-                                    isFriendsLocationValid = true
-                                    
-                                    // Update the address with more complete information if needed
-                                    let placemark = item.placemark
-                                    let formattedAddress = [
-                                        placemark.name,
-                                        placemark.thoroughfare,
-                                        placemark.locality,
-                                        placemark.administrativeArea
-                                    ].compactMap { $0 }.joined(separator: ", ")
-                                    
-                                    if !formattedAddress.isEmpty {
-                                        DispatchQueue.main.async {
-                                            friendLocation = formattedAddress
+                                LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
+                                    DispatchQueue.main.async {
+                                        if let coordinate = coordinate {
+                                            self.viewModel.friendLocation = coordinate
+                                            self.isFriendsLocationValid = true
                                         }
+                                        
+                                        if let formattedAddress = formattedAddress {
+                                            self.friendLocation = formattedAddress
+                                        }
+                                        
+                                        self.isFriendsLocationFocused = false
                                     }
                                 }
                             },
@@ -485,54 +487,11 @@ struct MeetingSearchSheetView: View {
                     if isMyLocationValid && isFriendsLocationValid {
                         Button(action: {
                             // Ensure we have coordinates for both locations before proceeding
-                            let processLocations = {
-                                if viewModel.userLocation != nil && viewModel.friendLocation != nil {
-                                    viewModel.reverseGeocodeUserLocation()
-                                    viewModel.reverseGeocodeFriendLocation()
-                                    viewModel.searchNearbyPlaces()
-                                    onDone()
-                                }
+                            processBothLocations {
+                                onDone()
                             }
                             
-                            // First check if we need to geocode the user location
-                            if viewModel.userLocation == nil {
-                                viewModel.geocodeAddress(myLocation) { userCoord in
-                                    guard let userCoord = userCoord else {
-                                        print("❌ Failed to geocode My Location: \(myLocation)")
-                                        return
-                                    }
-                                    viewModel.userLocation = userCoord
-                                    
-                                    // Now check if we need to geocode the friend location
-                                    if viewModel.friendLocation == nil {
-                                        viewModel.geocodeAddress(friendLocation) { friendCoord in
-                                            guard let friendCoord = friendCoord else {
-                                                print("❌ Failed to geocode Friend's Location: \(friendLocation)")
-                                                return
-                                            }
-                                            viewModel.friendLocation = friendCoord
-                                            processLocations()
-                                        }
-                                    } else {
-                                        processLocations()
-                                    }
-                                }
-                            }
-                            // If user location is already known, check friend location
-                            else if viewModel.friendLocation == nil {
-                                viewModel.geocodeAddress(friendLocation) { friendCoord in
-                                    guard let friendCoord = friendCoord else {
-                                        print("❌ Failed to geocode Friend's Location: \(friendLocation)")
-                                        return
-                                    }
-                                    viewModel.friendLocation = friendCoord
-                                    processLocations()
-                                }
-                            }
-                            // Both locations already have coordinates
-                            else {
-                                processLocations()
-                            }
+
                         }) {
                             Text("Done")
                                 .foregroundColor(.primary)
@@ -546,67 +505,54 @@ struct MeetingSearchSheetView: View {
                 friendSearchCompleter.updateQuery(friendLocation)
                 
                 // If userLocation is available, reverse geocode to get a human-readable address.
+                // Inside onAppear, replace the reverse geocoding for user location:
                 if let userLoc = viewModel.userLocation {
                     // Check if myLocation is already populated with a good value
                     if myLocation.isEmpty || myLocation.contains(",") {
                         let location = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
                         CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                            if let placemark = placemarks?.first, error == nil {
-                                let address = [
-                                    placemark.name,
-                                    placemark.locality,
-                                    placemark.administrativeArea,
-                                ]
-                                .compactMap { $0 }
-                                .joined(separator: ", ")
+                            // Instead, use:
+                            let formattedCoords = LocationHelpers.formatCoordinates(userLoc)
+                            LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
                                 DispatchQueue.main.async {
-                                    myLocation = address
-                                    isMyLocationValid = true
-                                    
-                                    // Only set focus to friend location if it's empty
-                                    if friendLocation.isEmpty {
-                                        isFriendsLocationFocused = true
+                                    if let address = formattedAddress {
+                                        self.myLocation = address
+                                        self.isMyLocationValid = true
+                                        
+                                        // Only set focus to friend location if it's empty
+                                        if self.friendLocation.isEmpty {
+                                            self.isFriendsLocationFocused = true
+                                        }
+                                    } else {
+                                        // Only update if we don't already have a good value
+                                        if self.myLocation.isEmpty {
+                                            self.myLocation = formattedCoords
+                                            self.isMyLocationFocused = true
+                                        }
                                     }
-                                }
-                            } else {
-                                // Only update if we don't already have a good value
-                                if myLocation.isEmpty {
-                                    myLocation = String(format: "%.4f, %.4f", userLoc.latitude, userLoc.longitude)
-                                    isMyLocationFocused = true
                                 }
                             }
                         }
-                    } else {
-                        // If myLocation already has a good value, mark it as valid
-                        isMyLocationValid = true
                     }
-                } else {
-                    viewModel.requestUserLocation()
-                    isMyLocationFocused = true
                 }
+
+
                 
                 // Similar logic for friend location
                 if let friendLoc = viewModel.friendLocation {
                     // Check if friendLocation is already populated with a good value
                     if friendLocation.isEmpty || friendLocation.contains(",") {
-                        let location = CLLocation(latitude: friendLoc.latitude, longitude: friendLoc.longitude)
-                        CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                            if let placemark = placemarks?.first, error == nil {
-                                let address = [
-                                    placemark.name,
-                                    placemark.locality,
-                                    placemark.administrativeArea,
-                                ]
-                                .compactMap { $0 }
-                                .joined(separator: ", ")
-                                DispatchQueue.main.async {
-                                    friendLocation = address
-                                    isFriendsLocationValid = true
-                                }
-                            } else {
-                                // Only update if we don't already have a good value
-                                if friendLocation.isEmpty {
-                                    friendLocation = String(format: "%.4f, %.4f", friendLoc.latitude, friendLoc.longitude)
+                        let formattedCoords = LocationHelpers.formatCoordinates(friendLoc)
+                        LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
+                            DispatchQueue.main.async {
+                                if let address = formattedAddress {
+                                    self.friendLocation = address
+                                    self.isFriendsLocationValid = true
+                                } else {
+                                    // Only update if we don't already have a good value
+                                    if self.friendLocation.isEmpty {
+                                        self.friendLocation = formattedCoords
+                                    }
                                 }
                             }
                         }
@@ -619,12 +565,28 @@ struct MeetingSearchSheetView: View {
             .onChange(of: myLocation) { newValue in
                 mySearchCompleter.updateQuery(newValue)
                 
-                // Update validation status
-                isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
-                
-                // If the address is valid but doesn't have coordinates, geocode it
-                if isMyLocationValid && viewModel.userLocation == nil {
-                    geocodeIfNeeded(newValue, isMyLocation: true)
+                // Check if it's coordinates
+                if LocationHelpers.isLikelyCoordinates(newValue) {
+                    isMyLocationValid = true
+                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                        DispatchQueue.main.async {
+                            if let coordinate = coordinate {
+                                self.viewModel.userLocation = coordinate
+                            }
+                            
+                            if let formattedAddress = formattedAddress {
+                                self.myLocation = formattedAddress
+                            }
+                        }
+                    }
+                } else {
+                    // Otherwise use normal validation
+                    isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
+                    
+                    // If the address is valid but doesn't have coordinates, geocode it
+                    if isMyLocationValid && viewModel.userLocation == nil {
+                        geocodeIfNeeded(newValue, isMyLocation: true)
+                    }
                 }
             }
             
@@ -632,12 +594,28 @@ struct MeetingSearchSheetView: View {
             .onChange(of: friendLocation) { newValue in
                 friendSearchCompleter.updateQuery(newValue)
                 
-                // Update validation status
-                isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
-                
-                // If the address is valid but doesn't have coordinates, geocode it
-                if isFriendsLocationValid && viewModel.friendLocation == nil {
-                    geocodeIfNeeded(newValue, isMyLocation: false)
+                // Check if it's coordinates
+                if LocationHelpers.isLikelyCoordinates(newValue) {
+                    isFriendsLocationValid = true
+                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                        DispatchQueue.main.async {
+                            if let coordinate = coordinate {
+                                self.viewModel.friendLocation = coordinate
+                            }
+                            
+                            if let formattedAddress = formattedAddress {
+                                self.friendLocation = formattedAddress
+                            }
+                        }
+                    }
+                } else {
+                    // Otherwise use normal validation
+                    isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
+                    
+                    // If the address is valid but doesn't have coordinates, geocode it
+                    if isFriendsLocationValid && viewModel.friendLocation == nil {
+                        geocodeIfNeeded(newValue, isMyLocation: false)
+                    }
                 }
             }
             
