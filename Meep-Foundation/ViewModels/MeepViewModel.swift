@@ -93,6 +93,8 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         "movie theater": ("Theater", "🎭"),
         "stadium": ("Stadium", "🏟"),
         "museum": ("Museum", "🎨"),
+        "mkpoicategorymusicvenue": ("Music Venue", "🎶"),
+        "mkpoicategorymarina": ("Marina", "🚤"),
         "library": ("Library", "📚"),
         "art gallery": ("Museum", "🎨"),
         "park": ("Park", "🌳"),
