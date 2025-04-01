@@ -15,5 +15,7 @@
 	<string>We need your location to find the best meeting points for you.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Location access helps us provide the best meeting suggestions.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Find friends using Meep and add them to your network</string>
 </dict>
 </plist>
