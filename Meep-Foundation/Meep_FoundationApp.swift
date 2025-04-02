@@ -11,6 +11,7 @@ import GooglePlaces
 
 @main
 struct MeepApp: App {
+    @StateObject private var onboardingManager = OnboardingManager.shared
     init() {
         if let mapsAPIKey = Bundle.main.object(forInfoDictionaryKey: "GMS_MAPS_API_KEY") as? String,
            !mapsAPIKey.isEmpty {
@@ -32,6 +33,11 @@ struct MeepApp: App {
     var body: some Scene {
         WindowGroup {
             MeepAppView()
+                .environmentObject(onboardingManager)
+                .onAppear {
+                    OnboardingManager.shared.incrementAppLaunch()
+                }
         }
+
     }
 }

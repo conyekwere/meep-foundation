@@ -271,12 +271,19 @@ struct MeepAppView: View {
                 onDismiss: {
                     isSearching = false
                     
-                    // Only reset the view model if explicitly requested or if the search sheet is canceled
-                    // without setting any locations
-                    if viewModel.userLocation == nil && viewModel.friendLocation == nil {
+                    // Get a reference to the sheet view to check its text fields
+                    let sheetView = MeetingSearchSheetView(
+                        viewModel: viewModel,
+                        isSearchActive: .constant(true),
+                        onDismiss: { },
+                        onDone: { }
+                    )
+                    
+                    // Check if both text fields are empty
+                    if sheetView.areFieldsEmpty() || (viewModel.userLocation == nil && viewModel.friendLocation == nil) {
                         uiState = .onboarding
                         
-                        // Reset view model locations and shareable strings.
+                        // Reset view model locations and shareable strings
                         viewModel.userLocation = nil
                         viewModel.friendLocation = nil
                         viewModel.sharableUserLocation = "My Location"

@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleDisplayName</key>
+    <string>Meep</string>
+    
 	<key>GMS_PLACES_API_KEY</key>
 	<string>$(GOOGLE_PLACES_API_KEY)</string>
 	<key>GMS_MAPS_API_KEY</key>
@@ -15,5 +18,7 @@
 	<string>We need your location to find the best meeting points for you.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Location access helps us provide the best meeting suggestions.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Find friends using Meep and add them to your network</string>
 </dict>
 </plist>

@@ -234,7 +234,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     var annotations: [MeepAnnotation] {
         var results: [MeepAnnotation] = []
         
-        results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
+        if userLocation != nil && friendLocation != nil {
+             results.append(MeepAnnotation(coordinate: midpoint, title: "Midpoint", type: .midpoint))
+         }
         
         if let uLoc = userLocation {
             results.append(MeepAnnotation(coordinate: uLoc, title: "You", type: .user))
@@ -558,7 +560,61 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         )
     }
 
+    // In your MeepViewModel
+    func listenForLocationResponses() {
+        // For Firebase implementation:
+        /*
+        let db = Firestore.firestore()
+        db.collection("locationResponses")
+          .whereField("userID", isEqualTo: UserDefaults.standard.string(forKey: "userId") ?? "")
+          .addSnapshotListener { snapshot, error in
+              guard let documents = snapshot?.documents else {
+                  print("Error listening for location responses: \(error?.localizedDescription ?? "Unknown error")")
+                  return
+              }
+              
+              for document in documents {
+                  let data = document.data()
+                  if let requestID = data["requestID"] as? String,
+                     let latitude = data["latitude"] as? Double,
+                     let longitude = data["longitude"] as? Double {
+                      
+                      DispatchQueue.main.async {
+                          self.handleLocationResponse(
+                              requestID: requestID,
+                              coordinate: CLLocationCoordinate2D(
+                                  latitude: latitude,
+                                  longitude: longitude
+                              )
+                          )
+                      }
+                  }
+              }
+          }
+        */
+        
+        // For demo purposes, simulate a response after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            self.handleLocationResponse(
+                requestID: "simulated-request",
+                coordinate: CLLocationCoordinate2D(
+                    latitude: 40.7128,
+                    longitude: -74.0060
+                )
+            )
+        }
+    }
 
+    func handleLocationResponse(requestID: String, coordinate: CLLocationCoordinate2D) {
+        // Update friend's location in the UI
+        self.friendLocation = coordinate
+        
+        // Trigger search for meeting places
+        self.searchNearbyPlaces()
+        
+        // Update UI state
+        // uiState = .results
+    }
     
     
     // 2. Add a function to update and sync categories from search results
