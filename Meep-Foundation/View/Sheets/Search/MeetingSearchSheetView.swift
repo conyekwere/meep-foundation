@@ -12,6 +12,43 @@ import Contacts
 import ContactsUI
 
 
+struct ArrowPointerView: View {
+    @State private var arrowOffsetY: CGFloat = 0
+    
+    var body: some View {
+        ZStack {
+            // Semi-transparent overlay to darken the screen
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+            
+            // Bouncing arrow pointing upward
+            VStack {
+   
+                
+                Image(systemName: "chevron.up")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+                    .padding(.top, 240)
+                    .padding(.leading, 140)
+                    .fontWeight(.bold)
+                    .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
+                    .textCase(.uppercase).shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.5)), radius:4, x:0, y:4)
+                    .offset(y: arrowOffsetY)
+                    .onAppear {
+                        withAnimation(
+                            Animation.easeInOut(duration: 0.8)
+                                .repeatForever(autoreverses: true)
+                        ) {
+                            arrowOffsetY = -15
+                        }
+                    }
+            }
+        }
+    }
+}
+
+
+
 struct MeetingSearchSheetView: View {
     @State private var myLocation: String = ""
     @State private var friendLocation: String = ""
@@ -41,6 +78,7 @@ struct MeetingSearchSheetView: View {
     
     @State private var isShowingContactPicker = false
     @State private var selectedContact: CNContact? = nil
+    @State private var showingArrowPointer = false
     
     @State private var isMyLocationValid: Bool = false
     @State private var isFriendsLocationValid: Bool = false
@@ -390,14 +428,17 @@ struct MeetingSearchSheetView: View {
     }
     
     private func requestContactsAccess() {
-        let contactStore = CNContactStore()
-        contactStore.requestAccess(for: .contacts) { granted, error in
-            DispatchQueue.main.async {
-                if granted {
-                    self.isShowingContactPicker = true
-                } else {
-                    // Proceed without contacts access
-                    self.shareLocationRequest(to: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let contactStore = CNContactStore()
+            contactStore.requestAccess(for: .contacts) { granted, error in
+                DispatchQueue.main.async {
+                    if granted {
+                        self.isShowingContactPicker = true
+                        
+                    } else {
+                        // Proceed without contacts access
+                        self.shareLocationRequest(to: nil)
+                    }
                 }
             }
         }
@@ -695,6 +736,8 @@ struct MeetingSearchSheetView: View {
                                 
                                 // Ask for Friend's Location button (shown for all states)
                                 Button(action: {
+                                    showingArrowPointer = true
+                                    
                                     requestContactsAccess()
                                 }) {
                                     HStack(spacing: 16) {
@@ -1134,6 +1177,14 @@ struct MeetingSearchSheetView: View {
                 }
             }
         }
+        .overlay(
+            Group {
+                if showingArrowPointer {
+                    ArrowPointerView()
+                        .transition(.opacity)
+                }
+            }
+        )
     }
 }
 
@@ -1145,3 +1196,5 @@ struct MeetingSearchSheetView: View {
         onDone: { print("Done tapped") }
     )
 }
+
+
