@@ -8,6 +8,45 @@
 import SwiftUI
 import CoreLocation
 import MapKit
+import Contacts
+import ContactsUI
+
+
+struct ArrowPointerView: View {
+    @State private var arrowOffsetY: CGFloat = 0
+    
+    var body: some View {
+        ZStack {
+            // Semi-transparent overlay to darken the screen
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+            
+            // Bouncing arrow pointing upward
+            VStack {
+   
+                
+                Image(systemName: "chevron.up")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+                    .padding(.top, 240)
+                    .padding(.leading, 140)
+                    .fontWeight(.bold)
+                    .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
+                    .textCase(.uppercase).shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.5)), radius:4, x:0, y:4)
+                    .offset(y: arrowOffsetY)
+                    .onAppear {
+                        withAnimation(
+                            Animation.easeInOut(duration: 0.8)
+                                .repeatForever(autoreverses: true)
+                        ) {
+                            arrowOffsetY = -15
+                        }
+                    }
+            }
+        }
+    }
+}
+
 
 
 struct MeetingSearchSheetView: View {
@@ -16,6 +55,9 @@ struct MeetingSearchSheetView: View {
     
     @ObservedObject var viewModel: MeepViewModel
     @ObservedObject private var locationsManager = UserLocationsManager.shared
+    @EnvironmentObject private var onboardingManager: OnboardingManager
+    
+    
     @Binding var isSearchActive: Bool
     
     // Focus states for the two text fields.
@@ -30,6 +72,13 @@ struct MeetingSearchSheetView: View {
     @StateObject private var mySearchCompleter = LocalSearchCompleterDelegate()
     @StateObject private var friendSearchCompleter = LocalSearchCompleterDelegate()
     
+    
+    @State private var isGeocodingInProgress = false
+    @State private var geocodingQueue = 0
+    
+    @State private var isShowingContactPicker = false
+    @State private var selectedContact: CNContact? = nil
+    @State private var showingArrowPointer = false
     
     @State private var isMyLocationValid: Bool = false
     @State private var isFriendsLocationValid: Bool = false
@@ -56,7 +105,150 @@ struct MeetingSearchSheetView: View {
     @State private var myLocationHistory: [String] = []
     @State private var friendLocationHistory: [String] = []
     @State private var locationHistoryText: String = ""
+    
+    
+    @State private var arrowOffsetY : CGFloat = 0
+    
+    
+    
+    
+    
+    func areFieldsEmpty() -> Bool {
+        return myLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+               friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    private func shareLocationRequest(to contact: CNContact?, displayName: String = "Friend") {
+        // Generate unique request ID
+        let requestID = UUID().uuidString
+        
+        // Get current user info
+        let userName = UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee"
+        let userId = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
+        
+        // Create deep link URL for App Clip
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "meep.earth"
+        components.path = "/share"
+        
+        // Add query parameters
+        components.queryItems = [
+            URLQueryItem(name: "requestID", value: requestID),
+            URLQueryItem(name: "userName", value: userName),
+            URLQueryItem(name: "userId", value: userId)
+        ]
+        
+        // Add contact info if available
+        if let contact = contact {
+            let contactId = contact.identifier
+            components.queryItems?.append(URLQueryItem(name: "contactId", value: contactId))
+        }
+        
+        guard let url = components.url else {
+            print("Failed to create URL")
+            return
+        }
+        
+        // Create message text
+        let message = "\(userName) wants to figure out where to meet."
+        
+        // Create and present share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [message, url],
+            applicationActivities: nil
+        )
+        
+        // Present the share sheet
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            
+            // If presented from iPad, set popover presentation properties
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = rootViewController.view
+                popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2,
+                                           y: UIScreen.main.bounds.height / 2,
+                                           width: 0,
+                                           height: 0)
+                popover.permittedArrowDirections = []
+            }
+            
+            rootViewController.present(activityVC, animated: true)
+        }
+        
+        // Save this request to the database
+        saveLocationRequest(
+            requestID: requestID,
+            contactName: displayName,
+            contactId: contact?.identifier
+        )
+    }
+    
+    private func saveLocationRequest(requestID: String, contactName: String, contactId: String?) {
+        // Create request data
+        let requestData: [String: Any] = [
+            "requestID": requestID,
+            "userID": UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString,
+            "userName": UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee",
+            "contactName": contactName, // Use directly, not as optional
+            "contactId": contactId ?? "anonymous",
+            "status": "pending",
+            "createdAt": Date().timeIntervalSince1970
+        ]
+        
+        // For Firebase implementation:
+        /*
+        let db = Firestore.firestore()
+        db.collection("locationRequests").document(requestID).setData(requestData) { error in
+            if let error = error {
+                print("Error saving location request: \(error.localizedDescription)")
+            } else {
+                print("Location request saved successfully")
+            }
+        }
+        */
+        
+        // For now, just print the data
+        print("Saving location request: \(requestData)")
+    }
+    
+    // Function to safely start and end geocoding operations
+    private func performGeocoding(action: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            self.isGeocodingInProgress = true
+            self.geocodingQueue += 1
+            
+            action()
+        }
+    }
 
+    private func geocodingCompleted() {
+        DispatchQueue.main.async {
+            self.geocodingQueue -= 1
+            if self.geocodingQueue <= 0 {
+                self.geocodingQueue = 0
+                self.isGeocodingInProgress = false
+                
+                // After all geocoding is complete, check if any field still contains coordinate formats
+                let myLocationTrimmed = self.myLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+                let friendLocationTrimmed = self.friendLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // If either field still contains coordinates, clear it
+                if LocationHelpers.isLikelyCoordinates(myLocationTrimmed) {
+                    self.myLocation = ""
+                    self.viewModel.userLocation = nil
+                    self.isMyLocationValid = false
+                }
+                
+                if LocationHelpers.isLikelyCoordinates(friendLocationTrimmed) {
+                    self.friendLocation = ""
+                    self.viewModel.friendLocation = nil
+                    self.isFriendsLocationValid = false
+                }
+            }
+        }
+    }
+    
     // Replace your current validateAddress method with:
     private func validateAddress(_ address: String, using completer: LocalSearchCompleterDelegate) -> Bool {
         let allSavedLocations = [locationsManager.homeLocation, locationsManager.workLocation]
@@ -142,6 +334,23 @@ struct MeetingSearchSheetView: View {
     }
     
     
+    private func clearCoordinateFormats() {
+        // Check My Location field
+        if LocationHelpers.isLikelyCoordinates(myLocation.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            myLocation = ""
+            viewModel.userLocation = nil
+            isMyLocationValid = false
+        }
+        
+        // Check Friend's Location field
+        if LocationHelpers.isLikelyCoordinates(friendLocation.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            friendLocation = ""
+            viewModel.friendLocation = nil
+            isFriendsLocationValid = false
+        }
+    }
+    
+    
     private func handleSavedLocation(_ savedLocation: SavedLocation) {
         // Set the location based on the current focus
         if isMyLocationFocused {
@@ -217,6 +426,24 @@ struct MeetingSearchSheetView: View {
         // Update the combined history text
         locationHistoryText = LocationHistoryManager.shared.getCombinedHistoryText()
     }
+    
+    private func requestContactsAccess() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let contactStore = CNContactStore()
+            contactStore.requestAccess(for: .contacts) { granted, error in
+                DispatchQueue.main.async {
+                    if granted {
+                        self.isShowingContactPicker = true
+                        
+                    } else {
+                        // Proceed without contacts access
+                        self.shareLocationRequest(to: nil)
+                    }
+                }
+            }
+        }
+    }
+
     
     
     
@@ -509,7 +736,9 @@ struct MeetingSearchSheetView: View {
                                 
                                 // Ask for Friend's Location button (shown for all states)
                                 Button(action: {
-                                    print("Ask for friend's location selected")
+                                    showingArrowPointer = true
+                                    
+                                    requestContactsAccess()
                                 }) {
                                     HStack(spacing: 16) {
                                         Image(systemName: "message")
@@ -518,8 +747,9 @@ struct MeetingSearchSheetView: View {
                                             .frame(width: 40, height: 40)
                                             .background(Color(hex: "E8F0FE"))
                                             .clipShape(Circle())
+                                        
                                         VStack(alignment: .leading) {
-                                            Text("Ask for a friend's location")
+                                            Text("Ask for a Friend's Location")
                                                 .foregroundColor(.primary)
                                                 .font(.body)
                                             Text("Exact coordinates are hidden")
@@ -532,6 +762,22 @@ struct MeetingSearchSheetView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 
+                                
+                                if onboardingManager.shouldShowOnboardingElement() {
+                                    Image(systemName: "chevron.up")
+                                        .font(.title3)
+                                        .foregroundColor(.primary)
+                                        .padding(.trailing, 16)
+                                        .offset(y: arrowOffsetY)
+                                        .onAppear {
+                                            withAnimation(
+                                                Animation.easeInOut(duration: 0.5)
+                                                    .repeatForever(autoreverses: true)
+                                            ) {
+                                                arrowOffsetY = -15
+                                            }
+                                        }
+                                }
                                 // History section based on focus state
                                 if !myLocationHistory.isEmpty && isMyLocationFocused {
                                     // My Location history when My Location is focused
@@ -549,6 +795,7 @@ struct MeetingSearchSheetView: View {
                                             }
                                         }
                                     })
+                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
                                 } else if !friendLocationHistory.isEmpty && isFriendsLocationFocused {
                                     // Friend's Location history when Friend's Location is focused
                                     LocationHistoryView(histories: friendLocationHistory, onSelectLocation: { address in
@@ -564,6 +811,7 @@ struct MeetingSearchSheetView: View {
                                             }
                                         }
                                     })
+                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
                                 } else if !myLocationHistory.isEmpty && !isMyLocationFocused && !isFriendsLocationFocused {
                                     // History when neither field is focused (default to My Location history)
                                     LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
@@ -580,6 +828,7 @@ struct MeetingSearchSheetView: View {
                                             }
                                         }
                                     })
+                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
                                 }
                             }
                         }
@@ -594,6 +843,28 @@ struct MeetingSearchSheetView: View {
             .padding(.top, -24)
             .background(Color(.systemBackground))
             .ignoresSafeArea(edges: .bottom)
+            .overlay(
+                ZStack {
+                    if isGeocodingInProgress {
+                        Color.black.opacity(0.1)
+                            .edgesIgnoringSafeArea(.all)
+                        
+                        VStack {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .padding()
+                            
+                            Text("Converting coordinates...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .shadow(radius: 5)
+                    }
+                }
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: {
@@ -605,6 +876,7 @@ struct MeetingSearchSheetView: View {
                             .aspectRatio(contentMode: .fit)
                             .padding(12)
                             .frame(width: 40, height: 40)
+                            .foregroundColor(isGeocodingInProgress ? Color(.lightGray) : Color(.gray))
                             .foregroundColor(Color(.gray))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30)
@@ -613,6 +885,7 @@ struct MeetingSearchSheetView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .disabled(isGeocodingInProgress)
                 }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 2) {
@@ -627,20 +900,28 @@ struct MeetingSearchSheetView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     if isMyLocationValid && isFriendsLocationValid {
                         Button(action: {
-                            // Ensure we have coordinates for both locations before proceeding
-                            processBothLocations {
-                                onDone()
+
+
+                            // Only proceed if both fields are valid after clearing
+                            if isMyLocationValid && isFriendsLocationValid {
+                                processBothLocations {
+                                    onDone()
+                                }
                             }
                             
 
                         }) {
                             Text("Done")
-                                .foregroundColor(.primary)
+                                .foregroundColor(isGeocodingInProgress ? .gray : .primary)
                         }
+                        .disabled(isGeocodingInProgress)
                     }
                 }
             }
             .onAppear {
+                
+                
+                
                 // Update autocomplete queries for both fields.
                 mySearchCompleter.updateQuery(myLocation)
                 friendSearchCompleter.updateQuery(friendLocation)
@@ -715,18 +996,27 @@ struct MeetingSearchSheetView: View {
                 // Check if it's coordinates
                 if LocationHelpers.isLikelyCoordinates(newValue) {
                     isMyLocationValid = true
-                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                        DispatchQueue.main.async {
-                            if let coordinate = coordinate {
-                                self.viewModel.userLocation = coordinate
-                            }
-                            
-                            if let formattedAddress = formattedAddress {
-                                self.myLocation = formattedAddress
+                    
+                    performGeocoding {
+                        LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                            DispatchQueue.main.async {
+                                if let coordinate = coordinate {
+                                    self.viewModel.userLocation = coordinate
+                                }
+                                
+                                if let formattedAddress = formattedAddress {
+                                    self.myLocation = formattedAddress
+                                    self.viewModel.sharableUserLocation = formattedAddress
+                                }
+                                
+                                // Mark this geocoding operation as complete
+                                self.geocodingCompleted()
                             }
                         }
                     }
-                } else {
+                }
+                
+                else {
                     // Otherwise use normal validation
                     isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
                     
@@ -741,17 +1031,23 @@ struct MeetingSearchSheetView: View {
             .onChange(of: friendLocation) { newValue in
                 friendSearchCompleter.updateQuery(newValue)
                 
-                // Check if it's coordinates
+                
+                
                 if LocationHelpers.isLikelyCoordinates(newValue) {
                     isFriendsLocationValid = true
-                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                        DispatchQueue.main.async {
-                            if let coordinate = coordinate {
-                                self.viewModel.friendLocation = coordinate
-                            }
-                            
-                            if let formattedAddress = formattedAddress {
-                                self.friendLocation = formattedAddress
+                    
+                    performGeocoding {
+                        LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                            DispatchQueue.main.async {
+                                if let coordinate = coordinate {
+                                    self.viewModel.friendLocation = coordinate
+                                }
+                                
+                                if let formattedAddress = formattedAddress {
+                                    self.friendLocation = formattedAddress
+                                }
+                                
+                                self.geocodingCompleted()
                             }
                         }
                     }
@@ -781,6 +1077,21 @@ struct MeetingSearchSheetView: View {
                 }
             }
             
+            .sheet(isPresented: $isShowingContactPicker) {
+                ContactPickerWrapper(
+                    isPresented: $isShowingContactPicker,
+                    selectedContact: $selectedContact,
+                    onContactSelected: { contact in
+                        // Get contact name
+                        let givenName = contact.givenName
+                        let familyName = contact.familyName
+                        let displayName = [givenName, familyName].filter { !$0.isEmpty }.joined(separator: " ")
+                        
+                        // Share location request
+                        self.shareLocationRequest(to: contact, displayName: displayName)
+                    }
+                )
+            }
             
             // Show save location sheet
                .sheet(isPresented: $showSaveLocationSheet) {
@@ -866,6 +1177,14 @@ struct MeetingSearchSheetView: View {
                 }
             }
         }
+        .overlay(
+            Group {
+                if showingArrowPointer {
+                    ArrowPointerView()
+                        .transition(.opacity)
+                }
+            }
+        )
     }
 }
 
@@ -877,3 +1196,5 @@ struct MeetingSearchSheetView: View {
         onDone: { print("Done tapped") }
     )
 }
+
+
