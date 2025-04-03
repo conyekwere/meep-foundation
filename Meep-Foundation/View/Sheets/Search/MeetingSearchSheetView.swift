@@ -14,6 +14,7 @@ import ContactsUI
 
 struct ArrowPointerView: View {
     @State private var arrowOffsetY: CGFloat = 0
+    @State private var showArrow: Bool = false
     
     var body: some View {
         ZStack {
@@ -28,18 +29,29 @@ struct ArrowPointerView: View {
                 Image(systemName: "chevron.up")
                     .font(.largeTitle)
                     .foregroundColor(.white)
-                    .padding(.top, 240)
-                    .padding(.leading, 140)
+                    .padding(.top, UIScreen.main.bounds.height * 0.4) // 30% of screen height instead of fixed 240
+                    .padding(.leading, UIScreen.main.bounds.width * 0.35) // 35% of screen width instead of fixed 140
+
                     .fontWeight(.bold)
                     .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
-                    .textCase(.uppercase).shadow(color: Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 0.5)), radius:4, x:0, y:4)
+                    .textCase(.uppercase)
+                    .shadow(color: Color(UIColor(red: 0, green: 0, blue: 0, alpha: 0.5)), radius: 4, x: 0, y: 4)
                     .offset(y: arrowOffsetY)
+                    .opacity(showArrow ? 1 : 0) // Control visibility with a state variable
                     .onAppear {
-                        withAnimation(
-                            Animation.easeInOut(duration: 0.8)
-                                .repeatForever(autoreverses: true)
-                        ) {
-                            arrowOffsetY = -15
+                        // Delay the appearance to match contact permissions modal
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // 1 second delay
+                            withAnimation(.easeIn(duration: 0.5)) {
+                                showArrow = true // Fade in the arrow
+                            }
+                            
+                            // Start the bouncing animation after it appears
+                            withAnimation(
+                                Animation.easeInOut(duration: 0.8)
+                                    .repeatForever(autoreverses: true)
+                            ) {
+                                arrowOffsetY = -15
+                            }
                         }
                     }
             }
@@ -78,7 +90,7 @@ struct MeetingSearchSheetView: View {
     
     @State private var isShowingContactPicker = false
     @State private var selectedContact: CNContact? = nil
-    @State private var showingArrowPointer = false
+    @State private var showingContactArrowPointer = false
     
     @State private var isMyLocationValid: Bool = false
     @State private var isFriendsLocationValid: Bool = false
@@ -118,71 +130,7 @@ struct MeetingSearchSheetView: View {
                friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
-    private func shareLocationRequest(to contact: CNContact?, displayName: String = "Friend") {
-        // Generate unique request ID
-        let requestID = UUID().uuidString
-        
-        // Get current user info
-        let userName = UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee"
-        let userId = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
-        
-        // Create deep link URL for App Clip
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "meep.earth"
-        components.path = "/share"
-        
-        // Add query parameters
-        components.queryItems = [
-            URLQueryItem(name: "requestID", value: requestID),
-            URLQueryItem(name: "userName", value: userName),
-            URLQueryItem(name: "userId", value: userId)
-        ]
-        
-        // Add contact info if available
-        if let contact = contact {
-            let contactId = contact.identifier
-            components.queryItems?.append(URLQueryItem(name: "contactId", value: contactId))
-        }
-        
-        guard let url = components.url else {
-            print("Failed to create URL")
-            return
-        }
-        
-        // Create message text
-        let message = "\(userName) wants to figure out where to meet."
-        
-        // Create and present share sheet
-        let activityVC = UIActivityViewController(
-            activityItems: [message, url],
-            applicationActivities: nil
-        )
-        
-        // Present the share sheet
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootViewController = windowScene.windows.first?.rootViewController {
-            
-            // If presented from iPad, set popover presentation properties
-            if let popover = activityVC.popoverPresentationController {
-                popover.sourceView = rootViewController.view
-                popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2,
-                                           y: UIScreen.main.bounds.height / 2,
-                                           width: 0,
-                                           height: 0)
-                popover.permittedArrowDirections = []
-            }
-            
-            rootViewController.present(activityVC, animated: true)
-        }
-        
-        // Save this request to the database
-        saveLocationRequest(
-            requestID: requestID,
-            contactName: displayName,
-            contactId: contact?.identifier
-        )
-    }
+
     
     private func saveLocationRequest(requestID: String, contactName: String, contactId: String?) {
         // Create request data
@@ -427,19 +375,86 @@ struct MeetingSearchSheetView: View {
         locationHistoryText = LocationHistoryManager.shared.getCombinedHistoryText()
     }
     
-    private func requestContactsAccess() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let contactStore = CNContactStore()
-            contactStore.requestAccess(for: .contacts) { granted, error in
-                DispatchQueue.main.async {
-                    if granted {
-                        self.isShowingContactPicker = true
-                        
-                    } else {
-                        // Proceed without contacts access
-                        self.shareLocationRequest(to: nil)
-                    }
-                }
+    private func requestContactAccess(completion: @escaping (Bool) -> Void) {
+        showingContactArrowPointer = true
+        
+        let contactStore = CNContactStore()
+        contactStore.requestAccess(for: .contacts) { granted, error in
+            // After permission dialog completes, wait a moment before showing share sheet
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                showingContactArrowPointer = false
+                self.presentShareSheet()
+
+            }
+        }
+    }
+    
+
+
+    private func presentShareSheet() {
+        // Generate the request data
+        let userName = UserDefaults.standard.string(forKey: "userName") ?? "User"
+        let userId = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
+        let requestID = UUID().uuidString
+        
+        // Create deep link URL
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "meep.earth"
+        components.path = "/share"
+        components.queryItems = [
+            URLQueryItem(name: "requestID", value: requestID),
+            URLQueryItem(name: "userName", value: userName),
+            URLQueryItem(name: "userId", value: userId)
+        ]
+        
+        guard let url = components.url else {
+            print("Failed to create URL")
+            return
+        }
+        
+        // Create message
+        let message = "\(userName) wants to figure out where to meet."
+        
+        // Find the top-most presented controller to present on
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            print("Could not find root view controller")
+            return
+        }
+        
+        // Find the topmost presented controller
+        var topController = rootViewController
+        while let presentedController = topController.presentedViewController {
+            topController = presentedController
+        }
+        
+        // Create the share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [message, url],
+            applicationActivities: nil
+        )
+        
+        // Set up iPad popover if needed
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = topController.view
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2,
+                                       y: UIScreen.main.bounds.height / 2,
+                                       width: 0,
+                                       height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        // Present on the main thread
+        DispatchQueue.main.async {
+            // Present directly on the topmost controller
+            topController.present(activityVC, animated: true) {
+                // Save the request after presentation
+                self.saveLocationRequest(
+                    requestID: requestID,
+                    contactName: "Friend",
+                    contactId: nil
+                )
             }
         }
     }
@@ -736,9 +751,14 @@ struct MeetingSearchSheetView: View {
                                 
                                 // Ask for Friend's Location button (shown for all states)
                                 Button(action: {
-                                    showingArrowPointer = true
                                     
-                                    requestContactsAccess()
+                                    //if Contact  Access has already been requested showingContactArrowPointer = true
+                                    
+                                    requestContactAccess { granted in
+                                                    // Regardless of the result, the modal was shown
+                                                    showingContactArrowPointer = false
+                                                    
+                                                }
                                 }) {
                                     HStack(spacing: 16) {
                                         Image(systemName: "message")
@@ -1077,21 +1097,6 @@ struct MeetingSearchSheetView: View {
                 }
             }
             
-            .sheet(isPresented: $isShowingContactPicker) {
-                ContactPickerWrapper(
-                    isPresented: $isShowingContactPicker,
-                    selectedContact: $selectedContact,
-                    onContactSelected: { contact in
-                        // Get contact name
-                        let givenName = contact.givenName
-                        let familyName = contact.familyName
-                        let displayName = [givenName, familyName].filter { !$0.isEmpty }.joined(separator: " ")
-                        
-                        // Share location request
-                        self.shareLocationRequest(to: contact, displayName: displayName)
-                    }
-                )
-            }
             
             // Show save location sheet
                .sheet(isPresented: $showSaveLocationSheet) {
@@ -1179,7 +1184,7 @@ struct MeetingSearchSheetView: View {
         }
         .overlay(
             Group {
-                if showingArrowPointer {
+                if showingContactArrowPointer {
                     ArrowPointerView()
                         .transition(.opacity)
                 }
