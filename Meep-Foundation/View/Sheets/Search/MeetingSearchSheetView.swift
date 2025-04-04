@@ -19,31 +19,33 @@ struct ShareSheetPointerView: View {
     var body: some View {
         ZStack {
             // Semi-transparent overlay to darken the screen
-            Color.black.opacity(0.4)
+            Color.black.opacity(0.7)
                 .edgesIgnoringSafeArea(.all)
             
             // Position arrow at the bottom pointing upward to the share sheet
-            VStack {
+            VStack(spacing:32)
+            {
                 // Add explanatory text above the arrow
-                Text("TAP A CONTACT TO SHARE YOUR MEETING REQUEST")
-                    .font(.headline)
+                Text("Tap a contact to share your meeting request.")
+                    .font(.title)
                     .fontWeight(.bold)
                     .multilineTextAlignment(.center)
                     .foregroundColor(.white)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 20)
                     .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+                    .blendMode(.hardLight)
                 
-                Image(systemName: "chevron.up")
+                Image(systemName: "chevron.down")
                     .font(.largeTitle)
                     .foregroundColor(.white)
                     .fontWeight(.bold)
-                    .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
+                    .shadow(color: .black.opacity(1), radius: 1, x: 0, y: 1)
                     .offset(y: arrowOffsetY)
                     .opacity(showArrow ? 1 : 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 200) // Position above the share sheet
+            .padding(.bottom, UIScreen.main.bounds.height * 0.60)
             .onAppear {
                 // Fade in the arrow with a slight delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -71,7 +73,7 @@ struct ArrowPointerView: View {
     var body: some View {
         ZStack {
             // Semi-transparent overlay to darken the screen
-            Color.black.opacity(0.4)
+            Color.black.opacity(0.7)
                 .edgesIgnoringSafeArea(.all)
             
             // Bouncing arrow pointing upward
@@ -512,6 +514,11 @@ struct MeetingSearchSheetView: View {
                     contactName: "Friend",
                     contactId: nil
                 )
+            }
+            activityVC.completionWithItemsHandler = { _, _, _, _ in
+                withAnimation {
+                    self.showingShareArrowPointer = false
+                }
             }
         }
     }
