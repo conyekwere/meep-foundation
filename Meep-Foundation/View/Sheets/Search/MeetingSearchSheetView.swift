@@ -12,6 +12,58 @@ import Contacts
 import ContactsUI
 
 
+struct ShareSheetPointerView: View {
+    @State private var arrowOffsetY: CGFloat = 0
+    @State private var showArrow: Bool = false
+    
+    var body: some View {
+        ZStack {
+            // Semi-transparent overlay to darken the screen
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+            
+            // Position arrow at the bottom pointing upward to the share sheet
+            VStack {
+                // Add explanatory text above the arrow
+                Text("TAP A CONTACT TO SHARE YOUR MEETING REQUEST")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
+                    .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
+                
+                Image(systemName: "chevron.up")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+                    .fontWeight(.bold)
+                    .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
+                    .offset(y: arrowOffsetY)
+                    .opacity(showArrow ? 1 : 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, 200) // Position above the share sheet
+            .onAppear {
+                // Fade in the arrow with a slight delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeIn(duration: 0.5)) {
+                        showArrow = true
+                    }
+                    
+                    // Start the bouncing animation
+                    withAnimation(
+                        Animation.easeInOut(duration: 0.8)
+                            .repeatForever(autoreverses: true)
+                    ) {
+                        arrowOffsetY = -15
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ArrowPointerView: View {
     @State private var arrowOffsetY: CGFloat = 0
     @State private var showArrow: Bool = false
@@ -122,7 +174,7 @@ struct MeetingSearchSheetView: View {
     @State private var arrowOffsetY : CGFloat = 0
     
     
-    
+    @State private var showingShareArrowPointer = false
     
     
     func areFieldsEmpty() -> Bool {
@@ -383,6 +435,11 @@ struct MeetingSearchSheetView: View {
             // After permission dialog completes, wait a moment before showing share sheet
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 showingContactArrowPointer = false
+               
+               // Show the share sheet pointer
+                withAnimation {
+                    self.showingShareArrowPointer = true
+                }
                 self.presentShareSheet()
 
             }
@@ -391,7 +448,7 @@ struct MeetingSearchSheetView: View {
     
 
 
-    private func presentShareSheet() {
+     func presentShareSheet() {
         // Generate the request data
         let userName = UserDefaults.standard.string(forKey: "userName") ?? "User"
         let userId = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
@@ -1187,6 +1244,11 @@ struct MeetingSearchSheetView: View {
                 if showingContactArrowPointer {
                     ArrowPointerView()
                         .transition(.opacity)
+                }
+                
+                if showingShareArrowPointer {
+                  ShareSheetPointerView()
+                    .transition(.opacity)
                 }
             }
         )
