@@ -6,6 +6,7 @@
 	<array>
 		<string>appclips:meep.earth</string>
 		<string>webcredentials:meep.earth</string>
+		<string>applinks:meep.earth</string>
 	</array>
 	<key>com.apple.developer.parent-application-identifiers</key>
 	<array>
