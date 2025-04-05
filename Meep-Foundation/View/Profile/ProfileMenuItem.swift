@@ -50,7 +50,6 @@ struct ProfileMenuItem: View {
     }
 }
 
-
 #Preview {
-    ProfileMenuItem(icon: "slider.horizontal.3", title: "Manage Account", subtitle: "Profile and preferences",isRotated: true)
+    ProfileMenuItem(icon: "slider.horizontal.3", title: "Manage Account", subtitle: "Profile and preferences", isRotated: true)
 }

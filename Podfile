@@ -9,6 +9,9 @@ target 'Meep-Foundation' do
   use_frameworks!
 
   # Pods for Meep-Foundation
+  pod 'Firebase/Core'
+  pod 'Firebase/Auth'
+  pod 'Firebase/Firestore'
   pod 'GoogleMaps' 
   pod 'GooglePlaces'
   pod 'Alamofire'
