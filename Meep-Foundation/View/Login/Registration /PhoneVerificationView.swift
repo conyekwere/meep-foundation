@@ -51,6 +51,7 @@ struct PhoneVerificationView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Header
+                    Spacer()
                     VStack(alignment: .center, spacing: 8) {
                         // Title
                         Text("What's your phone number?")
@@ -130,7 +131,7 @@ struct PhoneVerificationView: View {
                             .padding(.horizontal, 16)
                             .padding(.top, 8)
                     }
-                    .padding(.top, 72)
+                    .padding(.top, 88)
                     
                     Spacer()
                     
