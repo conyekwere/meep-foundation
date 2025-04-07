@@ -4,7 +4,12 @@
 //
 //  Created by Chima Onyekwere on 4/5/25.
 //
-
+//
+//  PhoneVerificationView.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 4/5/25.
+//
 
 import SwiftUI
 import FirebaseAuth
@@ -18,6 +23,10 @@ struct PhoneVerificationView: View {
     @State private var showOTPVerification = false
     @State private var selectedCountry = Country(name: "United States", code: "+1", flag: "🇺🇸", maxLength: 10)
     @State private var isCountrySelectorPresented = false
+    
+    // Environment
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var themeSettings: ThemeSettings
     
     // Focus state
     @FocusState private var phoneFieldFocused: Bool
@@ -40,98 +49,119 @@ struct PhoneVerificationView: View {
             )
         } else {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     // Header
-                    VStack(spacing: 12) {
-                        Text(isCreatingAccount ? "Create Your Account" : "Welcome Back")
-                            .font(.title)
-                            .fontWeight(.bold)
+                    VStack(alignment: .center, spacing: 8) {
+                        // Title
+                        Text("What's your phone number?")
+                            .font(.headline)
+                            .fontWeight(.medium)
                             .fontWidth(.expanded)
-                            .foregroundColor(.primary)
+                            .foregroundColor(.white)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                             .lineSpacing(16)
+                            .padding(.bottom, 8)
+                    
+                        // Error message if any
+                        if let errorMessage = errorMessage {
+                            Text(errorMessage)
+                                .font(.footnote)
+                                .foregroundColor(.red)
+                                .padding(.horizontal)
+                                .multilineTextAlignment(.center)
+                        }
                         
-                        Text("Enter your phone number to \(isCreatingAccount ? "get started" : "sign in")")
-                            .font(.body)
-                            .foregroundColor(Color(.gray))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                    }
-                    .padding(.top, 72)
-                    
-                    // Error message if any
-                    if let errorMessage = errorMessage {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                            .padding(.horizontal)
-                            .multilineTextAlignment(.center)
-                    }
-                    
-                    // Phone number input
-                    VStack(spacing: 16) {
+                        // Phone number input
                         HStack(alignment: .center, spacing: 8) {
                             // Country Code Button
+                            Spacer()
                             Button(action: {
                                 isCountrySelectorPresented.toggle()
                             }) {
                                 Text(selectedCountry.code)
-                                    .font(.title3)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(12)
+                                    .font(.largeTitle)
+                                    .fontDesign(.rounded)
+                                    .foregroundColor(.white)
+                                    .opacity(0.8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 9)
+                                            .fill(Color.white)
+                                            .frame(height: 2)
+                                            .padding(.top, 35),
+                                        alignment: .bottom
+                                    )
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .frame(minWidth: 60, alignment: .trailing)
                             
                             // Phone Number TextField
-                            TextField(selectedCountry.maxLength < 10 ? "212555012" : "(212) 555-0123", text: $phoneNumber)
-                                .keyboardType(.phonePad)
-                                .font(.title3)
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                                .focused($phoneFieldFocused)
-                                .onChange(of: phoneNumber) { newValue in
-                                    // Format the phone number
-                                    phoneNumber = formatPhoneNumber(newValue)
+                            ZStack(alignment: .leading) {
+                                if phoneNumber.isEmpty {
+                                    Text(selectedCountry.maxLength < 10 ? "212555012" : "(212) 555-0123")
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .font(.largeTitle)
+                                        .fontDesign(.rounded)
                                 }
+                                TextField("", text: $phoneNumber)
+                                    .keyboardType(.phonePad)
+                                    .font(.largeTitle)
+                                    .fontDesign(.rounded)
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.leading)
+                                    .focused($phoneFieldFocused)
+                                    .onChange(of: phoneNumber) { newValue in
+                                        phoneNumber = formatPhoneNumber(newValue)
+                                    }
+   
+                            }
                         }
-                        .padding(.horizontal)
+                        .padding(.horizontal, 16)
+                        .padding(.leading, selectedCountry.maxLength < 10 ? 20 : 0)
+                        .frame(maxWidth: .infinity)
                         
-                        Text("Message and data rates may apply")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        // Description Text
+                        Text("We'll send you a text with a verification code. Message and data rates may apply.")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                            .opacity(0.7)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(2.0)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
                     }
+                    .padding(.top, 72)
+                    
+                    Spacer()
                     
                     // Continue button
-                    Button(action: verifyPhoneNumber) {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                        } else {
-                            Text("Continue")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(isFormValid ? Color.blue : Color.gray)
-                                .cornerRadius(12)
-                                .padding(.horizontal)
+                    if isFormValid {
+                        Button(action: verifyPhoneNumber) {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.black)
+                                    .clipShape(RoundedRectangle(cornerRadius: 32))
+                                    .padding(.horizontal)
+                            } else {
+                                Text("Continue")
+                                    .font(.headline)
+                                    .foregroundColor(Color.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.black)
+                                    .clipShape(RoundedRectangle(cornerRadius: 32))
+                                    .padding(.horizontal)
+                            }
                         }
+                        .disabled(isLoading)
+                        .padding(.top, 24)
+                        .padding(.bottom, 48)
+                        .accessibilityLabel("Continue to next section")
+                        .accessibilityHint("Proceed to verification code")
                     }
-                    .disabled(isLoading || !isFormValid)
-                    .padding(.top, 16)
-                    
-                    Spacer(minLength: 40)
                 }
                 .padding(.horizontal)
             }
@@ -148,6 +178,22 @@ struct PhoneVerificationView: View {
                         phoneNumber = "" // Reset phone number when country changes
                     }
             }
+            // Only apply background if not disabled by parent
+            .background(
+                Group {
+                    if !(themeSettings.disableBackgrounds) {
+                        ZStack {
+                            Rectangle()
+                                .fill(Color(#colorLiteral(red: 0.0470588244497776, green: 0.09803921729326248, blue: 0.26274511218070984, alpha: 1)) .opacity(0.4))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            
+                            // Add blur effect
+                            VisualEffectBlur(blurStyle: .dark)
+                                .opacity(0.7)
+                        }
+                    }
+                }
+            )
         }
     }
     
@@ -212,193 +258,9 @@ struct PhoneVerificationView: View {
     }
 }
 
-// MARK: - OTP Verification View
-
-struct OTPVerificationView: View {
-    // Properties
-    var phoneNumber: String
-    var isCreatingAccount: Bool = false
-    
-    // State
-    @State private var otpFields = Array(repeating: "", count: 4)
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var countdown = 30
-    @State private var isCountdownFinished = false
-    @State private var showRegistration = false
-    
-    // Focus state
-    @FocusState private var focusedField: Int?
-    
-    // Firebase service
-    @StateObject private var firebaseService = FirebaseService.shared
-    
-    // Callback when verification is complete
-    var onComplete: (Bool) -> Void
-    
-    var body: some View {
-        if showRegistration {
-            RegistrationInfoView(
-                phoneNumber: phoneNumber,
-                onComplete: onComplete
-            )
-        } else {
-            ScrollView {
-                VStack(spacing: 32) {
-                    // Header
-                    VStack(alignment: .center, spacing: 8) {
-                        Text("Enter the code we texted you")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .fontWidth(.expanded)
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                            .lineSpacing(16)
-                        
-                        Text(phoneNumber)
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.top, 72)
-                    
-                    // Error message
-                    if let errorMessage = errorMessage {
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                            .padding(.horizontal)
-                            .multilineTextAlignment(.center)
-                    }
-                    
-                    // OTP Input fields
-                    OTPInputFields(otpFields: $otpFields, focusedField: _focusedField)
-                        .padding(.top, 16)
-                    
-                    // Continue button
-                    if isOtpComplete() {
-                        Button(action: verifyOTP) {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .cornerRadius(12)
-                                    .padding(.horizontal)
-                            } else {
-                                Text("Verify")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .cornerRadius(12)
-                                    .padding(.horizontal)
-                            }
-                        }
-                        .disabled(isLoading)
-                        .padding(.top, 24)
-                    } else {
-                        if isCountdownFinished {
-                            Button(action: resendCode) {
-                                Text("Resend Code")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.blue)
-                                    .cornerRadius(12)
-                                    .padding(.horizontal)
-                            }
-                            .padding(.bottom, 16)
-                        } else {
-                            Text("You can ask for a new code in \(countdown) seconds")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
-                        }
-                    }
-                    
-                    Spacer(minLength: 40)
-                }
-                .padding(.horizontal)
-            }
-            .onAppear {
-                startCountdown()
-                focusedField = 0
-            }
-        }
+#Preview {
+    PhoneVerificationView(isCreatingAccount: true) { success in
+        print("Verification completed: \(success)")
     }
-    
-    // Countdown timer
-    private func startCountdown() {
-        isCountdownFinished = false
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            if countdown > 0 {
-                countdown -= 1
-            } else {
-                isCountdownFinished = true
-                timer.invalidate()
-            }
-        }
-    }
-    
-    // Reset countdown
-    private func resetCountdown() {
-        countdown = 30
-        startCountdown()
-    }
-    
-    // Check if OTP is complete
-    private func isOtpComplete() -> Bool {
-        return otpFields.allSatisfy { $0.count == 1 }
-    }
-    
-    // Resend verification code
-    private func resendCode() {
-        isLoading = true
-        errorMessage = nil
-        
-        firebaseService.startPhoneAuth(phoneNumber: phoneNumber) { success, error in
-            isLoading = false
-            
-            if success {
-                // Reset fields and countdown
-                otpFields = Array(repeating: "", count: 4)
-                resetCountdown()
-                focusedField = 0
-            } else if let error = error {
-                errorMessage = error
-            }
-        }
-    }
-    
-    // Verify OTP code
-    private func verifyOTP() {
-        isLoading = true
-        errorMessage = nil
-        
-        let otpCode = otpFields.joined()
-        
-        firebaseService.verifyPhoneCode(code: otpCode) { success, error in
-            isLoading = false
-            
-            if success {
-                // Check if we have user data
-                if firebaseService.isAuthenticated && !isCreatingAccount {
-                    // User exists, complete flow
-                    onComplete(true)
-                } else {
-                    // New user or explicitly creating account, show registration
-                    withAnimation {
-                        showRegistration = true
-                    }
-                }
-            } else if let error = error {
-                errorMessage = error
-            }
-        }
-    }
+    .environmentObject(ThemeSettings())
 }

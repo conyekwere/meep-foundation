@@ -12,13 +12,16 @@ import SwiftUI
 struct GhostTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(.systemGray4), lineWidth: 1)
-                    .background(Color(.systemBackground))
+            .font(.largeTitle)
+            .fontDesign(.rounded)
+            .foregroundColor(.primary)
+            .opacity(0.8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .frame(height: 2)
+                    .padding(.top, 35),
+                alignment: .bottom
             )
-            .cornerRadius(8)
     }
 }
 
@@ -41,3 +44,4 @@ struct GhostTextFieldModifier: ViewModifier {
             .cornerRadius(8)
     }
 }
+

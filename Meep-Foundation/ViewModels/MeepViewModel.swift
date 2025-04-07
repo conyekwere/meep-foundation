@@ -704,7 +704,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         if myTransit != .train { count += 1 } // Example: Default is `train`, so any change counts as a filter
         if friendTransit != .train { count += 1 }
-        if searchRadius != 2 { count += 1 } // Default search radius is 2 miles
+        if searchRadius != 1 { count += 1 } // Default search radius is 1 miles
         if departureTime != nil { count += 1 }
 
         activeFilterCount = count

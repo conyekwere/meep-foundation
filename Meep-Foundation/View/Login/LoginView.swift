@@ -3,13 +3,9 @@
 //  Meep-Foundation
 //
 //  Created by Chima Onyekwere on 4/4/25.
-//
-//
-//  LoginView.swift
-//  Meep-Foundation
-//
-//  Created by Chima Onyekwere on 4/4/25.
-//
+
+
+
 import SwiftUI
 import FirebaseAuth
 
@@ -28,264 +24,90 @@ struct LoginView: View {
     var createAccount: Bool = false
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                // Background gradient
-                backgroundGradient
-                
-                // Show the appropriate view based on navigation state
-                if showPhoneVerification {
-                    PhoneVerificationView(
-                        isCreatingAccount: createAccount,
-                        onComplete: { success in
-                            if success {
-                                onDismiss(true)
-                            }
-                        }
-                    )
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        onDismiss(false)
-                    }) {
-                        Image(systemName: "xmark")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(12)
-                            .frame(width: 40, height: 40)
-                            .background(Color(.lightGray).opacity(0.1))
-                            .foregroundColor(.primary)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 30)
-                                    .stroke(Color(.systemGray6), lineWidth: 2)
-                            )
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-        }
-    }
-    
-    // Background gradient
-    private var backgroundGradient: some View {
         ZStack {
-            Color(#colorLiteral(red: 0.0470588244497776, green: 0.09803921729326248, blue: 0.26274511218070984, alpha: 0.20000000298023224)).opacity(0.2)
-            Color(#colorLiteral(red: 1, green: 0.364705890417099, blue: 0.20392157137393951, alpha: 0.20000000298023224)).opacity(0.2)
-            VisualEffectBlur(blurStyle: colorScheme == .dark ? .systemUltraThinMaterialLight : .systemUltraThinMaterialDark)
-        }
-        .edgesIgnoringSafeArea(.all)
-    }
-}
-
-
-
-
-
-// MARK: - Registration Info View
-
-struct RegistrationInfoView: View {
-    // Properties
-    var phoneNumber: String
-    
-    // State
-    @State private var fullName = ""
-    @State private var email = ""
-    @State private var username = ""
-    @State private var showEmailVerification = false
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    
-    // Focus state
-    @FocusState private var currentField: Field?
-    
-    enum Field {
-        case name, email, username
-    }
-    
-    // Firebase service
-    @StateObject private var firebaseService = FirebaseService.shared
-    
-    // Callback when registration is complete
-    var onComplete: (Bool) -> Void
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 12) {
-                    Text("Complete Your Profile")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .fontWidth(.expanded)
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    Text("Just a few more details to get you started")
-                        .font(.body)
-                        .foregroundColor(Color(.gray))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                }
-                .padding(.top, 40)
-                
-                // Error message if any
-                if let errorMessage = errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
-                        .multilineTextAlignment(.center)
-                }
-                
-                // Form fields
-                VStack(spacing: 20) {
-                    // Full Name
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Full Name")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        TextField("John Smith", text: $fullName)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .focused($currentField, equals: .name)
-                            .submitLabel(.next)
-                            .onSubmit {
-                                currentField = .email
-                            }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Email
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Email")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        TextField("email@example.com", text: $email)
-                            .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .focused($currentField, equals: .email)
-                            .submitLabel(.next)
-                            .onSubmit {
-                                currentField = .username
-                            }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Username
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Username")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        TextField("johnsmith", text: $username)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .focused($currentField, equals: .username)
-                            .submitLabel(.done)
-                            .onChange(of: username) { newValue in
-                                username = formatUsername(newValue)
-                            }
-                    }
-                    .padding(.horizontal)
-                }
-                
-                // Continue button
-                Button(action: completeRegistration) {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                    } else {
-                        Text("Continue")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(isFormValid ? Color.blue : Color.gray)
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                    }
-                }
-                .disabled(isLoading || !isFormValid)
-                .padding(.top, 24)
-                
-                Spacer(minLength: 40)
-            }
-            .padding(.horizontal)
-        }
-        .scrollDismissesKeyboard(.immediately)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                currentField = .name
-            }
-        }
-    }
-    
-    // Form validation
-    private var isFormValid: Bool {
-        return !fullName.isEmpty && isValidEmail(email) && !username.isEmpty
-    }
-    
-    // Email validation
-    private func isValidEmail(_ email: String) -> Bool {
-        let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
-        let emailPredicate = NSPredicate(format: "SELF MATCHES %@", emailRegex)
-        return emailPredicate.evaluate(with: email)
-    }
-    
-    // Username formatting
-    private func formatUsername(_ input: String) -> String {
-        // Allow only alphanumeric characters and underscores
-        let allowedCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
-        return input.components(separatedBy: allowedCharacters.inverted).joined()
-    }
-    
-    // Complete registration
-    private func completeRegistration() {
-        isLoading = true
-        errorMessage = nil
-        
-        // Validate username format
-        if username.isEmpty || username.count < 3 {
-            errorMessage = "Username must be at least 3 characters long"
-            isLoading = false
-            return
-        }
-        
-        // Create user profile
-        firebaseService.createUserProfile(
-            fullName: fullName,
-            email: email,
-            username: username
-        ) { success, error in
-            isLoading = false
             
-            if success {
-                // Registration successful
-                onComplete(true)
-            } else if let error = error {
-                errorMessage = error
+            Image("blur-background")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .edgesIgnoringSafeArea(.all)
+                .opacity(0.7)
+            
+            // First layer: Dark blur effect
+            VisualEffectBlur(blurStyle: .systemThinMaterialDark)
+                .edgesIgnoringSafeArea(.all)
+
+            // Second layer: Gradient background
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(#colorLiteral(red: 0.1019607843, green: 0.1254901961, blue: 0.1882352941, alpha: 1.0)),
+                    Color(#colorLiteral(red: 0.0470588244497776, green: 0.09803921729326248, blue: 0.26274511218070984, alpha: 1.0))
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .opacity(0.5)
+            .edgesIgnoringSafeArea(.all)
+            
+            
+           
+            // Content layer
+            ZStack {
+                if showPhoneVerification {
+                    VStack {
+                        // Custom back button
+                        HStack {
+
+                            Button(action: {
+                                onDismiss(false)
+                            }) {
+                                Image(systemName: "chevron.left")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 12, height: 12)
+                                    .padding(14)
+                                    .foregroundColor(.white)
+                                    .background(Color.black.opacity(0.3))
+                                    .clipShape(Circle())
+                                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 16)
+                        
+                        // Main content
+                        PhoneVerificationView(
+                            isCreatingAccount: createAccount,
+                            onComplete: { success in
+                                if success {
+                                    onDismiss(true)
+                                }
+                            }
+                        )
+                        .environmentObject(ThemeSettings(disableBackgrounds: true))
+                    }
+                }
             }
         }
     }
 }
 
+// Add this to your project to manage theme settings
+class ThemeSettings: ObservableObject {
+    @Published var disableBackgrounds: Bool = false
+    
+    init(disableBackgrounds: Bool = false) {
+        self.disableBackgrounds = disableBackgrounds
+    }
+}
+
+#Preview {
+    LoginView(onDismiss: { success in
+        print("Login completed: \(success)")
+    })
+}

@@ -5,7 +5,6 @@
 //  Created by Chima Onyekwere on 4/4/25.
 //
 
-
 import SwiftUI
 import FirebaseAuth
 
@@ -81,6 +80,18 @@ struct AppCoordinatorView: View {
         .onOpenURL { url in
             // Handle deep links here if needed
             print("Received deep link: \(url)")
+        }
+    }
+}
+
+struct AppCoordinatorView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            AppCoordinatorView()
+                .environment(\.colorScheme, .dark)
+            
+            AppCoordinatorView()
+                .environment(\.colorScheme, .light)
         }
     }
 }
