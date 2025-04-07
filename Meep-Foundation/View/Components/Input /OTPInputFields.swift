@@ -62,3 +62,51 @@ struct OTPInputFields: View {
         }
     }
 }
+
+
+//
+//  OTPInputFields.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 4/6/25.
+//
+
+//import SwiftUI
+//
+//struct OTPInputFields: View {
+//    @Binding var otpFields: [String]
+//    @FocusState var focusedField: Int?
+//    
+//    var body: some View {
+//        HStack(spacing: 15) {
+//            ForEach(0..<otpFields.count, id: \.self) { index in
+//                TextField("", text: $otpFields[index])
+//                    .keyboardType(.numberPad)
+//                    .frame(width: 60, height: 60)
+//                    .multilineTextAlignment(.center)
+//                    .font(.title2.bold())
+//                    .foregroundColor(.white)
+//                    .background(Color(.systemGray6).opacity(0.3))
+//                    .cornerRadius(12)
+//                    .focused($focusedField, equals: index)
+//                    .onChange(of: otpFields[index]) { newValue in
+//                        // Limit to one character
+//                        if newValue.count > 1 {
+//                            otpFields[index] = String(newValue.prefix(1))
+//                        }
+//                        
+//                        // Auto advance to next field
+//                        if newValue.count == 1 && index < otpFields.count - 1 {
+//                            focusedField = index + 1
+//                        }
+//                    }
+//                    .onTapGesture {
+//                        // Clear the field when tapped
+//                        if !otpFields[index].isEmpty {
+//                            otpFields[index] = ""
+//                        }
+//                    }
+//            }
+//        }
+//    }
+//}
