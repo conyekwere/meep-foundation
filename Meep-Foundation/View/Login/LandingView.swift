@@ -12,6 +12,7 @@ struct LandingView: View {
     // State
     @State private var showLoginView = false
     @State private var showCreateAccountView = false
+    @State private var videoLoaded: Bool = false
     
     // Environment
     @Environment(\.colorScheme) var colorScheme
@@ -26,9 +27,34 @@ struct LandingView: View {
         ZStack {
 
             // Background image with overlay
-            LandingVideoBackgroundView()
-                .ignoresSafeArea()
-                .overlay(Color.black.opacity(0.80)) // optional dimming overlay
+            LandingVideoBackgroundView {
+                videoLoaded = true
+            }
+            .ignoresSafeArea()
+            .overlay(            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 1)),
+                    Color(#colorLiteral(red: 0.1157327518, green: 0.2090111971, blue: 0.1976979971, alpha: 1)),
+                    Color(#colorLiteral(red: 0.05121128261, green: 0.09113004059, blue: 0.08617139608, alpha: 1)),
+                    Color(#colorLiteral(red: 0, green: 0, blue: 0, alpha: 1))
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            ).opacity(0.95))// optional dimming overlay
+            
+            if !videoLoaded {
+                AnimatedMeshGradient()
+                .edgesIgnoringSafeArea(.all)
+                .overlay(            LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color(#colorLiteral(red: 0.1019607843, green: 0.1254901961, blue: 0.1882352941, alpha: 1.0)),
+                        Color(#colorLiteral(red: 0.0470588244497776, green: 0.09803921729326248, blue: 0.26274511218070984, alpha: 1.0))
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                ).opacity(0.80))
+                
+            }
             
             // Main content
             VStack(spacing: 30) {
@@ -89,10 +115,7 @@ struct LandingView: View {
                             .padding(.vertical, 20)
                             .background(Color.black)
                             .cornerRadius(40)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 40)
-                                    .stroke(Color.gray, lineWidth: 0.1)
-                            )
+          
                     }
                     .padding(.horizontal, 20)
                     
@@ -152,9 +175,4 @@ struct LandingView: View {
             }
         }
     }
-}
-
-#Preview {
-    LandingView()
-        .environmentObject(AppCoordinator())
 }
