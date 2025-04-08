@@ -1,7 +1,7 @@
 project 'Meep-Foundation.xcodeproj'
 
 # Uncomment the next line to define a global platform for your project
-# platform :ios, '15.0'
+# platform :ios, '16.0'
 
 target 'Meep-Foundation' do
 
@@ -9,9 +9,13 @@ target 'Meep-Foundation' do
   use_frameworks!
 
   # Pods for Meep-Foundation
+  pod 'Firebase/Core'
+  pod 'Firebase/Auth'
+  pod 'Firebase/Firestore'
   pod 'GoogleMaps' 
   pod 'GooglePlaces'
   pod 'Alamofire'
+
   target 'Meep-FoundationTests' do
     inherit! :search_paths
     # Pods for testing
