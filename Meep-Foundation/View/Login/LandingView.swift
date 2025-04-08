@@ -40,7 +40,7 @@ struct LandingView: View {
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
-            ).opacity(0.95))// optional dimming overlay
+            ).opacity(0.93))// optional dimming overlay
             
             if !videoLoaded {
                 AnimatedMeshGradient()
