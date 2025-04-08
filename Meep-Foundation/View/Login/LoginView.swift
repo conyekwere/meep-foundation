@@ -30,7 +30,7 @@ struct LoginView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .edgesIgnoringSafeArea(.all)
-                .opacity(0.7)
+                .opacity(0.3)
             
             // First layer: Dark blur effect
             VisualEffectBlur(blurStyle: .systemThinMaterialDark)
