@@ -111,12 +111,12 @@ struct AdvancedFiltersBottomSheet: View {
 
                     // Search Range Slider
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Search Range (\(Int(searchRadius)) miles)")
+                        Text("Search Range (\(formattedDistance(searchRadius)))")
                             .font(.headline)
                             .fontWeight(.regular)
                             .fontWidth(.expanded)
 
-                        CustomRangeSlider(value: $searchRadius, range: 1...20, step: 1)
+                        CustomRangeSlider(value: $searchRadius, range: 0.1...5, step: 0.1)
                     }
                     .padding(.top, 4)
                     .padding()
@@ -134,7 +134,7 @@ struct AdvancedFiltersBottomSheet: View {
                 Button("Clear All") {
                     myTransit = .train
                     friendTransit = .train
-                    searchRadius = 2 // Set to 2 miles as default
+                    searchRadius = 1 // Set to 1 miles as default
                     departureTime = nil
                     isNowSelected = true
                     
@@ -217,13 +217,23 @@ struct AdvancedFiltersBottomSheet: View {
             return formatter.string(from: date)
         }
     }
+
+    func formattedDistance(_ value: Double) -> String {
+        if value < 0.25 {
+            return "< ¼ mile"
+        } else if value == floor(value) {
+            return "\(Int(value)) mile" + (value == 1 ? "" : "s")
+        } else {
+            return String(format: "%.1f miles", value)
+        }
+    }
 }
 
 #Preview {
     AdvancedFiltersBottomSheet(
         myTransit: .constant(.train),
         friendTransit: .constant(.train),
-        searchRadius: .constant(2), // Default 2 miles
+        searchRadius: .constant(1), // Default 1 miles
         departureTime: .constant(nil), viewModel: MeepViewModel()
     )
 }

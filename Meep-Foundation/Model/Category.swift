@@ -5,13 +5,19 @@
 //  Created by Chima onyekwere on 2/3/25.
 //
 
-import SwiftUI
+import Foundation
 
-// Define a structured Category model
 struct Category: Identifiable, Hashable {
     let id = UUID()
     let emoji: String
     let name: String
     let hidden: Bool
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    static func == (lhs: Category, rhs: Category) -> Bool {
+        lhs.id == rhs.id
+    }
 }
-
