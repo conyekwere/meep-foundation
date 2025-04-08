@@ -21,3 +21,5 @@ struct VisualEffectBlur: UIViewRepresentable {
         uiView.effect = UIBlurEffect(style: blurStyle)
     }
 }
+
+
