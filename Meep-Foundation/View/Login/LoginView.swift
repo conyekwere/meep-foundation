@@ -23,6 +23,15 @@ struct LoginView: View {
     // Whether this is for account creation or just login
     var createAccount: Bool = false
     
+    // New enum for authentication steps
+    enum AuthStep {
+        case phone
+        case otp
+    }
+    
+    // New state variable for the current step
+    @State private var step: AuthStep = .phone
+    
     var body: some View {
         ZStack {
             
@@ -58,7 +67,11 @@ struct LoginView: View {
                         HStack {
 
                             Button(action: {
-                                onDismiss(false)
+                                if step == .otp {
+                                    step = .phone
+                                } else {
+                                    onDismiss(false)
+                                }
                             }) {
                                 Image(systemName: "chevron.left")
                                     .resizable()
@@ -81,15 +94,29 @@ struct LoginView: View {
                         .padding(.top, 16)
                         
                         // Main content
-                        PhoneVerificationView(
-                            isCreatingAccount: createAccount,
-                            onComplete: { success in
+                        switch step {
+                        case .phone:
+                            PhoneVerificationView(
+                                isCreatingAccount: createAccount,
+                                onComplete: { success in
+                                    if success {
+                                        step = .otp
+                                    }
+                                }
+                                
+                            )
+                            .environmentObject(ThemeSettings(disableBackgrounds: true))
+                        case .otp:
+                            OTPVerificationView(phoneNumber: "+15712140016", isCreatingAccount: false) { success in
                                 if success {
                                     onDismiss(true)
                                 }
                             }
-                        )
-                        .environmentObject(ThemeSettings(disableBackgrounds: true))
+                            .environmentObject(ThemeSettings(disableBackgrounds: true))
+                        }
+                        
+                        
+
                     }
                 }
             }

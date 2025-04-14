@@ -195,31 +195,15 @@ struct ProfileBottomSheet: View {
     
     private func notAuthenticatedSection() -> some View {
         VStack(spacing: 24) {
-            Image(systemName: "person.crop.circle.badge.questionmark")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .foregroundColor(.gray)
+
+            Text("Session expired. Please login again.")
+                .padding()
             
-            Text("Sign in to access your profile")
-                .font(.headline)
-            
-            Button(action: {
-                showLoginView = true
-            }) {
-                Text("Sign In")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(12)
+            Button("Logout", role: .destructive) {
+                logout()
             }
-            .padding(.horizontal, 32)
-            
-            Spacer()
-            
-            termsAndPrivacySection()
+            .padding()
+            .buttonStyle(.borderedProminent)
         }
         .padding(.top, 32)
     }

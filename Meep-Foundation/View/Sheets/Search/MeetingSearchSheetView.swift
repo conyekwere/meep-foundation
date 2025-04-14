@@ -924,7 +924,7 @@ struct MeetingSearchSheetView: View {
                 
                 Spacer()
             }
-            .padding(.top, -24)
+            .padding(.top, 16)
             .background(Color(.systemBackground))
             .ignoresSafeArea(edges: .bottom)
             .overlay(
@@ -949,6 +949,9 @@ struct MeetingSearchSheetView: View {
                     }
                 }
             )
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: {
@@ -965,6 +968,7 @@ struct MeetingSearchSheetView: View {
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30)
                                     .stroke(Color(.systemGray6), lineWidth: 2)
+                                    
                             )
                             .clipShape(Circle())
                     }
@@ -972,15 +976,16 @@ struct MeetingSearchSheetView: View {
                     .disabled(isGeocodingInProgress)
                 }
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 2) {
+                    VStack(alignment: .center, spacing: 2) {
                         Text("Set meeting point")
                             .font(.headline)
                             .fontWeight(.semibold)
                             .fontWidth(.expanded)
                             .foregroundColor(.primary).opacity(0.7)
                     }
-                    .padding(.top, 8)
+                    .padding(.vertical, 8)
                 }
+                
                 ToolbarItem(placement: .topBarTrailing) {
                     if isMyLocationValid && isFriendsLocationValid {
                         Button(action: {
@@ -1002,6 +1007,8 @@ struct MeetingSearchSheetView: View {
                     }
                 }
             }
+           
+            
             .onAppear {
                 
                 

@@ -23,6 +23,7 @@ struct PhoneVerificationView: View {
     @State private var showOTPVerification = false
     @State private var selectedCountry = Country(name: "United States", code: "+1", flag: "🇺🇸", maxLength: 10)
     @State private var isCountrySelectorPresented = false
+    @State private var localVerificationID: String? // Store verification ID locally
     
     // Environment
     @Environment(\.colorScheme) var colorScheme
@@ -43,12 +44,13 @@ struct PhoneVerificationView: View {
     var body: some View {
         if showOTPVerification {
             OTPVerificationView(
-                phoneNumber: "\(countryCode)\(phoneNumber)",
+                phoneNumber: "\(selectedCountry.code)\(phoneNumber.filter { $0.isNumber })",
                 isCreatingAccount: isCreatingAccount,
                 onComplete: onComplete
             )
         } else {
             ScrollView {
+                // Content remains the same
                 VStack(spacing: 16) {
                     // Header
                     Spacer()
@@ -111,10 +113,9 @@ struct PhoneVerificationView: View {
                                     .foregroundColor(.white)
                                     .multilineTextAlignment(.leading)
                                     .focused($phoneFieldFocused)
-                                    .onChange(of: phoneNumber) { newValue in
+                                    .onChange(of: phoneNumber) { oldValue, newValue in
                                         phoneNumber = formatPhoneNumber(newValue)
                                     }
-   
                             }
                         }
                         .padding(.horizontal, 16)
@@ -243,17 +244,40 @@ struct PhoneVerificationView: View {
         errorMessage = nil
         
         // Format phone number for Firebase
-        let formattedPhone = "\(countryCode)\(phoneNumber.filter { $0.isNumber })"
+        let formattedPhone = "\(selectedCountry.code)\(phoneNumber.filter { $0.isNumber })"
+        print("Attempting verification for: \(formattedPhone)")
         
-        firebaseService.startPhoneAuth(phoneNumber: formattedPhone) { success, error in
+        // Direct approach like phonesignin3
+        PhoneAuthProvider.provider().verifyPhoneNumber(formattedPhone, uiDelegate: nil) { [self] verificationID, error in
             isLoading = false
             
-            if success {
-                withAnimation {
-                    showOTPVerification = true
-                }
-            } else if let error = error {
-                errorMessage = error
+            if let error = error {
+                // Print detailed error information
+                print("Firebase Auth Error: \(error)")
+                print("Error Domain: \(error.localizedDescription)")
+                
+                // Get the error code as NSError
+                let nsError = error as NSError
+                print("Error Code: \(nsError.code)")
+                print("Error Domain: \(nsError.domain)")
+                print("Error User Info: \(nsError.userInfo)")
+                
+                errorMessage = "Error: \(error.localizedDescription)"
+                return
+            }
+            
+            guard let verificationID = verificationID else {
+                errorMessage = "Verification ID not received"
+                return
+            }
+            
+            print("Verification ID received successfully: \(verificationID)")
+            
+            // Store verification ID in the service
+            firebaseService.verificationID = verificationID
+            
+            withAnimation {
+                showOTPVerification = true
             }
         }
     }
@@ -261,7 +285,7 @@ struct PhoneVerificationView: View {
 
 #Preview {
     PhoneVerificationView(isCreatingAccount: true) { success in
-        print("Verification completed: \(success)")
+        print("Verification complete: \(success)")
     }
-    .environmentObject(ThemeSettings())
+    .environmentObject(ThemeSettings(disableBackgrounds: true))
 }

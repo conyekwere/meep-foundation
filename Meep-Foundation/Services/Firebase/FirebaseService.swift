@@ -15,11 +15,29 @@ class FirebaseService: ObservableObject {
     @Published var isAuthenticated = false
     @Published var currentUser: User?
     @Published var meepUser: MeepUser?
-    private var verificationID: String?
+    @Published var verificationID: String?
     
     private init() {
         // Check if user is already authenticated
         checkAuthStatus()
+        setupAuthStateListener()
+    }
+    
+    /// Setup Firebase Auth state listener
+    private func setupAuthStateListener() {
+        Auth.auth().addStateDidChangeListener { [weak self] auth, user in
+            guard let self = self else { return }
+            
+            if let user = user {
+                self.isAuthenticated = true
+                self.currentUser = user
+                self.fetchUserProfile(for: user.uid)
+            } else {
+                self.isAuthenticated = false
+                self.currentUser = nil
+                self.meepUser = nil
+            }
+        }
     }
     
     /// Check if user is authenticated and refresh current user
@@ -37,15 +55,18 @@ class FirebaseService: ObservableObject {
     
     // MARK: - Phone Authentication
     
-    /// Start phone authentication process with Firebase
+    /// Start phone authentication process with Firebase - direct approach from phonesignin3
     /// - Parameters:
     ///   - phoneNumber: Full international phone number
     ///   - completion: Callback with success status and error message
     func startPhoneAuth(phoneNumber: String, completion: @escaping (Bool, String?) -> Void) {
         print("Starting phone auth for number: \(phoneNumber)")
         
-        // Firebase phone verification
-        PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil) { [weak self] verificationID, error in
+        // Ensure phone number has proper formatting with "+"
+        let formattedPhone = phoneNumber.starts(with: "+") ? phoneNumber : "+\(phoneNumber)"
+        
+        // Firebase phone verification - simplified phonesignin3 approach
+        PhoneAuthProvider.provider().verifyPhoneNumber(formattedPhone, uiDelegate: nil) { [weak self] verificationID, error in
             if let error = error {
                 print("Phone auth error: \(error.localizedDescription)")
                 completion(false, error.localizedDescription)
@@ -58,13 +79,13 @@ class FirebaseService: ObservableObject {
                 return
             }
             
-            print("Verification ID received successfully")
+            print("Verification ID received successfully: \(verificationID)")
             self?.verificationID = verificationID
             completion(true, nil)
         }
     }
     
-    /// Verify phone code received via SMS
+    /// Verify phone code received via SMS - direct approach from phonesignin3
     /// - Parameters:
     ///   - code: The verification code received
     ///   - completion: Callback with success status and error message
@@ -75,11 +96,15 @@ class FirebaseService: ObservableObject {
             return
         }
         
+        print("Verifying code with verification ID: \(verificationID)")
+        
+        // Create credential directly
         let credential = PhoneAuthProvider.provider().credential(
             withVerificationID: verificationID,
             verificationCode: code
         )
         
+        // Sign in with credential
         Auth.auth().signIn(with: credential) { [weak self] (authResult, error) in
             if let error = error {
                 print("Verification error: \(error.localizedDescription)")
