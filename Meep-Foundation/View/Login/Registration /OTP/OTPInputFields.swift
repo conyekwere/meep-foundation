@@ -55,12 +55,19 @@ struct OTPInputFields: View {
     }
     
     private func handleFieldChange(index: Int, value: String) {
-        // If more than one character is entered, keep only the first one
+        if value.count == otpFields.count {
+            // Handle full OTP paste into first field (auto-fill from Messages)
+            for (i, char) in value.prefix(otpFields.count).enumerated() {
+                otpFields[i] = String(char)
+            }
+            focusedField = nil
+            return
+        }
+
         if value.count > 1 {
             otpFields[index] = String(value.prefix(1))
         }
-        
-        // Auto-advance to next field
+
         if value.count == 1 && index < otpFields.count - 1 {
             focusedField = index + 1
         } else if value.isEmpty && index > 0 {
