@@ -331,6 +331,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				137BAE082D6C3756009482C5 /* XCRemoteSwiftPackageReference "google-maps-ios-utils" */,
+				1355F5312DD11FD500593A78 /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				1355F6F82DD1385300593A78 /* XCRemoteSwiftPackageReference "dotlottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5D2E051F2D40AD8E00A2E0DF /* Products */;
@@ -956,6 +958,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1355F5312DD11FD500593A78 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.1;
+			};
+		};
+		1355F6F82DD1385300593A78 /* XCRemoteSwiftPackageReference "dotlottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/LottieFiles/dotlottie-ios";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		137BAE082D6C3756009482C5 /* XCRemoteSwiftPackageReference "google-maps-ios-utils" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/googlemaps/google-maps-ios-utils";

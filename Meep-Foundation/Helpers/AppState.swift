@@ -11,7 +11,7 @@ import FirebaseAuth
 /// App state to track which view is currently presented
 enum AppState {
     case landing
-    case main
+    case main(isNewUser: Bool)
 }
 
 /// Coordinator for handling app-wide navigation and state
@@ -29,9 +29,9 @@ class AppCoordinator: ObservableObject {
     
     /// Check if user is already logged in and update app state accordingly
     func checkAuthState() {
-        if Auth.auth().currentUser != nil {
+        if let user = Auth.auth().currentUser {
             // User is already logged in
-            showMainApp()
+            showMainApp(isNewUser: user.metadata.creationDate == user.metadata.lastSignInDate)
         } else {
             // No user session, show landing page
             showLanding()
@@ -46,9 +46,13 @@ class AppCoordinator: ObservableObject {
     }
     
     /// Show the main app
-    func showMainApp() {
+    func showMainApp(isNewUser: Bool) {
+        guard firebaseService.meepUser != nil else {
+            showLanding()
+            return
+        }
         withAnimation {
-            currentState = .main
+            currentState = .main(isNewUser: isNewUser)
         }
     }
     
@@ -72,8 +76,8 @@ struct AppCoordinatorView: View {
             case .landing:
                 LandingView()
                     .environmentObject(coordinator)
-            case .main:
-                MeepAppView()
+            case .main(let isNewUser):
+                MeepAppView(isNewUser: isNewUser)
                     .environmentObject(coordinator)
             }
         }

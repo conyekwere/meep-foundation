@@ -1,2 +1,23 @@
 Config.xcconfig
 Meep-Foundation/View/Login/Media/Hyperlapse.mp4
+# Firebase & Google API Keys
+Meep-Foundation/GoogleService-Info.plist
+Info.plist
+
+# Xcode
+*.xcuserdata
+*.xcuserstate
+
+# Build artifacts
+build/
+DerivedData/
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# SwiftPM
+.build/
+
+# Misc
+.DS_Store

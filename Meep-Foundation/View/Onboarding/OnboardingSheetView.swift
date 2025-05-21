@@ -24,35 +24,37 @@ struct OnboardingSheetView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // First Card: Allow Location
-                        OnboardingCardView(
-                            title: "Allow location",
-                            subtitle: "Allow location to get from A to B",
-                            gradientColors: [Color(hex: "67DB92"), Color(hex: "41AC99")],
-                            icon: AnyView(
-                                ZStack {
-                                    Circle()
-                                        .fill(Color(#colorLiteral(red: 0.3455161154270172, green: 0.5001650452613831, blue: 0.9254494905471802, alpha: 1)))
-                                        .strokeBorder(Color.white, lineWidth: 1)
-                                        .frame(width: 16, height: 16)
-                                        .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
-                                    
-                                    Circle()
-                                        .strokeBorder(Color.white, lineWidth: 1)
-                                        .frame(width: 60, height: 60)
-                                    
-                                    Circle()
-                                        .strokeBorder(Color.white, lineWidth: 1)
-                                        .frame(width: 108, height: 108)
+                        if viewModel.userLocation == nil {
+                            OnboardingCardView(
+                                title: "Enable location",
+                                subtitle: "You‘ll need to enable your location in order to use Meep",
+                                gradientColors: [Color(hex: "67DB92"), Color(hex: "41AC99")],
+                                icon: AnyView(
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(#colorLiteral(red: 0.3455161154270172, green: 0.5001650452613831, blue: 0.9254494905471802, alpha: 1)))
+                                            .strokeBorder(Color.white, lineWidth: 1)
+                                            .frame(width: 16, height: 16)
+                                            .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
+                                        
+                                        Circle()
+                                            .strokeBorder(Color.white, lineWidth: 1)
+                                            .frame(width: 60, height: 60)
+                                        
+                                        Circle()
+                                            .strokeBorder(Color.white, lineWidth: 1)
+                                            .frame(width: 108, height: 108)
+                                    }
+                                ),
+                                actionTitle: "Allow Location",
+                                action: {
+                                    viewModel.requestUserLocation()
                                 }
-                            ),
-                            actionTitle: "Allow",
-                            action: {
-                                viewModel.requestUserLocation()
-                            }
-                        )
-                        .cornerRadius(16)
-                        .padding(.horizontal, 16)
-                        .frame(height: 360)
+                            )
+                            .cornerRadius(16)
+                            .padding(.horizontal, 16)
+                            .frame(height: 360)
+                        }
                     
 
                         // Second Card: Meet Your Friends
@@ -78,7 +80,7 @@ struct OnboardingSheetView: View {
                             ),
                             actionTitle: "Search",
                             action: {
-                                // Add search action here
+                                searchRequest = true
                             }
                         )
                         .cornerRadius(16)

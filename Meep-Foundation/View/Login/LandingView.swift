@@ -12,6 +12,7 @@ struct LandingView: View {
     // State
     @State private var showLoginView = false
     @State private var showCreateAccountView = false
+    @State private var createAccount: Bool = false
     @State private var videoLoaded: Bool = false
     
     // Environment
@@ -147,9 +148,9 @@ struct LandingView: View {
                 LoginView(onDismiss: { success in
                     showLoginView = false
                     if success {
-                        coordinator.showMainApp()
+                        coordinator.showMainApp(isNewUser: false)
                     }
-                })
+                }, createAccount: $createAccount, viewModel: MeepViewModel())
                 .transition(.move(edge: .bottom))
                 .zIndex(5)
             }
@@ -161,17 +162,17 @@ struct LandingView: View {
                 LoginView(onDismiss: { success in
                     showCreateAccountView = false
                     if success {
-                        coordinator.showMainApp()
+                        coordinator.showMainApp(isNewUser: true)
                     }
-                }, createAccount: true)
+                }, createAccount: $createAccount, viewModel: MeepViewModel())
                 .transition(.move(edge: .bottom))
                 .zIndex(5)
             }
         }
-        .onAppear {
-            // Check if user is already logged in
-            if Auth.auth().currentUser != nil {
-                coordinator.showMainApp()
+        .task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // Wait 0.5 seconds
+            if let user = Auth.auth().currentUser, user.phoneNumber != nil {
+                coordinator.showMainApp(isNewUser: false)
             }
         }
     }

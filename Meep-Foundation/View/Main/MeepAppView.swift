@@ -16,8 +16,12 @@ enum UIState {
 struct MeepAppView: View {
     @StateObject private var viewModel = MeepViewModel()
     
+    @StateObject private var firebaseService = FirebaseService.shared
+    
+    var isNewUser: Bool = false
     
     @State private var departureTime: Date? = nil // ✅ Fix: Add departureTime
+    @State private var searchRequest: Bool = false
     
     // Overall UI state for top search bars etc.
     @State private var uiState: UIState = .onboarding
@@ -43,7 +47,7 @@ struct MeepAppView: View {
     
     @State private var myTransit: TransportMode = .train
     @State private var friendTransit: TransportMode = .train
-    @State private var searchRadius: Double = 2
+    @State private var searchRadius: Double = 1
     
     @State private var selectedAnnotation: MeepAnnotation? = nil
     
@@ -190,7 +194,7 @@ struct MeepAppView: View {
                         title: "Find where to meet",
                         subtitle: "\(viewModel.sharableUserLocation) · \(viewModel.sharableFriendLocation)",
                         leadingIcon: "magnifyingglass",
-                        trailingIcon: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
+                        trailingIcon: firebaseService.meepUser?.profileImageUrl ?? "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
                         isDirty: false,
                         filterCount: viewModel.activeFilterCount,
                         onLeadingIconTap: { isSearching = true },
@@ -216,7 +220,7 @@ struct MeepAppView: View {
                 OnboardingSheetView(
                     viewModel: viewModel,
                     isLocationAllowed: $viewModel.isLocationAccessGranted,
-                    searchRequest: .constant(false)
+                    searchRequest: $searchRequest
                 )
                 .background(Color(.tertiarySystemBackground))
                 .cornerRadius(onboardingOffset == sheetMin ? 0 : 24)
@@ -304,8 +308,8 @@ struct MeepAppView: View {
         
         .sheet(isPresented: $isProfilePresented) {
             ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
-                .presentationDetents([.fraction(0.65)])
-                .presentationDragIndicator(.hidden)
+                .presentationDetents([.fraction(0.75)])
+                
         }
         
         
@@ -319,9 +323,15 @@ struct MeepAppView: View {
             )
             .presentationDetents([.fraction(0.85)])
         }
+        .onChange(of: searchRequest) { newValue in
+            if newValue {
+                isSearching = true
+                searchRequest = false
+            }
+        }
     }
 }
 
 #Preview {
-    MeepAppView()
+    MeepAppView(isNewUser: true)
 }
