@@ -48,22 +48,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set up notification delegate
         UNUserNotificationCenter.current().delegate = self
         
-        // Configure Google Maps API
-        if let mapsAPIKey = Bundle.main.object(forInfoDictionaryKey: "GMS_MAPS_API_KEY") as? String,
-           !mapsAPIKey.isEmpty {
-            GMSServices.provideAPIKey(mapsAPIKey)
-            print("✅ Google Maps API Key Loaded")
+        // Configure Google Maps & Places API
+        if let apiKey = Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String,
+           !apiKey.isEmpty {
+            GMSServices.provideAPIKey(apiKey)
+            GMSPlacesClient.provideAPIKey(apiKey)
+            print("✅ Google Maps & Places API Key Loaded")
         } else {
-            fatalError("❌ Google Maps API Key is missing or invalid")
-        }
-
-        // Configure Google Places API
-        if let placesAPIKey = Bundle.main.object(forInfoDictionaryKey: "GMS_PLACES_API_KEY") as? String,
-           !placesAPIKey.isEmpty {
-            GMSPlacesClient.provideAPIKey(placesAPIKey)
-            print("✅ Google Places API Key Loaded")
-        } else {
-            fatalError("❌ Google Places API Key is missing or invalid")
+            fatalError("❌ Google API Key is missing or invalid")
         }
 
         configureAppAppearance()

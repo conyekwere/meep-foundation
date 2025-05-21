@@ -12,9 +12,13 @@ target 'Meep-Foundation' do
   pod 'Firebase/Core'
   pod 'Firebase/Auth'
   pod 'Firebase/Firestore'
-  pod 'GoogleMaps' 
+  pod 'Firebase/Storage'
+  pod 'GoogleMaps'
   pod 'GooglePlaces'
   pod 'Alamofire'
+  pod 'lottie-ios'
+  pod 'Kingfisher'
+
 
   target 'Meep-FoundationTests' do
     inherit! :search_paths

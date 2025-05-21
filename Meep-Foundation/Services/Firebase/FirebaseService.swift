@@ -210,33 +210,49 @@ class FirebaseService: ObservableObject {
     ///   - fullName: User's full name
     ///   - email: User's email
     ///   - username: User's username
+    ///   - profileImageUrl: User's profile image URL
     ///   - completion: Callback with success status and error message
-    func createUserProfile(fullName: String, email: String, username: String, completion: @escaping (Bool, String?) -> Void) {
+    func createUserProfile(
+        fullName: String,
+        email: String,
+        username: String,
+        phoneNumber: String,
+        profileImageUrl: String,
+        gender: String,
+        dateOfBirth: String,
+        completion: @escaping (Bool, String?) -> Void
+    ) {
         guard let user = Auth.auth().currentUser else {
             completion(false, "User not authenticated")
             return
         }
-        
-        // Create a change request to update the display name
+
         let changeRequest = user.createProfileChangeRequest()
         changeRequest.displayName = fullName
-        
+
         changeRequest.commitChanges { [weak self] error in
             if let error = error {
                 print("Failed to update display name: \(error.localizedDescription)")
                 completion(false, error.localizedDescription)
                 return
             }
-            
-            // Update email
+
             user.updateEmail(to: email) { error in
                 if let error = error {
-                    // Don't fail if email update fails, as we're not verifying it now
                     print("Email update failed: \(error.localizedDescription)")
                 }
-                
-                // Store additional user data in Firestore
-                self?.saveUserData(uid: user.uid, fullName: fullName, email: email, username: username, completion: completion)
+
+                self?.saveUserData(
+                    uid: user.uid,
+                    fullName: fullName,
+                    email: email,
+                    username: username,
+                    profileImageUrl: profileImageUrl,
+                    phoneNumber: phoneNumber,
+                    gender: gender,
+                    dateOfBirth: dateOfBirth,
+                    completion: completion
+                )
             }
         }
     }
@@ -247,39 +263,47 @@ class FirebaseService: ObservableObject {
     ///   - fullName: User's full name
     ///   - email: User's email
     ///   - username: User's username
+    ///   - profileImageUrl: User's profile image URL
     ///   - completion: Callback with success status and error message
-    private func saveUserData(uid: String, fullName: String, email: String, username: String, completion: @escaping (Bool, String?) -> Void) {
+    private func saveUserData(
+        uid: String,
+        fullName: String,
+        email: String,
+        username: String,
+        profileImageUrl: String,
+        phoneNumber: String,
+        gender: String,
+        dateOfBirth: String,
+        completion: @escaping (Bool, String?) -> Void
+    ) {
         let db = Firestore.firestore()
-        
-        // First check if username is already taken
+
         db.collection("usernames").document(username).getDocument { [weak self] document, error in
             if let document = document, document.exists {
-                // Username is already taken
                 completion(false, "Username is already taken")
                 return
             }
-            
-            // Username is available, proceed with saving
+
             let userData: [String: Any] = [
                 "uid": uid,
                 "displayName": fullName,
                 "email": email,
                 "username": username,
-                "phoneNumber": Auth.auth().currentUser?.phoneNumber ?? "",
-                "profileImageUrl": "",
+                "phoneNumber": phoneNumber,
+                "profileImageUrl": profileImageUrl,
+                "gender": gender,
+                "dateOfBirth": dateOfBirth,
                 "createdAt": Timestamp(date: Date()),
                 "updatedAt": Timestamp(date: Date())
             ]
-            
-            // Save user data
+
             db.collection("users").document(uid).setData(userData) { error in
                 if let error = error {
                     print("Error saving user data: \(error.localizedDescription)")
                     completion(false, error.localizedDescription)
                     return
                 }
-                
-                // Reserve the username in a separate collection for uniqueness check
+
                 db.collection("usernames").document(username).setData([
                     "uid": uid,
                     "createdAt": Timestamp(date: Date())
@@ -289,21 +313,20 @@ class FirebaseService: ObservableObject {
                         completion(false, error.localizedDescription)
                         return
                     }
-                    
-                    // Create MeepUser object with the new data
+
                     if let user = Auth.auth().currentUser {
                         self?.meepUser = MeepUser(
                             id: uid,
                             displayName: fullName,
                             username: username,
                             email: email,
-                            phoneNumber: user.phoneNumber ?? "",
-                            profileImageUrl: "",
-                            createdAt: Date(),
-                            updatedAt: Date()
+                            phoneNumber: phoneNumber,
+                            profileImageUrl: profileImageUrl,
+                            createdAt: Date(), updatedAt: Date(), gender: gender,
+                            dateOfBirth: dateOfBirth
                         )
                     }
-                    
+
                     print("User profile created successfully")
                     completion(true, nil)
                 }

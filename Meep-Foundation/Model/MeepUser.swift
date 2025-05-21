@@ -18,6 +18,8 @@ struct MeepUser: Identifiable, Codable {
     var profileImageUrl: String
     var createdAt: Date
     var updatedAt: Date
+    var gender: String
+    var dateOfBirth: String
     
     // Initialize from Firebase User
     init(from user: User, username: String = "", profileImageUrl: String = "") {
@@ -29,6 +31,8 @@ struct MeepUser: Identifiable, Codable {
         self.profileImageUrl = profileImageUrl
         self.createdAt = user.metadata.creationDate ?? Date()
         self.updatedAt = user.metadata.lastSignInDate ?? Date()
+        self.gender = ""
+        self.dateOfBirth = ""
     }
     
     // Custom initializer for preview and testing
@@ -39,7 +43,9 @@ struct MeepUser: Identifiable, Codable {
          phoneNumber: String = "+1 (555) 123-4567",
          profileImageUrl: String = "",
          createdAt: Date = Date(),
-         updatedAt: Date = Date()) {
+         updatedAt: Date = Date(),
+         gender: String = "Other",
+         dateOfBirth: String = "2000-01-01") {
         self.id = id
         self.displayName = displayName
         self.username = username
@@ -48,5 +54,7 @@ struct MeepUser: Identifiable, Codable {
         self.profileImageUrl = profileImageUrl
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.gender = gender
+        self.dateOfBirth = dateOfBirth
     }
 }

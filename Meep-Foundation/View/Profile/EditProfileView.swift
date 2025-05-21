@@ -1,9 +1,10 @@
 //
 //  EditProfileView.swift
-//  syce-foundation
+//  Meep-Foundation
 //
-//  Created by Chima onyekwere on 5/9/24.
+//  Created by Chima Onyekwere on 5/16/25.
 //
+
 
 import SwiftUI
 import PhotosUI
@@ -12,7 +13,10 @@ struct EditProfileView: View {
     
     @Environment(\.dismiss) var dismiss
     @StateObject var vm: EditProfileViewModel
-        
+    
+    
+    @StateObject private var firebaseService = FirebaseService.shared
+    
     var body: some View {
         NavigationStack {
             VStack {
@@ -30,6 +34,8 @@ struct EditProfileView: View {
                         }
             
                         Text("Change Photo")
+                            .foregroundStyle(Color.primary)
+                            .padding(.top)
                     }
                     
                 }
@@ -39,12 +45,11 @@ struct EditProfileView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     Text("About You")
                         .font(.footnote)
-                        .foregroundStyle(Color(.systemGray2))
                         .fontWeight(.semibold)
+                        .foregroundStyle(Color.primary)
                     
-                    EditProfileOptionRowView(option:EditProfileOptions.name, value: vm.user.fullname)
+                    EditProfileOptionRowView(option:EditProfileOptions.name, value: vm.user.displayName)
                     EditProfileOptionRowView(option:EditProfileOptions.username, value: vm.user.username)
-                    EditProfileOptionRowView(option:EditProfileOptions.bio, value: vm.user.bio ?? "Add a bio")
                     
                 }
                 .font(.subheadline)
@@ -91,7 +96,7 @@ struct EditProfileView: View {
                 }
             }
         }
-        .foregroundStyle(Color(.white))
+        .foregroundStyle(Color.primary)
         .onChange(of: vm.dismiss) {
             dismiss()
         }
@@ -105,5 +110,5 @@ private extension EditProfileView{
 }
 
 #Preview {
-    EditProfileView(vm: EditProfileViewModel(imageUploader: ImageUploadService(), user: DeveloperPreview.user))
+    EditProfileView(vm: EditProfileViewModel(imageUploader: ImageUploadService(), user: DeveloperPreview.meepUser))
 }
