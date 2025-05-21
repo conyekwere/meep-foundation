@@ -601,326 +601,363 @@ struct MeetingSearchSheetView: View {
                 
                 
                 // MARK: Main Content Section
-                VStack(spacing: 0) {
-                    // MARK: Autocomplete Section (Only shows when typing)
-                    if myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isMyLocationFocused && !mySearchCompleter.completions.isEmpty {
-                        AutocompleteSuggestionsView(
-                            completions: mySearchCompleter.completions,
-                            text: $myLocation,
-                            geocodeAddress: { completion in
-                                LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
-                                    DispatchQueue.main.async {
-                                        if let coordinate = coordinate {
-                                            self.viewModel.userLocation = coordinate
-                                            self.isMyLocationValid = true
-                                        }
-                                        
-                                        if let formattedAddress = formattedAddress {
-                                            self.myLocation = formattedAddress
-                                        }
-                                        
-                                        self.isMyLocationFocused = false
-                                        self.isFriendsLocationFocused = true
-                                    }
-                                }
-                            },
-                            onSuggestionSelected: {
-                                isMyLocationFocused = false
-                                isFriendsLocationFocused = true
-                                isMyLocationValid = true
-                            }
-                        )
-                    } else if friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isFriendsLocationFocused && !friendSearchCompleter.completions.isEmpty {
-                        AutocompleteSuggestionsView(
-                            completions: friendSearchCompleter.completions,
-                            text: $friendLocation,
-                            geocodeAddress: { completion in
-                                LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
-                                    DispatchQueue.main.async {
-                                        if let coordinate = coordinate {
-                                            self.viewModel.friendLocation = coordinate
-                                            self.isFriendsLocationValid = true
-                                        }
-                                        
-                                        if let formattedAddress = formattedAddress {
-                                            self.friendLocation = formattedAddress
-                                        }
-                                        
-                                        self.isFriendsLocationFocused = false
-                                    }
-                                }
-                            },
-                            onSuggestionSelected: {
-                                isFriendsLocationFocused = false
-                                isFriendsLocationValid = true
-                            }
-                        )
-                    } else {
-                        // MARK: Suggestion Buttons Section
-                        // Show when not displaying autocomplete
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 24) {
-                                if isMyLocationFocused {
-                                    // My Location buttons when My Location is focused
-                                    SuggestionButton(
-                                        icon: "house",
-                                        title: locationsManager.homeLocation?.address ?? "Set location",
-                                        label: "Home",
-                                        action: {
-                                            guard let home = locationsManager.homeLocation,
-                                                  home.isValidCoordinate() else {
-                                                showAddHomeAddressSheet = true
-                                                return
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // MARK: Autocomplete Section (Only shows when typing)
+                        if myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isMyLocationFocused && !mySearchCompleter.completions.isEmpty {
+                            AutocompleteSuggestionsView(
+                                completions: mySearchCompleter.completions,
+                                text: $myLocation,
+                                geocodeAddress: { completion in
+                                    LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
+                                        DispatchQueue.main.async {
+                                            if let coordinate = coordinate {
+                                                self.viewModel.userLocation = coordinate
+                                                self.isMyLocationValid = true
                                             }
                                             
-                                            myLocation = home.address
-                                            isMyLocationValid = true
-                                            viewModel.userLocation = home.coordinate
+                                            if let formattedAddress = formattedAddress {
+                                                self.myLocation = formattedAddress
+                                            }
                                             
-                                            isMyLocationFocused = false
-                                            isFriendsLocationFocused = true
+                                            self.isMyLocationFocused = false
+                                            self.isFriendsLocationFocused = true
                                         }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "briefcase",
-                                        title: locationsManager.workLocation?.address ?? "Set location",
-                                        label: "Work",
-                                        action: {
-                                            if let work = locationsManager.workLocation {
-                                                myLocation = work.address
+                                    }
+                                },
+                                onSuggestionSelected: {
+                                    isMyLocationFocused = false
+                                    isFriendsLocationFocused = true
+                                    isMyLocationValid = true
+                                }
+                            )
+                        } else if friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isFriendsLocationFocused && !friendSearchCompleter.completions.isEmpty {
+                            AutocompleteSuggestionsView(
+                                completions: friendSearchCompleter.completions,
+                                text: $friendLocation,
+                                geocodeAddress: { completion in
+                                    LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
+                                        DispatchQueue.main.async {
+                                            if let coordinate = coordinate {
+                                                self.viewModel.friendLocation = coordinate
+                                                self.isFriendsLocationValid = true
+                                            }
+                                            
+                                            if let formattedAddress = formattedAddress {
+                                                self.friendLocation = formattedAddress
+                                            }
+                                            
+                                            self.isFriendsLocationFocused = false
+                                        }
+                                    }
+                                },
+                                onSuggestionSelected: {
+                                    isFriendsLocationFocused = false
+                                    isFriendsLocationValid = true
+                                }
+                            )
+                        } else {
+                            // MARK: Suggestion Buttons Section
+                            // Show when not displaying autocomplete
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 24) {
+                                    if isMyLocationFocused {
+                                        // My Location buttons when My Location is focused
+                                        SuggestionButton(
+                                            icon: "house",
+                                            title: locationsManager.homeLocation?.address ?? "Set location",
+                                            label: "Home",
+                                            action: {
+                                                guard let home = locationsManager.homeLocation,
+                                                      home.isValidCoordinate() else {
+                                                    showAddHomeAddressSheet = true
+                                                    return
+                                                }
+                                                
+                                                myLocation = home.address
                                                 isMyLocationValid = true
-                                                viewModel.userLocation = work.coordinate
+                                                viewModel.userLocation = home.coordinate
                                                 
                                                 isMyLocationFocused = false
                                                 isFriendsLocationFocused = true
-                                            } else {
-                                                showAddWorkAddressSheet = true
                                             }
-                                        }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "ellipsis",
-                                        title: "",
-                                        label: "More",
-                                        action: {
-                                            showCustomLocationsSheet = true
-                                        }
-                                    )
-                                } else if isFriendsLocationFocused {
-                                    // Friend's Location buttons when Friend's Location is focused
-                                    SuggestionButton(
-                                        icon: "plus",
-                                        title: "Add another friend",
-                                        label: "More friends?",
-                                        action: { print("Add friend tapped") }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "text.badge.plus",
-                                        title: "Add contacts",
-                                        label: "Searching for friends?",
-                                        action: { print("Add contacts tapped") }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "person.circle",
-                                        title: "Set location",
-                                        label: "Close Friend",
-                                        action: { print("Close friend tapped") }
-                                    )
-                                } else {
-                                    // Default buttons when neither field is focused
-                                    SuggestionButton(
-                                        icon: "house",
-                                        title: locationsManager.homeLocation?.address ?? "Set location",
-                                        label: "Home",
-                                        action: {
-                                            guard let home = locationsManager.homeLocation,
-                                                  home.isValidCoordinate() else {
-                                                showAddHomeAddressSheet = true
-                                                return
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "briefcase",
+                                            title: locationsManager.workLocation?.address ?? "Set location",
+                                            label: "Work",
+                                            action: {
+                                                if let work = locationsManager.workLocation {
+                                                    myLocation = work.address
+                                                    isMyLocationValid = true
+                                                    viewModel.userLocation = work.coordinate
+                                                    
+                                                    isMyLocationFocused = false
+                                                    isFriendsLocationFocused = true
+                                                } else {
+                                                    showAddWorkAddressSheet = true
+                                                }
                                             }
-                                            
-                                            myLocation = home.address
-                                            isMyLocationValid = true
-                                            viewModel.userLocation = home.coordinate
-                                            
-                                            isMyLocationFocused = false
-                                            isFriendsLocationFocused = true
-                                        }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "briefcase",
-                                        title: locationsManager.workLocation?.address ?? "Set location",
-                                        label: "Work",
-                                        action: {
-                                            if let work = locationsManager.workLocation {
-                                                myLocation = work.address
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "ellipsis",
+                                            title: "",
+                                            label: "More",
+                                            action: {
+                                                showCustomLocationsSheet = true
+                                            }
+                                        )
+                                    } else if isFriendsLocationFocused {
+                                        // Friend's Location buttons when Friend's Location is focused
+                                        SuggestionButton(
+                                            icon: "plus",
+                                            title: "Add another friend",
+                                            label: "More friends?",
+                                            action: { print("Add friend tapped") }
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "text.badge.plus",
+                                            title: "Add contacts",
+                                            label: "Searching for friends?",
+                                            action: { print("Add contacts tapped") }
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "person.circle",
+                                            title: "Set location",
+                                            label: "Close Friend",
+                                            action: { print("Close friend tapped") }
+                                        )
+                                    } else {
+                                        // Default buttons when neither field is focused
+                                        SuggestionButton(
+                                            icon: "house",
+                                            title: locationsManager.homeLocation?.address ?? "Set location",
+                                            label: "Home",
+                                            action: {
+                                                guard let home = locationsManager.homeLocation,
+                                                      home.isValidCoordinate() else {
+                                                    showAddHomeAddressSheet = true
+                                                    return
+                                                }
+                                                
+                                                myLocation = home.address
                                                 isMyLocationValid = true
-                                                viewModel.userLocation = work.coordinate
+                                                viewModel.userLocation = home.coordinate
                                                 
                                                 isMyLocationFocused = false
                                                 isFriendsLocationFocused = true
-                                            } else {
-                                                showAddWorkAddressSheet = true
                                             }
-                                        }
-                                    )
-                                    
-                                    SuggestionButton(
-                                        icon: "ellipsis",
-                                        title: "",
-                                        label: "More",
-                                        action: {
-                                            showCustomLocationsSheet = true
-                                        }
-                                    )
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "briefcase",
+                                            title: locationsManager.workLocation?.address ?? "Set location",
+                                            label: "Work",
+                                            action: {
+                                                if let work = locationsManager.workLocation {
+                                                    myLocation = work.address
+                                                    isMyLocationValid = true
+                                                    viewModel.userLocation = work.coordinate
+                                                    
+                                                    isMyLocationFocused = false
+                                                    isFriendsLocationFocused = true
+                                                } else {
+                                                    showAddWorkAddressSheet = true
+                                                }
+                                            }
+                                        )
+                                        
+                                        SuggestionButton(
+                                            icon: "ellipsis",
+                                            title: "",
+                                            label: "More",
+                                            action: {
+                                                showCustomLocationsSheet = true
+                                            }
+                                        )
+                                    }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.horizontal, 16)
-                        }
-                        .padding(.top, 40)
-                        .scrollTargetLayout()
-                        .safeAreaPadding(.trailing, 16)
-                        .scrollIndicators(.hidden)
-                        .scrollClipDisabled(true)
-                        
-                        // MARK: Additional Options Section
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(spacing: 40) {
-                                if isMyLocationFocused {
-                                    // Current Location Button when My Location is focused
+                            .padding(.top, 40)
+                            .scrollTargetLayout()
+                            .safeAreaPadding(.trailing, 16)
+                            .scrollIndicators(.hidden)
+                            .scrollClipDisabled(true)
+                            
+                            // MARK: Additional Options Section
+                            ScrollView(.vertical, showsIndicators: false) {
+                                LazyVStack(spacing: 40) {
+                                    if isMyLocationFocused {
+                                        // Current Location Button when My Location is focused
+                                        Button(action: {
+                                            print("Current Location selected")
+                                            viewModel.requestUserLocation()
+                                            
+                                            
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                                if let userCoord = viewModel.userLocation {
+                                                    let location = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+                                                    CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+                                                        if let placemark = placemarks?.first, error == nil {
+                                                            let address = [
+                                                                placemark.name,
+                                                                placemark.locality,
+                                                                placemark.administrativeArea
+                                                            ]
+                                                                .compactMap { $0 }
+                                                                .joined(separator: ", ")
+                                                            
+                                                            DispatchQueue.main.async {
+                                                                self.myLocation = address
+                                                                self.isMyLocationValid = true
+                                                                self.viewModel.userLocation = userCoord
+                                                                self.isMyLocationFocused = false
+                                                                self.isFriendsLocationFocused = true
+                                                            }
+                                                        } else {
+                                                            DispatchQueue.main.async {
+                                                                let fallback = String(format: "%.4f, %.4f", userCoord.latitude, userCoord.longitude)
+                                                                self.myLocation = fallback
+                                                                self.isMyLocationValid = true
+                                                                self.viewModel.userLocation = userCoord
+                                                                self.isMyLocationFocused = false
+                                                                self.isFriendsLocationFocused = true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                        }) {
+                                            HStack(spacing: 16) {
+                                                Image(systemName: "location")
+                                                    .font(.callout)
+                                                    .foregroundColor(.blue)
+                                                    .frame(width: 40, height: 40)
+                                                    .background(Color(hex: "E8F0FE"))
+                                                    .clipShape(Circle())
+                                                Text("Current Location")
+                                                    .foregroundColor(.primary)
+                                                    .font(.body)
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
+                                    
+                                    // Ask for Friend's Location button (shown for all states)
                                     Button(action: {
-                                        print("Current Location selected")
-                                        viewModel.requestUserLocation()
+                                        
+                                        //if Contact  Access has already been requested showingContactArrowPointer = true
+                                        
+                                        requestContactAccess { granted in
+                                            // Regardless of the result, the modal was shown
+                                            showingContactArrowPointer = false
+                                            
+                                        }
                                     }) {
                                         HStack(spacing: 16) {
-                                            Image(systemName: "location")
+                                            Image(systemName: "message")
                                                 .font(.callout)
                                                 .foregroundColor(.blue)
                                                 .frame(width: 40, height: 40)
                                                 .background(Color(hex: "E8F0FE"))
                                                 .clipShape(Circle())
-                                            Text("Current Location")
-                                                .foregroundColor(.primary)
-                                                .font(.body)
+                                            
+                                            VStack(alignment: .leading) {
+                                                Text("Ask for a Friend's Location")
+                                                    .foregroundColor(.primary)
+                                                    .font(.body)
+                                                Text("Exact coordinates are hidden")
+                                                    .font(.callout)
+                                                    .foregroundColor(Color(.darkGray))
+                                                    .lineLimit(1)
+                                            }
                                         }
                                         .padding(.horizontal, 16)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                }
-                                
-                                // Ask for Friend's Location button (shown for all states)
-                                Button(action: {
                                     
-                                    //if Contact  Access has already been requested showingContactArrowPointer = true
                                     
-                                    requestContactAccess { granted in
-                                                    // Regardless of the result, the modal was shown
-                                                    showingContactArrowPointer = false
-                                                    
+                                    if onboardingManager.shouldShowOnboardingElement() {
+                                        Image(systemName: "chevron.up")
+                                            .font(.title3)
+                                            .foregroundColor(.primary)
+                                            .padding(.trailing, 16)
+                                            .offset(y: arrowOffsetY)
+                                            .onAppear {
+                                                withAnimation(
+                                                    Animation.easeInOut(duration: 0.5)
+                                                        .repeatForever(autoreverses: true)
+                                                ) {
+                                                    arrowOffsetY = -15
                                                 }
-                                }) {
-                                    HStack(spacing: 16) {
-                                        Image(systemName: "message")
-                                            .font(.callout)
-                                            .foregroundColor(.blue)
-                                            .frame(width: 40, height: 40)
-                                            .background(Color(hex: "E8F0FE"))
-                                            .clipShape(Circle())
-                                        
-                                        VStack(alignment: .leading) {
-                                            Text("Ask for a Friend's Location")
-                                                .foregroundColor(.primary)
-                                                .font(.body)
-                                            Text("Exact coordinates are hidden")
-                                                .font(.callout)
-                                                .foregroundColor(Color(.darkGray))
-                                                .lineLimit(1)
-                                        }
+                                            }
                                     }
-                                    .padding(.horizontal, 16)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                
-                                
-                                if onboardingManager.shouldShowOnboardingElement() {
-                                    Image(systemName: "chevron.up")
-                                        .font(.title3)
-                                        .foregroundColor(.primary)
-                                        .padding(.trailing, 16)
-                                        .offset(y: arrowOffsetY)
-                                        .onAppear {
-                                            withAnimation(
-                                                Animation.easeInOut(duration: 0.5)
-                                                    .repeatForever(autoreverses: true)
-                                            ) {
-                                                arrowOffsetY = -15
-                                            }
-                                        }
-                                }
-                                // History section based on focus state
-                                if !myLocationHistory.isEmpty && isMyLocationFocused {
-                                    // My Location history when My Location is focused
-                                    LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
-                                        myLocation = address
-                                        isMyLocationValid = true
-                                        
-                                        LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                            if let coord = coordinate {
-                                                DispatchQueue.main.async {
-                                                    self.viewModel.userLocation = coord
-                                                    self.isMyLocationFocused = false
-                                                    self.isFriendsLocationFocused = true
+                                    // History section based on focus state
+                                    if !myLocationHistory.isEmpty && isMyLocationFocused {
+                                        // My Location history when My Location is focused
+                                        LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
+                                            myLocation = address
+                                            isMyLocationValid = true
+                                            
+                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                                                if let coord = coordinate {
+                                                    DispatchQueue.main.async {
+                                                        self.viewModel.userLocation = coord
+                                                        self.isMyLocationFocused = false
+                                                        self.isFriendsLocationFocused = true
+                                                    }
                                                 }
                                             }
-                                        }
-                                    })
-                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
-                                } else if !friendLocationHistory.isEmpty && isFriendsLocationFocused {
-                                    // Friend's Location history when Friend's Location is focused
-                                    LocationHistoryView(histories: friendLocationHistory, onSelectLocation: { address in
-                                        friendLocation = address
-                                        isFriendsLocationValid = true
-                                        
-                                        LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                            if let coord = coordinate {
-                                                DispatchQueue.main.async {
-                                                    self.viewModel.friendLocation = coord
-                                                    self.isFriendsLocationFocused = false
+                                        })
+                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+                                    } else if !friendLocationHistory.isEmpty && isFriendsLocationFocused {
+                                        // Friend's Location history when Friend's Location is focused
+                                        LocationHistoryView(histories: friendLocationHistory, onSelectLocation: { address in
+                                            friendLocation = address
+                                            isFriendsLocationValid = true
+                                            
+                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                                                if let coord = coordinate {
+                                                    DispatchQueue.main.async {
+                                                        self.viewModel.friendLocation = coord
+                                                        self.isFriendsLocationFocused = false
+                                                    }
                                                 }
                                             }
-                                        }
-                                    })
-                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
-                                } else if !myLocationHistory.isEmpty && !isMyLocationFocused && !isFriendsLocationFocused {
-                                    // History when neither field is focused (default to My Location history)
-                                    LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
-                                        myLocation = address
-                                        isMyLocationValid = true
-                                        
-                                        LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                            if let coord = coordinate {
-                                                DispatchQueue.main.async {
-                                                    self.viewModel.userLocation = coord
-                                                    self.isMyLocationFocused = false
-                                                    self.isFriendsLocationFocused = true
+                                        })
+                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+                                    } else if !myLocationHistory.isEmpty && !isMyLocationFocused && !isFriendsLocationFocused {
+                                        // History when neither field is focused (default to My Location history)
+                                        LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
+                                            myLocation = address
+                                            isMyLocationValid = true
+                                            
+                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                                                if let coord = coordinate {
+                                                    DispatchQueue.main.async {
+                                                        self.viewModel.userLocation = coord
+                                                        self.isMyLocationFocused = false
+                                                        self.isFriendsLocationFocused = true
+                                                    }
                                                 }
                                             }
-                                        }
-                                    })
-                                    .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+                                        })
+                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+                                    }
                                 }
                             }
+                            .scrollClipDisabled(true)
+                            .padding(.top, 40)
                         }
-                        .scrollClipDisabled(true)
-                        .padding(.top, 40)
                     }
                 }
-                
                 
                 Spacer()
             }

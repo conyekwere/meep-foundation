@@ -1,3 +1,12 @@
+//
+//  ImageUploadService.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 4/15/25.
+//
+
+
+import Firebase
 import FirebaseStorage
 import UIKit
 
@@ -6,7 +15,8 @@ struct ImageUploadService {
         guard let imageData = image.jpegData(compressionQuality: 0.25) else {return nil}
         //jpegData is a custom object that compresses the photo quality
         let filename = NSUUID().uuidString
-        let ref = Storage.storage().reference(withPath: "/profile_images/\(filename)")
+        guard let uid = Auth.auth().currentUser?.uid else { return nil }
+        let ref = Storage.storage().reference(withPath: "profile_images/\(uid)/\(filename)")
         
         do {
             let _ = try await ref.putDataAsync(imageData) //upload image data

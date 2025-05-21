@@ -1,8 +1,8 @@
 //
 //  EditProfileDetailView.swift
-//  syce-foundation
+//  Meep-Foundation
 //
-//  Created by Chima onyekwere on 5/13/24.
+//  Created by Chima Onyekwere on 5/17/25.
 //
 
 import SwiftUI
@@ -11,12 +11,12 @@ struct EditProfileDetailView: View {
     @Environment(\.dismiss) var dismiss
     @State private var value = ""
     let option: EditProfileOptions
-    let user:User
+    let user: MeepUser
     var body: some View {
         VStack(alignment:.leading) {
            
             HStack {
-                TextField("Add your bio", text: $value)
+                TextField("Add your information", text: $value)
                 Spacer()
                 if !value.isEmpty {
                     Button {
@@ -56,9 +56,12 @@ struct EditProfileDetailView: View {
 private extension EditProfileDetailView{
     var navigationTitle:String {
         switch option{
-        case .name: "Your full name can only be chnaged once every 7 days"
-        case .username: "Usernames can contain only letters, numbers, underscores and periods"
-        case .bio: "Tell us a little bit about yourself"
+        case .name:
+            return "Your full name can only be changed once every 7 days"
+        case .username:
+            return "Usernames can contain only letters, numbers, underscores and periods"
+        @unknown default:
+            return ""
         }
     }
     
@@ -66,19 +69,21 @@ private extension EditProfileDetailView{
     func onViewAppear() {
         switch option {
             
-        case .name: value = user.fullname
+        case .name:
+            value = user.displayName
             
-        case .username: value = user.username
+        case .username:
+            value = user.username
             
-        case .bio: value = user.bio  ?? ""
-            
+        @unknown default:
+            value = ""
         }
     }
 }
 
 #Preview {
     NavigationStack {
-        EditProfileDetailView(option: .bio,user: DeveloperPreview.user)
+        EditProfileDetailView(option: .name,user: DeveloperPreview.meepUser)
             .tint(.primary)
     }
 }

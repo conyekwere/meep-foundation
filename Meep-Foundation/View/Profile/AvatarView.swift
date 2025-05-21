@@ -1,5 +1,13 @@
 //
 //  AvatarView.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 5/16/25.
+//
+
+
+//
+//  AvatarView.swift
 //  syce-foundation
 //
 //  Created by Chima onyekwere on 5/16/24.
@@ -9,10 +17,11 @@ import SwiftUI
 import Kingfisher
 
 struct AvatarView: View {
-    let user:User?
+    let user: MeepUser
     let size:AvatarSize
     var body: some View {
-        if let  imageUrl = user?.profileImageUrl  {
+        if !user.profileImageUrl.isEmpty {
+            let imageUrl = user.profileImageUrl
             KFImage(URL(string: imageUrl))
                 .placeholder {
                     ProgressView()
@@ -35,11 +44,11 @@ struct AvatarView: View {
 
 #Preview{
     VStack{
-        AvatarView(user: DeveloperPreview.user,size: .xLarge)
-        AvatarView(user: DeveloperPreview.user,size: .large)
-        AvatarView(user: DeveloperPreview.user,size: .medium)
-        AvatarView(user: DeveloperPreview.user,size: .small)
-        AvatarView(user: DeveloperPreview.user,size: .xSmall)
-        AvatarView(user: DeveloperPreview.user,size: .xxSmall)
+        AvatarView(user: DeveloperPreview.meepUser,size: .xLarge)
+        AvatarView(user: DeveloperPreview.meepUser,size: .large)
+        AvatarView(user: DeveloperPreview.meepUser,size: .medium)
+        AvatarView(user: DeveloperPreview.meepUser,size: .small)
+        AvatarView(user: DeveloperPreview.meepUser,size: .xSmall)
+        AvatarView(user: DeveloperPreview.meepUser,size: .xxSmall)
     }
 }

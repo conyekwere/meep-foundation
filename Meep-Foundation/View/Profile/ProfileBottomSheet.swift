@@ -22,6 +22,7 @@ struct ProfileBottomSheet: View {
     @State private var showLoginView = false
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var isEditProfilePresented = false
     
     // Environment
     @Environment(\.dismiss) var dismiss
@@ -37,7 +38,8 @@ struct ProfileBottomSheet: View {
                 if isLoading {
                     ProgressView()
                         .padding()
-                } else if firebaseService.isAuthenticated, let user = firebaseService.meepUser {
+                } else if firebaseService.isAuthenticated,
+                          let user = firebaseService.meepUser {
                     // Authenticated User Profile
                     userProfileSection(user: user)
                     
@@ -51,11 +53,12 @@ struct ProfileBottomSheet: View {
                     notAuthenticatedSection()
                 }
             }
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
             .background(Color(.systemBackground))
             .cornerRadius(24)
             .ignoresSafeArea(edges: .bottom)
-            .padding(.top, 16)
+            
             
             // Error alert
             if let errorMessage = errorMessage {
@@ -75,15 +78,7 @@ struct ProfileBottomSheet: View {
             // Check authentication status when sheet appears
             firebaseService.checkAuthStatus()
         }
-        .sheet(isPresented: $showLoginView) {
-            LoginView(onDismiss: { success in
-                showLoginView = false
-                if success {
-                    // Refresh the view
-                    firebaseService.checkAuthStatus()
-                }
-            })
-        }
+
         .alert("Logout", isPresented: $showLogoutAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Logout", role: .destructive) {
@@ -100,11 +95,14 @@ struct ProfileBottomSheet: View {
         } message: {
             Text("This will permanently delete your account and all your data. This action cannot be undone.")
         }
+        .fullScreenCover(isPresented: $isEditProfilePresented) {
+            EditProfileView(vm: EditProfileViewModel(imageUploader: ImageUploadService(), user: firebaseService.meepUser!))
+        }
     }
     
     // MARK: - View Components
     
-    private func userProfileSection(user: MeepUser) -> some View {
+    fileprivate func userProfileSection(user: MeepUser) -> some View {
         VStack(spacing: 8) {
             // Profile Image
             AsyncImage(url: URL(string: user.profileImageUrl.isEmpty ? (imageUrl ?? "") : user.profileImageUrl)) { image in
@@ -140,7 +138,7 @@ struct ProfileBottomSheet: View {
         .padding(.horizontal)
     }
     
-    private func menuOptions() -> some View {
+    fileprivate func menuOptions() -> some View {
         VStack(spacing: 12) {
             ProfileMenuItem(icon: "plus", title: "Meep Plus", subtitle: "Get access to time-saving features", isRotated: false)
                 .onTapGesture {
@@ -154,7 +152,7 @@ struct ProfileBottomSheet: View {
             
             ProfileMenuItem(icon: "person.fill", title: "Edit Profile", subtitle: "Update your profile information", isRotated: false)
                 .onTapGesture {
-                    // Navigate to profile editing
+                    isEditProfilePresented = true
                 }
             
             Button(action: { showAccountActions = true }) {
@@ -174,7 +172,7 @@ struct ProfileBottomSheet: View {
         .padding(.horizontal)
     }
     
-    private func termsAndPrivacySection() -> some View {
+    fileprivate func termsAndPrivacySection() -> some View {
         HStack(spacing: 12) {
             Link("Terms", destination: URL(string: "https://meep.earth/terms")!)
                 .font(.footnote)
@@ -191,6 +189,7 @@ struct ProfileBottomSheet: View {
         .fontWidth(.expanded)
         .foregroundColor(.gray)
         .padding(16)
+        
     }
     
     private func notAuthenticatedSection() -> some View {
@@ -243,4 +242,49 @@ struct ProfileBottomSheet: View {
 
 #Preview {
     ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
+}
+
+struct ProfileBottomSheetPreview_Mocked: View {
+    let mockUser = MeepUser(
+        id: "123",
+        displayName: "Jane Doe",
+        username: "janedoe",
+        profileImageUrl: ""
+    )
+
+    var body: some View {
+        ZStack {
+            VStack(spacing: 16) {
+                // Drag Handle - Always Visible
+                Capsule()
+                    .frame(width: 40, height: 5)
+                    .foregroundColor(Color(.lightGray).opacity(0.3))
+
+                VStack(spacing: 24) {
+                    ProfileBottomSheet(imageUrl: nil)
+                        .userProfileSection(user: mockUser)
+
+                    Divider()
+
+                    ProfileBottomSheet(imageUrl: nil)
+                        .menuOptions()
+
+                    Divider()
+
+                    ProfileBottomSheet(imageUrl: nil)
+                        .termsAndPrivacySection()
+                }
+                .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemBackground))
+            .cornerRadius(24)
+            .ignoresSafeArea(edges: .bottom)
+            .padding(.top, 16)
+        }
+    }
+}
+
+#Preview {
+    ProfileBottomSheetPreview_Mocked()
 }
