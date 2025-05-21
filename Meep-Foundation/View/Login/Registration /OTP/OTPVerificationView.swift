@@ -11,7 +11,7 @@ import FirebaseAuth
 struct OTPVerificationView: View {
     // Properties
     var phoneNumber: String
-    var isCreatingAccount: Bool = false
+    @Binding var isCreatingAccount: Bool // Updated to Binding
     
     // State
     @State private var otpFields = Array(repeating: "", count: 6) // Use 6 digits for OTP
@@ -19,8 +19,8 @@ struct OTPVerificationView: View {
     @State private var errorMessage: String?
     @State private var countdown = 30
     @State private var isCountdownFinished = false
-    @State private var showRegistration = false
     @State private var showErrorModal = false // New local state property
+    @State private var showNoAccountModal = false // New local state property
     
     // Environment
     @Environment(\.colorScheme) var colorScheme
@@ -168,6 +168,42 @@ struct OTPVerificationView: View {
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
+                
+            }
+            .padding()
+            .presentationDetents([.fraction(0.4)])
+            .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showNoAccountModal) { // New sheet for no account modal
+            VStack(spacing: 32) {
+                Text("No account found for this phone number.")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .padding()
+
+                Button(action: {
+                    isCreatingAccount = true // Updated to set isCreatingAccount
+                    showNoAccountModal = false
+                    onComplete(true) // Trigger onComplete
+                }) {
+                    Text("Create account")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                
+                Button(action: {
+                    showNoAccountModal = false
+                }) {
+                    Text("Dismiss")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
             }
             .padding()
             .presentationDetents([.fraction(0.4)])
@@ -204,16 +240,21 @@ struct OTPVerificationView: View {
                     return
                 }
                 
-                // Authentication successful
-                if !isCreatingAccount {
-                    // User exists, complete flow
-                    onComplete(true)
-                } else {
-                    // New user or explicitly creating account, show registration
-                    withAnimation {
-                        showRegistration = true
+                // Check for no account
+                if firebaseService.meepUser == nil  {
+                    if !isCreatingAccount {
+                        showNoAccountModal = true
+                        return
+                    }
+                    else {
+                        onComplete(true)
+                        return
                     }
                 }
+   
+                
+                // Authentication successful
+                onComplete(true)
             }
         } else {
             // Fallback to original approach if no verification ID found
@@ -279,7 +320,7 @@ struct OTPVerificationView: View {
 }
 
 #Preview {
-    OTPVerificationView(phoneNumber: "+15712140016", isCreatingAccount: false) { success in
+    OTPVerificationView(phoneNumber: "+15712140016", isCreatingAccount: .constant(false)) { success in
         print("OTP completed: \(success)")
     }
 }
