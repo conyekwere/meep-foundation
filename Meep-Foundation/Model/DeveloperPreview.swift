@@ -1,3 +1,11 @@
+//
+//  DeveloperPreview.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 5/17/25.
+//
+
+
 import Foundation
 
 struct DeveloperPreview {

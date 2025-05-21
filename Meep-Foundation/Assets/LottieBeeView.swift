@@ -1,3 +1,11 @@
+//
+//  LottieBeeView.swift
+//  Meep-Foundation
+//
+//  Created by Chima Onyekwere on 5/11/25.
+//
+
+
 import SwiftUI
 import Lottie
 

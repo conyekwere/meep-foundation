@@ -1,9 +1,11 @@
 //
 //  EditProfileViewModel.swift
-//  syce-foundation
+//  Meep-Foundation
 //
-//  Created by Chima onyekwere on 5/15/24.
+//  Created by Chima Onyekwere on 4/15/25.
 //
+//
+
 
 import Firebase
 import UIKit
@@ -18,9 +20,9 @@ class EditProfileViewModel: ObservableObject {
     @Published var dismiss = false
 
     private let imageUploader: ImageUploadService
-    let user: User
+    let user: MeepUser
 
-    init(imageUploader: ImageUploadService, user: User) {
+    init(imageUploader: ImageUploadService, user: MeepUser) {
         self.imageUploader = imageUploader
         self.user = user
     }

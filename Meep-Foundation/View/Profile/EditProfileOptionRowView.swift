@@ -1,8 +1,8 @@
 //
 //  EditProfileOptionRowView.swift
-//  syce-foundation
+//  Meep-Foundation
 //
-//  Created by Chima onyekwere on 5/13/24.
+//  Created by Chima Onyekwere on 5/16/25.
 //
 
 import SwiftUI
@@ -14,8 +14,12 @@ struct EditProfileOptionRowView: View {
         NavigationLink(value: option){
             
             Text(option.title)
+                .foregroundStyle(Color.primary)
+                
             Spacer()
             Text(value)
+                .foregroundStyle(Color.primary)
+                
         }
     }
 }

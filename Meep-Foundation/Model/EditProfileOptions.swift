@@ -1,8 +1,8 @@
 //
 //  EditProfileOptions.swift
-//  syce-foundation
+//  Meep-Foundation
 //
-//  Created by Chima onyekwere on 5/13/24.
+//  Created by Chima Onyekwere on 5/16/25.
 //
 
 import Foundation
