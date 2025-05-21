@@ -278,59 +278,43 @@ class FirebaseService: ObservableObject {
     ) {
         let db = Firestore.firestore()
 
-        db.collection("usernames").document(username).getDocument { [weak self] document, error in
-            if let document = document, document.exists {
-                completion(false, "Username is already taken")
+        let userData: [String: Any] = [
+            "uid": uid,
+            "displayName": fullName,
+            "email": email,
+            "username": username,
+            "phoneNumber": phoneNumber,
+            "profileImageUrl": profileImageUrl,
+            "gender": gender,
+            "dateOfBirth": dateOfBirth,
+            "createdAt": Timestamp(date: Date()),
+            "updatedAt": Timestamp(date: Date())
+        ]
+
+        db.collection("users").document(uid).setData(userData) { [weak self] error in
+            if let error = error {
+                print("Error saving user data: \(error.localizedDescription)")
+                completion(false, error.localizedDescription)
                 return
             }
 
-            let userData: [String: Any] = [
-                "uid": uid,
-                "displayName": fullName,
-                "email": email,
-                "username": username,
-                "phoneNumber": phoneNumber,
-                "profileImageUrl": profileImageUrl,
-                "gender": gender,
-                "dateOfBirth": dateOfBirth,
-                "createdAt": Timestamp(date: Date()),
-                "updatedAt": Timestamp(date: Date())
-            ]
-
-            db.collection("users").document(uid).setData(userData) { error in
-                if let error = error {
-                    print("Error saving user data: \(error.localizedDescription)")
-                    completion(false, error.localizedDescription)
-                    return
-                }
-
-                db.collection("usernames").document(username).setData([
-                    "uid": uid,
-                    "createdAt": Timestamp(date: Date())
-                ]) { [weak self] error in
-                    if let error = error {
-                        print("Error reserving username: \(error.localizedDescription)")
-                        completion(false, error.localizedDescription)
-                        return
-                    }
-
-                    if let user = Auth.auth().currentUser {
-                        self?.meepUser = MeepUser(
-                            id: uid,
-                            displayName: fullName,
-                            username: username,
-                            email: email,
-                            phoneNumber: phoneNumber,
-                            profileImageUrl: profileImageUrl,
-                            createdAt: Date(), updatedAt: Date(), gender: gender,
-                            dateOfBirth: dateOfBirth
-                        )
-                    }
-
-                    print("User profile created successfully")
-                    completion(true, nil)
-                }
+            if let user = Auth.auth().currentUser {
+                self?.meepUser = MeepUser(
+                    id: uid,
+                    displayName: fullName,
+                    username: username,
+                    email: email,
+                    phoneNumber: phoneNumber,
+                    profileImageUrl: profileImageUrl,
+                    createdAt: Date(),
+                    updatedAt: Date(),
+                    gender: gender,
+                    dateOfBirth: dateOfBirth
+                )
             }
+
+            print("User profile created successfully")
+            completion(true, nil)
         }
     }
     
@@ -361,40 +345,28 @@ class FirebaseService: ObservableObject {
         // Delete user document from Firestore first
         let db = Firestore.firestore()
         
-        // Get username to delete from usernames collection
-        db.collection("users").document(user.uid).getDocument { document, error in
-            // Get username to delete from usernames collection
-            let username = document?.data()?["username"] as? String
+        db.collection("users").document(user.uid).delete { [weak self] error in
+            if let error = error {
+                print("Error deleting user data: \(error.localizedDescription)")
+                completion(false, error.localizedDescription)
+                return
+            }
             
-            // Delete user data
-            db.collection("users").document(user.uid).delete { error in
+            // Delete Firebase Auth user
+            user.delete { error in
                 if let error = error {
-                    print("Error deleting user data: \(error.localizedDescription)")
+                    print("Error deleting user: \(error.localizedDescription)")
                     completion(false, error.localizedDescription)
                     return
                 }
                 
-                // Delete username reservation if it exists
-                if let username = username {
-                    db.collection("usernames").document(username).delete()
-                }
+                self?.isAuthenticated = false
+                self?.currentUser = nil
+                self?.meepUser = nil
+                self?.verificationID = nil
                 
-                // Delete Firebase Auth user
-                user.delete { [weak self] error in
-                    if let error = error {
-                        print("Error deleting user: \(error.localizedDescription)")
-                        completion(false, error.localizedDescription)
-                        return
-                    }
-                    
-                    self?.isAuthenticated = false
-                    self?.currentUser = nil
-                    self?.meepUser = nil
-                    self?.verificationID = nil
-                    
-                    print("User account deleted successfully")
-                    completion(true, nil)
-                }
+                print("User account deleted successfully")
+                completion(true, nil)
             }
         }
     }

@@ -69,37 +69,14 @@
 		ECE6354D469F162B69C3A1EB /* Pods-Meep-Foundation.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Meep-Foundation.release.xcconfig"; path = "Target Support Files/Pods-Meep-Foundation/Pods-Meep-Foundation.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		131FC9E52D90B734002DF7A5 /* Exceptions for "MeepAppClip" folder in "MeepAppClip" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 131FC9D12D90B733002DF7A5 /* MeepAppClip */;
-		};
-		5D2E05722D41EC9300A2E0DF /* Exceptions for "Meep-Foundation" folder in "Meep-Foundation" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 5D2E051D2D40AD8E00A2E0DF /* Meep-Foundation */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		131FC9D32D90B733002DF7A5 /* MeepAppClip */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				131FC9E52D90B734002DF7A5 /* Exceptions for "MeepAppClip" folder in "MeepAppClip" target */,
-			);
 			path = MeepAppClip;
 			sourceTree = "<group>";
 		};
 		5D2E05202D40AD8E00A2E0DF /* Meep-Foundation */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				5D2E05722D41EC9300A2E0DF /* Exceptions for "Meep-Foundation" folder in "Meep-Foundation" target */,
-			);
 			path = "Meep-Foundation";
 			sourceTree = "<group>";
 		};
