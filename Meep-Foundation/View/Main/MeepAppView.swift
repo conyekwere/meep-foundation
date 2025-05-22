@@ -284,7 +284,7 @@ struct MeepAppView: View {
                     )
                     
                     // Check if both text fields are empty
-                    if sheetView.areFieldsEmpty() || (viewModel.userLocation == nil && viewModel.friendLocation == nil) {
+                    if sheetView.areFieldsEmpty() || viewModel.searchFieldsAreEmpty {
                         uiState = .onboarding
                         
                         // Reset view model locations and shareable strings
