@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+
     <key>NSAppClip</key>
     <dict>
         <key>NSAppClipRequestEphemeralUserNotification</key>
@@ -9,8 +15,12 @@
         <key>NSAppClipRequestLocationConfirmation</key>
         <false/>
     </dict>
+    <key>CFBundleIdentifier</key>
+    <string>chima.Meep-Foundation.MeepAppClip</string>
+    
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Your location is needed to find the ideal meeting point</string>
+
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

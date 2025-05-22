@@ -817,6 +817,11 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
+    
+    var searchFieldsAreEmpty: Bool {
+        userLocation == nil && friendLocation == nil
+    }
+    
     // Enhanced function to fetch place details including photos
     func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
         // Request fields we're interested in
