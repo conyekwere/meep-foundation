@@ -11,114 +11,12 @@ import MapKit
 import Contacts
 import ContactsUI
 
-
-struct ShareSheetPointerView: View {
-    @State private var arrowOffsetY: CGFloat = 0
-    @State private var showArrow: Bool = false
-    
-    var body: some View {
-        ZStack {
-            // Semi-transparent overlay to darken the screen
-            Color.black.opacity(0.7)
-                .edgesIgnoringSafeArea(.all)
-            
-            // Position arrow at the bottom pointing upward to the share sheet
-            VStack(spacing:32)
-            {
-                // Add explanatory text above the arrow
-                Text("Tap a contact to share your meeting request.")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 20)
-                    .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 1)
-                    .blendMode(.hardLight)
-                
-                Image(systemName: "chevron.down")
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
-                    .fontWeight(.bold)
-                    .shadow(color: .black.opacity(1), radius: 1, x: 0, y: 1)
-                    .offset(y: arrowOffsetY)
-                    .opacity(showArrow ? 1 : 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, UIScreen.main.bounds.height * 0.60)
-            .onAppear {
-                // Fade in the arrow with a slight delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.easeIn(duration: 0.5)) {
-                        showArrow = true
-                    }
-                    
-                    // Start the bouncing animation
-                    withAnimation(
-                        Animation.easeInOut(duration: 0.8)
-                            .repeatForever(autoreverses: true)
-                    ) {
-                        arrowOffsetY = -15
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct ArrowPointerView: View {
-    @State private var arrowOffsetY: CGFloat = 0
-    @State private var showArrow: Bool = false
-    
-    var body: some View {
-        ZStack {
-            // Semi-transparent overlay to darken the screen
-            Color.black.opacity(0.7)
-                .edgesIgnoringSafeArea(.all)
-            
-            // Bouncing arrow pointing upward
-            VStack {
-   
-                
-                Image(systemName: "chevron.up")
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
-                    .padding(.top, UIScreen.main.bounds.height * 0.4) // 30% of screen height instead of fixed 240
-                    .padding(.leading, UIScreen.main.bounds.width * 0.35) // 35% of screen width instead of fixed 140
-
-                    .fontWeight(.bold)
-                    .shadow(color: .black.opacity(0.80), radius: 1, x: 0, y: 1)
-                    .textCase(.uppercase)
-                    .shadow(color: Color(UIColor(red: 0, green: 0, blue: 0, alpha: 0.5)), radius: 4, x: 0, y: 4)
-                    .offset(y: arrowOffsetY)
-                    .opacity(showArrow ? 1 : 0) // Control visibility with a state variable
-                    .onAppear {
-                        // Delay the appearance to match contact permissions modal
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { // 1 second delay
-                            withAnimation(.easeIn(duration: 0.5)) {
-                                showArrow = true // Fade in the arrow
-                            }
-                            
-                            // Start the bouncing animation after it appears
-                            withAnimation(
-                                Animation.easeInOut(duration: 0.8)
-                                    .repeatForever(autoreverses: true)
-                            ) {
-                                arrowOffsetY = -15
-                            }
-                        }
-                    }
-            }
-        }
-    }
-}
-
-
-
 struct MeetingSearchSheetView: View {
     @State private var myLocation: String = ""
     @State private var friendLocation: String = ""
-    
+    // Debounce work items for location text fields
+    @State private var myDebounceWorkItem: DispatchWorkItem? = nil
+    @State private var friendDebounceWorkItem: DispatchWorkItem? = nil
     @ObservedObject var viewModel: MeepViewModel
     @ObservedObject private var locationsManager = UserLocationsManager.shared
     @EnvironmentObject private var onboardingManager: OnboardingManager
@@ -1119,75 +1017,65 @@ struct MeetingSearchSheetView: View {
                 
             }
             .onChange(of: myLocation) { newValue in
-                mySearchCompleter.updateQuery(newValue)
-                
-                // Check if it's coordinates
-                if LocationHelpers.isLikelyCoordinates(newValue) {
-                    isMyLocationValid = true
-                    
-                    performGeocoding {
-                        LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                            DispatchQueue.main.async {
-                                if let coordinate = coordinate {
-                                    self.viewModel.userLocation = coordinate
+                myDebounceWorkItem?.cancel()
+                let workItem = DispatchWorkItem {
+                    mySearchCompleter.updateQuery(newValue)
+                    if LocationHelpers.isLikelyCoordinates(newValue) {
+                        isMyLocationValid = true
+                        performGeocoding {
+                            LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                                DispatchQueue.main.async {
+                                    if let coordinate = coordinate {
+                                        self.viewModel.userLocation = coordinate
+                                    }
+                                    if let formattedAddress = formattedAddress {
+                                        self.myLocation = formattedAddress
+                                        self.viewModel.sharableUserLocation = formattedAddress
+                                    }
+                                    self.geocodingCompleted()
                                 }
-                                
-                                if let formattedAddress = formattedAddress {
-                                    self.myLocation = formattedAddress
-                                    self.viewModel.sharableUserLocation = formattedAddress
-                                }
-                                
-                                // Mark this geocoding operation as complete
-                                self.geocodingCompleted()
                             }
+                        }
+                    } else {
+                        isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
+                        if isMyLocationValid && viewModel.userLocation == nil {
+                            geocodeIfNeeded(newValue, isMyLocation: true)
                         }
                     }
                 }
-                
-                else {
-                    // Otherwise use normal validation
-                    isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
-                    
-                    // If the address is valid but doesn't have coordinates, geocode it
-                    if isMyLocationValid && viewModel.userLocation == nil {
-                        geocodeIfNeeded(newValue, isMyLocation: true)
-                    }
-                }
+                myDebounceWorkItem = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
             }
             
             
             .onChange(of: friendLocation) { newValue in
-                friendSearchCompleter.updateQuery(newValue)
-                
-                
-                
-                if LocationHelpers.isLikelyCoordinates(newValue) {
-                    isFriendsLocationValid = true
-                    
-                    performGeocoding {
-                        LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                            DispatchQueue.main.async {
-                                if let coordinate = coordinate {
-                                    self.viewModel.friendLocation = coordinate
+                friendDebounceWorkItem?.cancel()
+                let workItem = DispatchWorkItem {
+                    friendSearchCompleter.updateQuery(newValue)
+                    if LocationHelpers.isLikelyCoordinates(newValue) {
+                        isFriendsLocationValid = true
+                        performGeocoding {
+                            LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                                DispatchQueue.main.async {
+                                    if let coordinate = coordinate {
+                                        self.viewModel.friendLocation = coordinate
+                                    }
+                                    if let formattedAddress = formattedAddress {
+                                        self.friendLocation = formattedAddress
+                                    }
+                                    self.geocodingCompleted()
                                 }
-                                
-                                if let formattedAddress = formattedAddress {
-                                    self.friendLocation = formattedAddress
-                                }
-                                
-                                self.geocodingCompleted()
                             }
                         }
-                    }
-                } else {
-                    // Otherwise use normal validation
-                    isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
-                    
-                    // If the address is valid but doesn't have coordinates, geocode it
-                    if isFriendsLocationValid && viewModel.friendLocation == nil {
-                        geocodeIfNeeded(newValue, isMyLocation: false)
+                    } else {
+                        isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
+                        if isFriendsLocationValid && viewModel.friendLocation == nil {
+                            geocodeIfNeeded(newValue, isMyLocation: false)
+                        }
                     }
                 }
+                friendDebounceWorkItem = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
             }
             
             // When "My Transport" changes, update friend's transport (if the friend hasn't been manually changed).

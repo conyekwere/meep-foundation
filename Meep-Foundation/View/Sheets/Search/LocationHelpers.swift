@@ -12,6 +12,14 @@ import CoreLocation
 // This avoids access issues with private properties in MeetingSearchSheetView
 class LocationHelpers {
     
+    private static var sharedGeocoder = CLGeocoder()
+    
+    static func cancelGeocoding() {
+        if sharedGeocoder.isGeocoding {
+            sharedGeocoder.cancelGeocode()
+        }
+    }
+    
     // MARK: - Address Validation
     
     /// Checks if a string represents coordinate values
@@ -103,7 +111,7 @@ class LocationHelpers {
     /// Geocodes an address string to coordinates
     static func geocodeAddress(_ address: String,
                              completion: @escaping (CLLocationCoordinate2D?, String?) -> Void) {
-        let geocoder = CLGeocoder()
+        cancelGeocoding()
         
         // Check if address is coordinates
         if isLikelyCoordinates(address) {
@@ -115,7 +123,10 @@ class LocationHelpers {
                 
                 // Reverse geocode to get a more readable address
                 let location = CLLocation(latitude: lat, longitude: lon)
-                geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                sharedGeocoder.reverseGeocodeLocation(location) { placemarks, error in
+                    if let error = error {
+                        print("Reverse geocoding error: \(error.localizedDescription)")
+                    }
                     if let placemark = placemarks?.first, error == nil {
                         let formattedAddress = [
                             placemark.name,
@@ -126,18 +137,27 @@ class LocationHelpers {
                         .compactMap { $0 }
                         .joined(separator: ", ")
                         
-                        completion(coords, formattedAddress)
+                        DispatchQueue.main.async {
+                            completion(coords, formattedAddress)
+                        }
                     } else {
                         // Return coordinates but no formatted address
-                        completion(coords, nil)
+                        DispatchQueue.main.async {
+                            completion(coords, nil)
+                        }
                     }
                 }
             } else {
-                completion(nil, nil)
+                DispatchQueue.main.async {
+                    completion(nil, nil)
+                }
             }
         } else {
             // Regular address geocoding
-            geocoder.geocodeAddressString(address) { placemarks, error in
+            sharedGeocoder.geocodeAddressString(address) { placemarks, error in
+                if let error = error {
+                    print("Geocoding error: \(error.localizedDescription)")
+                }
                 if let placemark = placemarks?.first, let location = placemark.location {
                     // Format the full address
                     let formattedAddress = [
@@ -149,9 +169,13 @@ class LocationHelpers {
                     .compactMap { $0 }
                     .joined(separator: ", ")
                     
-                    completion(location.coordinate, formattedAddress)
+                    DispatchQueue.main.async {
+                        completion(location.coordinate, formattedAddress)
+                    }
                 } else {
-                    completion(nil, nil)
+                    DispatchQueue.main.async {
+                        completion(nil, nil)
+                    }
                 }
             }
         }
@@ -164,8 +188,13 @@ class LocationHelpers {
         let search = MKLocalSearch(request: searchRequest)
         
         search.start { response, error in
+            if let error = error {
+                print("Local search error: \(error.localizedDescription)")
+            }
             guard let response = response, let item = response.mapItems.first else {
-                completionHandler(nil, nil)
+                DispatchQueue.main.async {
+                    completionHandler(nil, nil)
+                }
                 return
             }
             
@@ -202,7 +231,9 @@ class LocationHelpers {
             
             let formattedAddress = addressComponents.joined(separator: ", ")
             
-            completionHandler(coordinate, formattedAddress.isEmpty ? nil : formattedAddress)
+            DispatchQueue.main.async {
+                completionHandler(coordinate, formattedAddress.isEmpty ? nil : formattedAddress)
+            }
         }
     }
     
@@ -221,5 +252,3 @@ class LocationHelpers {
         return components.joined(separator: ", ")
     }
 }
-
-
