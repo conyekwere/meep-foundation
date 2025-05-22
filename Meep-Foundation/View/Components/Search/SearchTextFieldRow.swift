@@ -41,14 +41,17 @@ struct SearchTextFieldRow: View {
                     Text(placeholder)
                         .foregroundColor(Color(.systemGray4))
                         .offset(y: 2)
+
                 }
 
                 TextField("", text: $text)
                     .foregroundColor(.primary)
                     .frame(height: 50, alignment: .leading)
-                    .offset(y: 2)
                     .padding(.vertical, 8)
+                    .offset(y: 2)
                     .focused($isTextFieldFocused)
+                    .disableAutocorrection(true)
+                    .textInputAutocapitalization(.never)
             }
             
             if isDirty {

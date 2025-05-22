@@ -119,6 +119,7 @@ struct LandingView: View {
           
                     }
                     .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                     
                     // Terms and conditions
                     ZStack {
