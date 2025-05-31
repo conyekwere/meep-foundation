@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		131FC9E12D90B734002DF7A5 /* MeepAppClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = 131FC9D22D90B733002DF7A5 /* MeepAppClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		133E651E2D6DA5690008DA18 /* Config.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 133E651D2D6DA5690008DA18 /* Config.xcconfig */; };
+		13F6665F2DEB6879008C21AF /* AppClip.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 13F6665E2DEB6879008C21AF /* AppClip.framework */; };
 		4B2D9A55210B6831195EB82D /* Pods_Meep_FoundationTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDA7C12B5BE71CC9F81A1F63 /* Pods_Meep_FoundationTests.framework */; };
 		67205F60A865FF3BE942F26E /* Pods_Meep_Foundation_Meep_FoundationUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */; };
 		6D6DB5BCBF6BCB37EFFCFE67 /* Pods_Meep_Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B632C42BB14B94DB21E67555 /* Pods_Meep_Foundation.framework */; };
@@ -55,6 +56,7 @@
 /* Begin PBXFileReference section */
 		131FC9D22D90B733002DF7A5 /* MeepAppClip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeepAppClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		133E651D2D6DA5690008DA18 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		13F6665E2DEB6879008C21AF /* AppClip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppClip.framework; path = System/Library/Frameworks/AppClip.framework; sourceTree = SDKROOT; };
 		1F815A418823B9FA82B2A5B9 /* Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; path = "Target Support Files/Pods-Meep-Foundation-Meep-FoundationUITests/Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; sourceTree = "<group>"; };
 		39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Meep_Foundation_Meep_FoundationUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D2E051E2D40AD8E00A2E0DF /* Meep-Foundation.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Meep-Foundation.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -120,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				13F6665F2DEB6879008C21AF /* AppClip.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,6 +194,7 @@
 		6F654688B7FA5782E76E6D79 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				13F6665E2DEB6879008C21AF /* AppClip.framework */,
 				B632C42BB14B94DB21E67555 /* Pods_Meep_Foundation.framework */,
 				39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */,
 				DDA7C12B5BE71CC9F81A1F63 /* Pods_Meep_FoundationTests.framework */,
@@ -776,7 +780,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Meep-Foundation/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Meep;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Find friends using Meep and add them to your network";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Location access helps us provide the best meeting suggestions.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to find the best meeting points for you.";
@@ -814,7 +818,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Meep-Foundation/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Meep;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Find friends using Meep and add them to your network";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Location access helps us provide the best meeting suggestions.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We need your location to find the best meeting points for you.";

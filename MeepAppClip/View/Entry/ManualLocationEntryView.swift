@@ -100,3 +100,14 @@ struct ManualLocationEntryView: View {
         return components.joined(separator: ", ")
     }
 }
+
+
+#Preview {
+    ManualLocationEntryView(
+        userName: "Test User",
+        requestID: "test-123",
+        onLocationSelected: { coordinate in
+            print("Selected location: \(coordinate)")
+        }
+    )
+}
