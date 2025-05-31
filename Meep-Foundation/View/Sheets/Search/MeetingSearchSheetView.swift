@@ -4,12 +4,7 @@
 //
 //  Created by Chima onyekwere on 1/24/25.
 //
-//
-//  MeetingSearchSheetView.swift
-//  Meep-Foundation
-//
-//  Created by Chima onyekwere on 1/24/25.
-//
+
 
 import SwiftUI
 import CoreLocation
@@ -243,8 +238,9 @@ struct MeetingSearchSheetView: View {
 
     func presentShareSheet() {
         // Generate the request data
-        let userName = firebaseService.meepUser?.displayName ??
+        let fullName = firebaseService.meepUser?.displayName ??
                        UserDefaults.standard.string(forKey: "userName") ?? "User"
+        let firstName = fullName.components(separatedBy: " ").first ?? fullName
         let userId = firebaseService.currentUser?.uid ??
                      UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
         let requestID = UUID().uuidString
@@ -256,7 +252,8 @@ struct MeetingSearchSheetView: View {
         components.path = "/share"
         components.queryItems = [
             URLQueryItem(name: "requestID", value: requestID),
-            URLQueryItem(name: "userName", value: userName),
+            URLQueryItem(name: "userName", value: fullName),
+            URLQueryItem(name: "username", value: firstName),
             URLQueryItem(name: "userId", value: userId)
         ]
         
@@ -267,7 +264,7 @@ struct MeetingSearchSheetView: View {
         }
         
         // Create message
-        let message = "\(userName) wants to figure out where to meet."
+        let message = "\(fullName) wants to figure out where to meet."
         
         // Find the top-most presented controller to present on
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -325,11 +322,14 @@ struct MeetingSearchSheetView: View {
     }
     
     private func saveLocationRequest(requestID: String, contactName: String, contactId: String?) {
-        // Create request data
+        // Extract full name and first name
+        let fullName = firebaseService.meepUser?.displayName ?? UserDefaults.standard.string(forKey: "userName") ?? "user name"
+        let firstName = fullName.components(separatedBy: " ").first ?? fullName
         let requestData: [String: Any] = [
             "requestID": requestID,
             "userID": firebaseService.currentUser?.uid ?? UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString,
-            "userName": firebaseService.meepUser?.displayName ?? UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee",
+            "userName": fullName,
+            "username": firstName,
             "contactName": contactName,
             "contactId": contactId ?? "anonymous",
             "status": "pending",
