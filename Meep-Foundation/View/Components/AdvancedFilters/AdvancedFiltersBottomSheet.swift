@@ -116,7 +116,9 @@ struct AdvancedFiltersBottomSheet: View {
                             .fontWeight(.regular)
                             .fontWidth(.expanded)
 
-                        CustomRangeSlider(value: $searchRadius, range: 0.1...5, step: 0.1)
+                        CustomRangeSlider(value: $searchRadius, range: 1...5, step: 1)
+                        
+                        
                     }
                     .padding(.top, 4)
                     .padding()

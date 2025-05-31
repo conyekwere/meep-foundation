@@ -4,6 +4,12 @@
 //
 //  Created by Chima onyekwere on 1/24/25.
 //
+//
+//  MeetingSearchSheetView.swift
+//  Meep-Foundation
+//
+//  Created by Chima onyekwere on 1/24/25.
+//
 
 import SwiftUI
 import CoreLocation
@@ -12,85 +18,319 @@ import Contacts
 import ContactsUI
 
 struct MeetingSearchSheetView: View {
-    @State private var myLocation: String = ""
-    @State private var friendLocation: String = ""
-    // Debounce work items for location text fields
-    @State private var myDebounceWorkItem: DispatchWorkItem? = nil
-    @State private var friendDebounceWorkItem: DispatchWorkItem? = nil
+    
+    // MARK: - Dependencies
     @ObservedObject var viewModel: MeepViewModel
+    @StateObject private var firebaseService = FirebaseService.shared
     @ObservedObject private var locationsManager = UserLocationsManager.shared
     @EnvironmentObject private var onboardingManager: OnboardingManager
-    
-    
     @Binding var isSearchActive: Bool
     
-    // Focus states for the two text fields.
+    // MARK: - Location State
+    @State private var myLocation: String = ""
+    @State private var friendLocation: String = ""
+    @State private var isMyLocationValid: Bool = false
+    @State private var isFriendsLocationValid: Bool = false
+    @State private var myLocationHistory: [String] = []
+    @State private var friendLocationHistory: [String] = []
+    @State private var locationHistoryText: String = ""
+    @State private var locationToSave = ""
+    @State private var tempCoordinate: CLLocationCoordinate2D? = nil
+    
+    // MARK: - Transport State
+    @State private var selectedMyTransport: TransportMode? = nil
+    @State private var selectedFriendTransport: TransportMode? = nil
+    @State private var friendTransportManuallyChanged: Bool = false
+    
+    // MARK: - Focus State
     @FocusState private var isMyLocationFocused: Bool
     @FocusState private var isFriendsLocationFocused: Bool
     
-    // Completion handlers for dismissing and completing the search.
-    var onDismiss: () -> Void
-    var onDone: () -> Void
-    
-    // Two separate local search completer instances:
+    // MARK: - Search State
     @StateObject private var mySearchCompleter = LocalSearchCompleterDelegate()
     @StateObject private var friendSearchCompleter = LocalSearchCompleterDelegate()
+    @State private var myDebounceWorkItem: DispatchWorkItem? = nil
+    @State private var friendDebounceWorkItem: DispatchWorkItem? = nil
+    @State private var didSelectMySuggestion = false
+    @State private var didSelectFriendSuggestion = false
     
-    
+    // MARK: - Geocoding State
     @State private var isGeocodingInProgress = false
     @State private var geocodingQueue = 0
     
-    @State private var isShowingContactPicker = false
-    @State private var selectedContact: CNContact? = nil
-    @State private var showingContactArrowPointer = false
-    
-    @State private var isMyLocationValid: Bool = false
-    @State private var isFriendsLocationValid: Bool = false
-    
-    
-    // Add state for the selected transport mode for each row.
-    @State private var selectedMyTransport: TransportMode? = nil
-    @State private var selectedFriendTransport: TransportMode? = nil
-    
-    // Flag to detect whether the friend’s transport was manually changed.
-       @State private var friendTransportManuallyChanged: Bool = false
-
-    // Sheet states
+    // MARK: - Sheet State
     @State private var showSaveLocationSheet = false
     @State private var showCustomLocationsSheet = false
     @State private var showAddHomeAddressSheet = false
     @State private var showAddWorkAddressSheet = false
     @State private var showAddCustomAddressSheet = false
-    @State private var locationToSave = ""
-    @State private var tempCoordinate: CLLocationCoordinate2D? = nil
+    @State private var showContactPermissionAlert = false
+    
+    // MARK: - UI State
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var isKeyboardShow: Bool = false
+    @State private var isShowingContactPicker = false
+    @State private var selectedContact: CNContact? = nil
+    @State private var showingContactArrowPointer = false
+    @State private var showingShareArrowPointer = false
+    @State private var arrowOffsetY: CGFloat = 0
     @State private var longPressTimer: Timer? = nil
     
+    // MARK: - Completion Handlers
+    var onDismiss: () -> Void
+    var onDone: () -> Void
     
-    @State private var myLocationHistory: [String] = []
-    @State private var friendLocationHistory: [String] = []
-    @State private var locationHistoryText: String = ""
-    
-    
-    @State private var arrowOffsetY : CGFloat = 0
-    
-    
-    @State private var showingShareArrowPointer = false
-    
-    
+    // MARK: - Helper Methods
     func areFieldsEmpty() -> Bool {
         return myLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
+    private func handleDoneButtonTap() {
+        if isMyLocationValid && isFriendsLocationValid {
+            processBothLocations {
+                onDone()
+            }
+        }
+    }
+    
+    private func handleMyLocationLongPress() {
+        guard isMyLocationValid && !myLocation.isEmpty else { return }
+        
+        locationToSave = myLocation
+        viewModel.geocodeAddress(myLocation) { coordinate in
+            if let coordinate = coordinate {
+                tempCoordinate = coordinate
+                showSaveLocationSheet = true
+            }
+        }
+    }
 
+    private func handleFriendLocationLongPress() {
+        guard isFriendsLocationValid && !friendLocation.isEmpty else { return }
+        
+        locationToSave = friendLocation
+        viewModel.geocodeAddress(friendLocation) { coordinate in
+            if let coordinate = coordinate {
+                tempCoordinate = coordinate
+                showSaveLocationSheet = true
+            }
+        }
+    }
+    
+    private func handleMyLocationGeocoding(_ completion: MKLocalSearchCompletion) {
+        LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
+            DispatchQueue.main.async {
+                if let coordinate = coordinate {
+                    self.viewModel.userLocation = coordinate
+                    self.isMyLocationValid = true
+                }
+
+                if let formattedAddress = formattedAddress {
+                    self.myLocation = formattedAddress
+                }
+            }
+        }
+    }
+
+    private func handleFriendLocationGeocoding(_ completion: MKLocalSearchCompletion) {
+        LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
+            DispatchQueue.main.async {
+                if let coordinate = coordinate {
+                    self.viewModel.friendLocation = coordinate
+                    self.isFriendsLocationValid = true
+                }
+                
+                if let formattedAddress = formattedAddress {
+                    self.friendLocation = formattedAddress
+                }
+                
+                self.isFriendsLocationFocused = false
+            }
+        }
+    }
+
+    private func handleMyLocationSelected() {
+        isMyLocationFocused = false
+        isFriendsLocationFocused = true
+        isMyLocationValid = true
+    }
+
+    private func handleFriendLocationSelected() {
+        isFriendsLocationFocused = false
+        isFriendsLocationValid = true
+    }
+    
+    private func handleCurrentLocationRequest() {
+        viewModel.requestUserLocation()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            guard let userCoord = viewModel.userLocation else { return }
+
+            let location = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+            CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+                if let placemark = placemarks?.first, error == nil {
+                    let address = [
+                        placemark.name,
+                        placemark.locality,
+                        placemark.administrativeArea
+                    ]
+                    .compactMap { $0 }
+                    .joined(separator: ", ")
+
+                    DispatchQueue.main.async {
+                        self.myLocation = address
+                        self.isMyLocationValid = true
+                        self.viewModel.userLocation = userCoord
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        let fallback = String(format: "%.4f, %.4f", userCoord.latitude, userCoord.longitude)
+                        self.myLocation = fallback
+                        self.isMyLocationValid = true
+                        self.viewModel.userLocation = userCoord
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Contact Permission and Share Flow
+    private func requestContactAccess(completion: @escaping (Bool) -> Void) {
+        let contactStore = CNContactStore()
+        
+        // Check current authorization status
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        
+        switch status {
+        case .authorized:
+            // Already have permission, proceed directly
+            completion(true)
+            
+        case .denied, .restricted:
+            // Permission was denied, show an alert
+            showContactPermissionDeniedAlert()
+            completion(false)
+            
+        case .notDetermined:
+            // Show the arrow pointer for the permission dialog
+            showingContactArrowPointer = true
+            
+            // Request permission
+            contactStore.requestAccess(for: .contacts) { granted, error in
+                DispatchQueue.main.async {
+                    // Hide the contact arrow pointer
+                    self.showingContactArrowPointer = false
+                    
+                    if granted {
+                        // Wait a moment before showing share sheet pointer
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            completion(true)
+                        }
+                    } else {
+                        completion(false)
+                    }
+                }
+            }
+            
+        @unknown default:
+            completion(false)
+        }
+    }
+    
+    private func showContactPermissionDeniedAlert() {
+        showContactPermissionAlert = true
+    }
+
+    func presentShareSheet() {
+        // Generate the request data
+        let userName = firebaseService.meepUser?.displayName ??
+                       UserDefaults.standard.string(forKey: "userName") ?? "User"
+        let userId = firebaseService.currentUser?.uid ??
+                     UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
+        let requestID = UUID().uuidString
+        
+        // Create deep link URL
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "meep.earth"
+        components.path = "/share"
+        components.queryItems = [
+            URLQueryItem(name: "requestID", value: requestID),
+            URLQueryItem(name: "userName", value: userName),
+            URLQueryItem(name: "userId", value: userId)
+        ]
+        
+        guard let url = components.url else {
+            print("Failed to create URL")
+            showingShareArrowPointer = false
+            return
+        }
+        
+        // Create message
+        let message = "\(userName) wants to figure out where to meet."
+        
+        // Find the top-most presented controller to present on
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            print("Could not find root view controller")
+            showingShareArrowPointer = false
+            return
+        }
+        
+        // Find the topmost presented controller
+        var topController = rootViewController
+        while let presentedController = topController.presentedViewController {
+            topController = presentedController
+        }
+        
+        // Create the share sheet
+        let activityVC = UIActivityViewController(
+            activityItems: [message, url],
+            applicationActivities: nil
+        )
+        
+        // Set completion handler before presenting
+        activityVC.completionWithItemsHandler = { activityType, completed, returnedItems, error in
+            // Hide the share arrow pointer when share sheet is dismissed
+            DispatchQueue.main.async {
+                withAnimation {
+                    self.showingShareArrowPointer = false
+                }
+                
+                // If sharing was completed successfully, save the request
+                if completed {
+                    self.saveLocationRequest(
+                        requestID: requestID,
+                        contactName: "Friend",
+                        contactId: nil
+                    )
+                }
+            }
+        }
+        
+        // Set up iPad popover if needed
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = topController.view
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2,
+                                       y: UIScreen.main.bounds.height / 2,
+                                       width: 0,
+                                       height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        // Present on the main thread
+        DispatchQueue.main.async {
+            topController.present(activityVC, animated: true)
+        }
+    }
     
     private func saveLocationRequest(requestID: String, contactName: String, contactId: String?) {
         // Create request data
         let requestData: [String: Any] = [
             "requestID": requestID,
-            "userID": UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString,
-            "userName": UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee",
-            "contactName": contactName, // Use directly, not as optional
+            "userID": firebaseService.currentUser?.uid ?? UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString,
+            "userName": firebaseService.meepUser?.displayName ?? UserDefaults.standard.string(forKey: "userName") ?? "Ashley Dee",
+            "contactName": contactName,
             "contactId": contactId ?? "anonymous",
             "status": "pending",
             "createdAt": Date().timeIntervalSince1970
@@ -163,76 +403,71 @@ struct MeetingSearchSheetView: View {
         )
     }
     
+    // MARK: - Refactored processBothLocations Methods
     private func processBothLocations(completion: @escaping () -> Void) {
-        // Ensure we have coordinates for both locations before proceeding
-        let processLocationResults = {
-                if self.viewModel.userLocation != nil && self.viewModel.friendLocation != nil {
-                    // Update the shareable strings with the actual addresses
-                    self.viewModel.sharableUserLocation = self.myLocation
-                    self.viewModel.sharableFriendLocation = self.friendLocation
-                    
-                    
-                    // Update location history
-                    self.updateLocationHistory()
-                    
-                    // Then proceed with the rest
-                    self.viewModel.reverseGeocodeUserLocation()
-                    self.viewModel.reverseGeocodeFriendLocation()
-                    self.viewModel.searchNearbyPlaces()
-                    completion()
-                }
+        geocodeMyLocationIfNeeded {
+            self.geocodeFriendLocationIfNeeded {
+                self.finalizeAndSearch(completion: completion)
             }
-        
-        // First check if we need to geocode the user location
-        if viewModel.userLocation == nil {
-            LocationHelpers.geocodeAddress(myLocation) { coordinate, _ in
-                guard let userCoord = coordinate else {
-                    print("❌ Failed to geocode My Location: \(self.myLocation)")
-                    return
-                }
-                
-                DispatchQueue.main.async {
-                    self.viewModel.userLocation = userCoord
-                    
-                    // Now check if we need to geocode the friend location
-                    if self.viewModel.friendLocation == nil {
-                        LocationHelpers.geocodeAddress(self.friendLocation) { coordinate, _ in
-                            guard let friendCoord = coordinate else {
-                                print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
-                                return
-                            }
-                            
-                            DispatchQueue.main.async {
-                                self.viewModel.friendLocation = friendCoord
-                                processLocationResults()
-                            }
-                        }
-                    } else {
-                        processLocationResults()
-                    }
-                }
-            }
-        }
-        // If user location is already known, check friend location
-        else if viewModel.friendLocation == nil {
-            LocationHelpers.geocodeAddress(friendLocation) { coordinate, _ in
-                guard let friendCoord = coordinate else {
-                    print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
-                    return
-                }
-                
-                DispatchQueue.main.async {
-                    self.viewModel.friendLocation = friendCoord
-                    processLocationResults()
-                }
-            }
-        }
-        // Both locations already have coordinates
-        else {
-            processLocationResults()
         }
     }
-    
+
+    private func geocodeMyLocationIfNeeded(completion: @escaping () -> Void) {
+        guard viewModel.userLocation == nil else {
+            completion()
+            return
+        }
+        
+        LocationHelpers.cancelGeocoding()
+        LocationHelpers.geocodeAddress(myLocation) { coordinate, _ in
+            guard let userCoord = coordinate else {
+                print("❌ Failed to geocode My Location: \(self.myLocation)")
+                completion()
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.viewModel.userLocation = userCoord
+                completion()
+            }
+        }
+    }
+
+    private func geocodeFriendLocationIfNeeded(completion: @escaping () -> Void) {
+        guard viewModel.friendLocation == nil else {
+            completion()
+            return
+        }
+        
+        LocationHelpers.cancelGeocoding()
+        LocationHelpers.geocodeAddress(friendLocation) { coordinate, _ in
+            guard let friendCoord = coordinate else {
+                print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
+                completion()
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.viewModel.friendLocation = friendCoord
+                completion()
+            }
+        }
+    }
+
+    private func finalizeAndSearch(completion: @escaping () -> Void) {
+        // Update the shareable strings with the actual addresses
+        viewModel.sharableUserLocation = myLocation
+        viewModel.sharableFriendLocation = friendLocation
+        
+        // Update location history
+        updateLocationHistory()
+        
+        // Then proceed with the rest
+        viewModel.reverseGeocodeUserLocation()
+        viewModel.reverseGeocodeFriendLocation()
+        viewModel.searchNearbyPlaces()
+        completion()
+    }
     
     private func clearCoordinateFormats() {
         // Check My Location field
@@ -249,7 +484,6 @@ struct MeetingSearchSheetView: View {
             isFriendsLocationValid = false
         }
     }
-    
     
     private func handleSavedLocation(_ savedLocation: SavedLocation) {
         // Set the location based on the current focus
@@ -276,9 +510,6 @@ struct MeetingSearchSheetView: View {
         showAddWorkAddressSheet = false
         showAddCustomAddressSheet = false
     }
-    
-    
-
 
     // Function to proactively geocode an address if it's valid but doesn't have coordinates yet
     private func geocodeIfNeeded(_ address: String, isMyLocation: Bool) {
@@ -286,6 +517,7 @@ struct MeetingSearchSheetView: View {
         let hasCoordinates = isMyLocation ? (viewModel.userLocation != nil) : (viewModel.friendLocation != nil)
         
         if isValid && !hasCoordinates {
+            LocationHelpers.cancelGeocoding()
             LocationHelpers.geocodeAddress(address) { coordinate, formattedAddress in
                 DispatchQueue.main.async {
                     if let coordinate = coordinate {
@@ -308,7 +540,6 @@ struct MeetingSearchSheetView: View {
         }
     }
     
-    
     private func updateLocationHistory() {
         // Only add valid locations to history
         if isMyLocationValid && !myLocation.isEmpty {
@@ -327,537 +558,418 @@ struct MeetingSearchSheetView: View {
         locationHistoryText = LocationHistoryManager.shared.getCombinedHistoryText()
     }
     
-    private func requestContactAccess(completion: @escaping (Bool) -> Void) {
-        showingContactArrowPointer = true
-        
-        let contactStore = CNContactStore()
-        contactStore.requestAccess(for: .contacts) { granted, error in
-            // After permission dialog completes, wait a moment before showing share sheet
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                showingContactArrowPointer = false
-               
-               // Show the share sheet pointer
-                withAnimation {
-                    self.showingShareArrowPointer = true
+    // MARK: - UI Components
+    private var navigationToolbar: some ToolbarContent {
+        Group {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: {
+                    print("DEBUG: Back Button Tapped")
+                    onDismiss()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(12)
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(isGeocodingInProgress ? Color(.lightGray) : Color(.gray))
+                        .foregroundColor(Color(.gray))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30)
+                                .stroke(Color(.systemGray6), lineWidth: 2)
+                        )
+                        .clipShape(Circle())
                 }
-                self.presentShareSheet()
-
+                .buttonStyle(PlainButtonStyle())
+                .disabled(isGeocodingInProgress)
+            }
+            
+            ToolbarItem(placement: .principal) {
+                VStack(alignment: .center, spacing: 2) {
+                    Text("Set meeting point")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .fontWidth(.expanded)
+                        .foregroundColor(.primary).opacity(0.7)
+                }
+                .padding(.vertical, 8)
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                if isMyLocationValid && isFriendsLocationValid {
+                    Button(action: handleDoneButtonTap) {
+                        Text("Done")
+                            .foregroundColor(isGeocodingInProgress ? .gray : .primary)
+                    }
+                    .disabled(isGeocodingInProgress)
+                }
             }
         }
     }
     
-
-
-     func presentShareSheet() {
-        // Generate the request data
-        let userName = UserDefaults.standard.string(forKey: "userName") ?? "User"
-        let userId = UserDefaults.standard.string(forKey: "userId") ?? UUID().uuidString
-        let requestID = UUID().uuidString
-        
-        // Create deep link URL
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "meep.earth"
-        components.path = "/share"
-        components.queryItems = [
-            URLQueryItem(name: "requestID", value: requestID),
-            URLQueryItem(name: "userName", value: userName),
-            URLQueryItem(name: "userId", value: userId)
-        ]
-        
-        guard let url = components.url else {
-            print("Failed to create URL")
-            return
+    @ViewBuilder
+    private var locationInputSection: some View {
+        VStack(spacing: 0) {
+            // "My Location" Input Row
+            SearchTextFieldRow(
+                leadingIcon: "dot.square.fill",
+                title: "My Location",
+                placeholder: "What's your location?",
+                text: $myLocation,
+                isDirty: !myLocation.isEmpty,
+                selectedMode: $selectedMyTransport,
+                isValid: !myLocation.isEmpty ? isMyLocationValid : nil
+            )
+            .focused($isMyLocationFocused)
+            .onSubmit { isMyLocationFocused = false }
+            .overlay(
+                Rectangle()
+                    .fill(Color(#colorLiteral(red: 0.971, green: 0.971, blue: 0.971, alpha: 1)))
+                    .frame(height: 2),
+                alignment: .bottom
+            )
+            .onLongPressGesture(minimumDuration: 0.5) {
+                handleMyLocationLongPress()
+            }
+            
+            // "Friend's Location" Input Row
+            SearchTextFieldRow(
+                leadingIcon: "dot.square.fill",
+                title: "Friend's Location",
+                placeholder: "What's your friend's location?",
+                text: $friendLocation,
+                isDirty: !friendLocation.isEmpty,
+                selectedMode: $selectedFriendTransport,
+                isValid: !friendLocation.isEmpty ? isFriendsLocationValid : nil
+            )
+            .focused($isFriendsLocationFocused)
+            .onSubmit { isFriendsLocationFocused = false }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                handleFriendLocationLongPress()
+            }
         }
-        
-        // Create message
-        let message = "\(userName) wants to figure out where to meet."
-        
-        // Find the top-most presented controller to present on
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = windowScene.windows.first?.rootViewController else {
-            print("Could not find root view controller")
-            return
-        }
-        
-        // Find the topmost presented controller
-        var topController = rootViewController
-        while let presentedController = topController.presentedViewController {
-            topController = presentedController
-        }
-        
-        // Create the share sheet
-        let activityVC = UIActivityViewController(
-            activityItems: [message, url],
-            applicationActivities: nil
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color(#colorLiteral(red: 0.971, green: 0.971, blue: 0.971, alpha: 1)), lineWidth: 2)
         )
-        
-        // Set up iPad popover if needed
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = topController.view
-            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2,
-                                       y: UIScreen.main.bounds.height / 2,
-                                       width: 0,
-                                       height: 0)
-            popover.permittedArrowDirections = []
-        }
-        
-        // Present on the main thread
-        DispatchQueue.main.async {
-            // Present directly on the topmost controller
-            topController.present(activityVC, animated: true) {
-                // Save the request after presentation
-                self.saveLocationRequest(
-                    requestID: requestID,
-                    contactName: "Friend",
-                    contactId: nil
-                )
-            }
-            activityVC.completionWithItemsHandler = { _, _, _, _ in
-                withAnimation {
-                    self.showingShareArrowPointer = false
-                }
-            }
+        .padding(.horizontal, 16)
+    }
+    
+    @ViewBuilder
+    private var autocompleteSuggestionsView: some View {
+        if myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isMyLocationFocused && !mySearchCompleter.completions.isEmpty {
+            
+            AutocompleteSuggestionsView(
+                completions: mySearchCompleter.completions,
+                text: $myLocation,
+                didSelectSuggestion: $didSelectMySuggestion,
+                geocodeAddress: handleMyLocationGeocoding,
+                onSuggestionSelected: handleMyLocationSelected
+            )
+        } else if friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isFriendsLocationFocused && !friendSearchCompleter.completions.isEmpty {
+            AutocompleteSuggestionsView(
+                completions: friendSearchCompleter.completions,
+                text: $friendLocation,
+                didSelectSuggestion: $didSelectFriendSuggestion,
+                geocodeAddress: handleFriendLocationGeocoding,
+                onSuggestionSelected: handleFriendLocationSelected
+            )
+        } else {
+            suggestionButtonsSection
         }
     }
-
     
+    @ViewBuilder
+    private var suggestionButtonsSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 24) {
+                if isMyLocationFocused {
+                    // My Location buttons when My Location is focused
+                    SuggestionButton(
+                        icon: "house",
+                        title: locationsManager.homeLocation?.address ?? "Set location",
+                        label: "Home",
+                        action: {
+                            guard let home = locationsManager.homeLocation,
+                                  home.isValidCoordinate() else {
+                                showAddHomeAddressSheet = true
+                                return
+                            }
+                            
+                            myLocation = home.address
+                            isMyLocationValid = true
+                            viewModel.userLocation = home.coordinate
+                            
+                            isMyLocationFocused = false
+                            isFriendsLocationFocused = true
+                        }
+                    )
+                    
+                    SuggestionButton(
+                        icon: "briefcase",
+                        title: locationsManager.workLocation?.address ?? "Set location",
+                        label: "Work",
+                        action: {
+                            if let work = locationsManager.workLocation {
+                                myLocation = work.address
+                                isMyLocationValid = true
+                                viewModel.userLocation = work.coordinate
+                                
+                                isMyLocationFocused = false
+                                isFriendsLocationFocused = true
+                            } else {
+                                showAddWorkAddressSheet = true
+                            }
+                        }
+                    )
+                    
+                    SuggestionButton(
+                        icon: "ellipsis",
+                        title: "",
+                        label: "More",
+                        action: {
+                            showCustomLocationsSheet = true
+                        }
+                    )
+                } else if isFriendsLocationFocused {
+                    
+//                    SuggestionButton(
+//                        icon: "plus",
+//                        title: "Add another friend",
+//                        label: "More friends?",
+//                        action: { print("Add friend tapped") }
+//                    )
+//
+//                    SuggestionButton(
+//                        icon: "text.badge.plus",
+//                        title: "Add contacts",
+//                        label: "Searching for friends?",
+//                        action: { print("Add contacts tapped") }
+//                    )
+//
+//                    SuggestionButton(
+//                        icon: "person.circle",
+//                        title: "Set location",
+//                        label: "Close Friend",
+//                        action: { print("Close friend tapped") }
+//                    )
+                    
+                } else {
+                    // Default buttons when neither field is focused
+                    SuggestionButton(
+                        icon: "house",
+                        title: locationsManager.homeLocation?.address ?? "Set location",
+                        label: "Home",
+                        action: {
+                            guard let home = locationsManager.homeLocation,
+                                  home.isValidCoordinate() else {
+                                showAddHomeAddressSheet = true
+                                return
+                            }
+                            
+                            myLocation = home.address
+                            isMyLocationValid = true
+                            viewModel.userLocation = home.coordinate
+                            
+                            isMyLocationFocused = false
+                            isFriendsLocationFocused = true
+                        }
+                    )
+                    
+                    SuggestionButton(
+                        icon: "briefcase",
+                        title: locationsManager.workLocation?.address ?? "Set location",
+                        label: "Work",
+                        action: {
+                            if let work = locationsManager.workLocation {
+                                myLocation = work.address
+                                isMyLocationValid = true
+                                viewModel.userLocation = work.coordinate
+                                
+                                isMyLocationFocused = false
+                                isFriendsLocationFocused = true
+                            } else {
+                                showAddWorkAddressSheet = true
+                            }
+                        }
+                    )
+                    
+                    SuggestionButton(
+                        icon: "ellipsis",
+                        title: "",
+                        label: "More",
+                        action: {
+                            showCustomLocationsSheet = true
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, isFriendsLocationFocused ? -10 : 40)
+        .scrollTargetLayout()
+        .safeAreaPadding(.trailing, 16)
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled(true)
+    }
     
+    @ViewBuilder
+    private var additionalOptionsSection: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 40) {
+                if isMyLocationFocused {
+                    // Current Location Button when My Location is focused
+                    Button(action: handleCurrentLocationRequest) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "location")
+                                .font(.callout)
+                                .foregroundColor(.blue)
+                                .frame(width: 40, height: 40)
+                                .background(Color(hex: "E8F0FE"))
+                                .clipShape(Circle())
+                            Text("Current Location")
+                                .foregroundColor(.primary)
+                                .font(.body)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                
+                // Ask for Friend's Location button (shown for all states)
+                Button(action: {
+                    requestContactAccess { granted in
+                        if granted {
+                            // Show share sheet pointer and present share sheet
+                            withAnimation {
+                                self.showingShareArrowPointer = true
+                            }
+                            self.presentShareSheet()
+                        }
+                    }
+                }) {
+                    HStack(spacing: 16) {
+                        Image(systemName: "message")
+                            .font(.callout)
+                            .foregroundColor(.blue)
+                            .frame(width: 40, height: 40)
+                            .background(Color(hex: "E8F0FE"))
+                            .clipShape(Circle())
+                        
+                        VStack(alignment: .leading) {
+                            Text("Ask for a Friend's Location")
+                                .foregroundColor(.primary)
+                                .font(.body)
+                            Text("Exact coordinates are hidden")
+                                .font(.callout)
+                                .foregroundColor(Color(.darkGray))
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                if onboardingManager.shouldShowOnboardingElement() {
+                    Image(systemName: "chevron.up")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                        .padding(.trailing, 16)
+                        .offset(y: arrowOffsetY)
+                        .onAppear {
+                            withAnimation(
+                                Animation.easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                            ) {
+                                arrowOffsetY = -15
+                            }
+                        }
+                }
+                
+                // History section based on focus state
+                locationHistorySection
+            }
+        }
+        .scrollClipDisabled(true)
+        .padding(.top, 40)
+    }
     
+    @ViewBuilder
+    private var locationHistorySection: some View {
+        if !myLocationHistory.isEmpty && isMyLocationFocused {
+            // My Location history when My Location is focused
+            LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
+                myLocation = address
+                isMyLocationValid = true
+                
+                LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                    if let coord = coordinate {
+                        DispatchQueue.main.async {
+                            self.viewModel.userLocation = coord
+                            self.isMyLocationFocused = false
+                            self.isFriendsLocationFocused = true
+                        }
+                    }
+                }
+            })
+            .padding(.top, onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+        } else if !friendLocationHistory.isEmpty && isFriendsLocationFocused {
+            // Friend's Location history when Friend's Location is focused
+            LocationHistoryView(histories: friendLocationHistory, onSelectLocation: { address in
+                friendLocation = address
+                isFriendsLocationValid = true
+                
+                LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                    if let coord = coordinate {
+                        DispatchQueue.main.async {
+                            self.viewModel.friendLocation = coord
+                            self.isFriendsLocationFocused = false
+                        }
+                    }
+                }
+            })
+            .padding(.top, onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+        } else if !myLocationHistory.isEmpty && !isMyLocationFocused && !isFriendsLocationFocused {
+            // History when neither field is focused (default to My Location history)
+            LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
+                myLocation = address
+                isMyLocationValid = true
+                
+                LocationHelpers.geocodeAddress(address) { coordinate, _ in
+                    if let coord = coordinate {
+                        DispatchQueue.main.async {
+                            self.viewModel.userLocation = coord
+                            self.isMyLocationFocused = false
+                            self.isFriendsLocationFocused = true
+                        }
+                    }
+                }
+            })
+            .padding(.top, onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
+        }
+    }
     
+    // MARK: - Main Body
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // MARK: Input Section
-                VStack(spacing: 0) {
-                    // "My Location" Input Row
-                    SearchTextFieldRow(
-                        leadingIcon: "dot.square.fill",
-                        title: "My Location",
-                        placeholder: "What's your location?",
-                        text: $myLocation,
-                        isDirty: !myLocation.isEmpty,
-                        selectedMode: $selectedMyTransport,
-                        isValid: !myLocation.isEmpty ? isMyLocationValid : nil  // Only show validation if not empty
-                    )
-                    .focused($isMyLocationFocused)
-                    .onSubmit { isMyLocationFocused = false }
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(#colorLiteral(red: 0.971, green: 0.971, blue: 0.971, alpha: 1)))
-                            .frame(height: 2),
-                        alignment: .bottom
-                    )
-                    .onLongPressGesture(minimumDuration: 0.5) {
-                        // Only show save sheet if there's a valid location
-                        if isMyLocationValid && !myLocation.isEmpty {
-                            locationToSave = myLocation
-                            
-                            // Geocode the address to get coordinates
-                            viewModel.geocodeAddress(myLocation) { coordinate in
-                                if let coordinate = coordinate {
-                                    tempCoordinate = coordinate
-                                    showSaveLocationSheet = true
-                                }
-                            }
-                        }
-                    }
-                    
-                    // "Friend's Location" Input Row
-                    SearchTextFieldRow(
-                        leadingIcon: "dot.square.fill",
-                        title: "Friend's Location",
-                        placeholder: "What's your friend's location?",
-                        text: $friendLocation,
-                        isDirty: !friendLocation.isEmpty,
-                        selectedMode: $selectedFriendTransport,
-                        isValid: !friendLocation.isEmpty ? isFriendsLocationValid : nil  // Only show validation if not empty
-                    )
-                    .focused($isFriendsLocationFocused)
-                    .onSubmit { isFriendsLocationFocused = false }
-                    .onLongPressGesture(minimumDuration: 0.5) {
-                        // Only show save sheet if there's a valid location
-                        if isFriendsLocationValid && !friendLocation.isEmpty {
-                            locationToSave = friendLocation
-                            
-                            // Geocode the address to get coordinates
-                            viewModel.geocodeAddress(friendLocation) { coordinate in
-                                if let coordinate = coordinate {
-                                    tempCoordinate = coordinate
-                                    showSaveLocationSheet = true
-                                }
-                            }
-                        }
-                    }
-                }
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color(#colorLiteral(red: 0.971, green: 0.971, blue: 0.971, alpha: 1)), lineWidth: 2)
-                )
-                .padding(.horizontal, 16)
-                
-                
+                locationInputSection
+                    .padding(.top, isKeyboardShow ? 60 : 0)
                 // MARK: Main Content Section
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        // MARK: Autocomplete Section (Only shows when typing)
-                        if myLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isMyLocationFocused && !mySearchCompleter.completions.isEmpty {
-                            AutocompleteSuggestionsView(
-                                completions: mySearchCompleter.completions,
-                                text: $myLocation,
-                                geocodeAddress: { completion in
-                                    LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
-                                        DispatchQueue.main.async {
-                                            if let coordinate = coordinate {
-                                                self.viewModel.userLocation = coordinate
-                                                self.isMyLocationValid = true
-                                            }
-                                            
-                                            if let formattedAddress = formattedAddress {
-                                                self.myLocation = formattedAddress
-                                            }
-                                            
-                                            self.isMyLocationFocused = false
-                                            self.isFriendsLocationFocused = true
-                                        }
-                                    }
-                                },
-                                onSuggestionSelected: {
-                                    isMyLocationFocused = false
-                                    isFriendsLocationFocused = true
-                                    isMyLocationValid = true
-                                }
-                            )
-                        } else if friendLocation.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 && isFriendsLocationFocused && !friendSearchCompleter.completions.isEmpty {
-                            AutocompleteSuggestionsView(
-                                completions: friendSearchCompleter.completions,
-                                text: $friendLocation,
-                                geocodeAddress: { completion in
-                                    LocationHelpers.geocodeCompletion(completion) { coordinate, formattedAddress in
-                                        DispatchQueue.main.async {
-                                            if let coordinate = coordinate {
-                                                self.viewModel.friendLocation = coordinate
-                                                self.isFriendsLocationValid = true
-                                            }
-                                            
-                                            if let formattedAddress = formattedAddress {
-                                                self.friendLocation = formattedAddress
-                                            }
-                                            
-                                            self.isFriendsLocationFocused = false
-                                        }
-                                    }
-                                },
-                                onSuggestionSelected: {
-                                    isFriendsLocationFocused = false
-                                    isFriendsLocationValid = true
-                                }
-                            )
-                        } else {
-                            // MARK: Suggestion Buttons Section
-                            // Show when not displaying autocomplete
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 24) {
-                                    if isMyLocationFocused {
-                                        // My Location buttons when My Location is focused
-                                        SuggestionButton(
-                                            icon: "house",
-                                            title: locationsManager.homeLocation?.address ?? "Set location",
-                                            label: "Home",
-                                            action: {
-                                                guard let home = locationsManager.homeLocation,
-                                                      home.isValidCoordinate() else {
-                                                    showAddHomeAddressSheet = true
-                                                    return
-                                                }
-                                                
-                                                myLocation = home.address
-                                                isMyLocationValid = true
-                                                viewModel.userLocation = home.coordinate
-                                                
-                                                isMyLocationFocused = false
-                                                isFriendsLocationFocused = true
-                                            }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "briefcase",
-                                            title: locationsManager.workLocation?.address ?? "Set location",
-                                            label: "Work",
-                                            action: {
-                                                if let work = locationsManager.workLocation {
-                                                    myLocation = work.address
-                                                    isMyLocationValid = true
-                                                    viewModel.userLocation = work.coordinate
-                                                    
-                                                    isMyLocationFocused = false
-                                                    isFriendsLocationFocused = true
-                                                } else {
-                                                    showAddWorkAddressSheet = true
-                                                }
-                                            }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "ellipsis",
-                                            title: "",
-                                            label: "More",
-                                            action: {
-                                                showCustomLocationsSheet = true
-                                            }
-                                        )
-                                    } else if isFriendsLocationFocused {
-                                        // Friend's Location buttons when Friend's Location is focused
-                                        SuggestionButton(
-                                            icon: "plus",
-                                            title: "Add another friend",
-                                            label: "More friends?",
-                                            action: { print("Add friend tapped") }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "text.badge.plus",
-                                            title: "Add contacts",
-                                            label: "Searching for friends?",
-                                            action: { print("Add contacts tapped") }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "person.circle",
-                                            title: "Set location",
-                                            label: "Close Friend",
-                                            action: { print("Close friend tapped") }
-                                        )
-                                    } else {
-                                        // Default buttons when neither field is focused
-                                        SuggestionButton(
-                                            icon: "house",
-                                            title: locationsManager.homeLocation?.address ?? "Set location",
-                                            label: "Home",
-                                            action: {
-                                                guard let home = locationsManager.homeLocation,
-                                                      home.isValidCoordinate() else {
-                                                    showAddHomeAddressSheet = true
-                                                    return
-                                                }
-                                                
-                                                myLocation = home.address
-                                                isMyLocationValid = true
-                                                viewModel.userLocation = home.coordinate
-                                                
-                                                isMyLocationFocused = false
-                                                isFriendsLocationFocused = true
-                                            }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "briefcase",
-                                            title: locationsManager.workLocation?.address ?? "Set location",
-                                            label: "Work",
-                                            action: {
-                                                if let work = locationsManager.workLocation {
-                                                    myLocation = work.address
-                                                    isMyLocationValid = true
-                                                    viewModel.userLocation = work.coordinate
-                                                    
-                                                    isMyLocationFocused = false
-                                                    isFriendsLocationFocused = true
-                                                } else {
-                                                    showAddWorkAddressSheet = true
-                                                }
-                                            }
-                                        )
-                                        
-                                        SuggestionButton(
-                                            icon: "ellipsis",
-                                            title: "",
-                                            label: "More",
-                                            action: {
-                                                showCustomLocationsSheet = true
-                                            }
-                                        )
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                            .padding(.top, 40)
-                            .scrollTargetLayout()
-                            .safeAreaPadding(.trailing, 16)
-                            .scrollIndicators(.hidden)
-                            .scrollClipDisabled(true)
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            // MARK: Autocomplete Section (Only shows when typing)
+                            autocompleteSuggestionsView
                             
                             // MARK: Additional Options Section
-                            ScrollView(.vertical, showsIndicators: false) {
-                                LazyVStack(spacing: 40) {
-                                    if isMyLocationFocused {
-                                        // Current Location Button when My Location is focused
-                                        Button(action: {
-                                            print("Current Location selected")
-                                            viewModel.requestUserLocation()
-                                            
-                                            
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                                if let userCoord = viewModel.userLocation {
-                                                    let location = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
-                                                    CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                                                        if let placemark = placemarks?.first, error == nil {
-                                                            let address = [
-                                                                placemark.name,
-                                                                placemark.locality,
-                                                                placemark.administrativeArea
-                                                            ]
-                                                                .compactMap { $0 }
-                                                                .joined(separator: ", ")
-                                                            
-                                                            DispatchQueue.main.async {
-                                                                self.myLocation = address
-                                                                self.isMyLocationValid = true
-                                                                self.viewModel.userLocation = userCoord
-                                                                self.isMyLocationFocused = false
-                                                                self.isFriendsLocationFocused = true
-                                                            }
-                                                        } else {
-                                                            DispatchQueue.main.async {
-                                                                let fallback = String(format: "%.4f, %.4f", userCoord.latitude, userCoord.longitude)
-                                                                self.myLocation = fallback
-                                                                self.isMyLocationValid = true
-                                                                self.viewModel.userLocation = userCoord
-                                                                self.isMyLocationFocused = false
-                                                                self.isFriendsLocationFocused = true
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            
-                                        }) {
-                                            HStack(spacing: 16) {
-                                                Image(systemName: "location")
-                                                    .font(.callout)
-                                                    .foregroundColor(.blue)
-                                                    .frame(width: 40, height: 40)
-                                                    .background(Color(hex: "E8F0FE"))
-                                                    .clipShape(Circle())
-                                                Text("Current Location")
-                                                    .foregroundColor(.primary)
-                                                    .font(.body)
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                    }
-                                    
-                                    // Ask for Friend's Location button (shown for all states)
-                                    Button(action: {
-                                        
-                                        //if Contact  Access has already been requested showingContactArrowPointer = true
-                                        
-                                        requestContactAccess { granted in
-                                            // Regardless of the result, the modal was shown
-                                            showingContactArrowPointer = false
-                                            
-                                        }
-                                    }) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "message")
-                                                .font(.callout)
-                                                .foregroundColor(.blue)
-                                                .frame(width: 40, height: 40)
-                                                .background(Color(hex: "E8F0FE"))
-                                                .clipShape(Circle())
-                                            
-                                            VStack(alignment: .leading) {
-                                                Text("Ask for a Friend's Location")
-                                                    .foregroundColor(.primary)
-                                                    .font(.body)
-                                                Text("Exact coordinates are hidden")
-                                                    .font(.callout)
-                                                    .foregroundColor(Color(.darkGray))
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    
-                                    
-                                    if onboardingManager.shouldShowOnboardingElement() {
-                                        Image(systemName: "chevron.up")
-                                            .font(.title3)
-                                            .foregroundColor(.primary)
-                                            .padding(.trailing, 16)
-                                            .offset(y: arrowOffsetY)
-                                            .onAppear {
-                                                withAnimation(
-                                                    Animation.easeInOut(duration: 0.5)
-                                                        .repeatForever(autoreverses: true)
-                                                ) {
-                                                    arrowOffsetY = -15
-                                                }
-                                            }
-                                    }
-                                    // History section based on focus state
-                                    if !myLocationHistory.isEmpty && isMyLocationFocused {
-                                        // My Location history when My Location is focused
-                                        LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
-                                            myLocation = address
-                                            isMyLocationValid = true
-                                            
-                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                                if let coord = coordinate {
-                                                    DispatchQueue.main.async {
-                                                        self.viewModel.userLocation = coord
-                                                        self.isMyLocationFocused = false
-                                                        self.isFriendsLocationFocused = true
-                                                    }
-                                                }
-                                            }
-                                        })
-                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
-                                    } else if !friendLocationHistory.isEmpty && isFriendsLocationFocused {
-                                        // Friend's Location history when Friend's Location is focused
-                                        LocationHistoryView(histories: friendLocationHistory, onSelectLocation: { address in
-                                            friendLocation = address
-                                            isFriendsLocationValid = true
-                                            
-                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                                if let coord = coordinate {
-                                                    DispatchQueue.main.async {
-                                                        self.viewModel.friendLocation = coord
-                                                        self.isFriendsLocationFocused = false
-                                                    }
-                                                }
-                                            }
-                                        })
-                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
-                                    } else if !myLocationHistory.isEmpty && !isMyLocationFocused && !isFriendsLocationFocused {
-                                        // History when neither field is focused (default to My Location history)
-                                        LocationHistoryView(histories: myLocationHistory, onSelectLocation: { address in
-                                            myLocation = address
-                                            isMyLocationValid = true
-                                            
-                                            LocationHelpers.geocodeAddress(address) { coordinate, _ in
-                                                if let coord = coordinate {
-                                                    DispatchQueue.main.async {
-                                                        self.viewModel.userLocation = coord
-                                                        self.isMyLocationFocused = false
-                                                        self.isFriendsLocationFocused = true
-                                                    }
-                                                }
-                                            }
-                                        })
-                                        .padding(.top,onboardingManager.shouldShowOnboardingElement() ? -36 : 0)
-                                    }
-                                }
-                            }
-                            .scrollClipDisabled(true)
-                            .padding(.top, 40)
+                            additionalOptionsSection
                         }
                     }
                 }
                 
-                Spacer()
+                Spacer().frame(height: keyboardHeight)
             }
             .padding(.top, 16)
             .background(Color(.systemBackground))
@@ -887,295 +999,46 @@ struct MeetingSearchSheetView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: {
-                        print("DEBUG: Back Button Tapped")
-                        onDismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .padding(12)
-                            .frame(width: 40, height: 40)
-                            .foregroundColor(isGeocodingInProgress ? Color(.lightGray) : Color(.gray))
-                            .foregroundColor(Color(.gray))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 30)
-                                    .stroke(Color(.systemGray6), lineWidth: 2)
-                                    
-                            )
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(isGeocodingInProgress)
-                }
-                ToolbarItem(placement: .principal) {
-                    VStack(alignment: .center, spacing: 2) {
-                        Text("Set meeting point")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .fontWidth(.expanded)
-                            .foregroundColor(.primary).opacity(0.7)
-                    }
-                    .padding(.vertical, 8)
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    if isMyLocationValid && isFriendsLocationValid {
-                        Button(action: {
-
-
-                            // Only proceed if both fields are valid after clearing
-                            if isMyLocationValid && isFriendsLocationValid {
-                                processBothLocations {
-                                    onDone()
-                                }
-                            }
-                            
-
-                        }) {
-                            Text("Done")
-                                .foregroundColor(isGeocodingInProgress ? .gray : .primary)
-                        }
-                        .disabled(isGeocodingInProgress)
-                    }
-                }
-            }
-           
-            
+            .toolbar { navigationToolbar }
             .onAppear {
-                
-                
-                
-                // Update autocomplete queries for both fields.
-                mySearchCompleter.updateQuery(myLocation)
-                friendSearchCompleter.updateQuery(friendLocation)
-                
-                // If userLocation is available, reverse geocode to get a human-readable address.
-                // Inside onAppear, replace the reverse geocoding for user location:
-                if let userLoc = viewModel.userLocation {
-                    // Check if myLocation is already populated with a good value
-                    if myLocation.isEmpty || myLocation.contains(",") {
-                        let location = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
-                        CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
-                            // Instead, use:
-                            let formattedCoords = LocationHelpers.formatCoordinates(userLoc)
-                            LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
-                                DispatchQueue.main.async {
-                                    if let address = formattedAddress {
-                                        self.myLocation = address
-                                        self.isMyLocationValid = true
-                                        
-                                        // Only set focus to friend location if it's empty
-                                        if self.friendLocation.isEmpty {
-                                            self.isFriendsLocationFocused = true
-                                        }
-                                    } else {
-                                        // Only update if we don't already have a good value
-                                        if self.myLocation.isEmpty {
-                                            self.myLocation = formattedCoords
-                                            self.isMyLocationFocused = true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-                
-                // Similar logic for friend location
-                if let friendLoc = viewModel.friendLocation {
-                    // Check if friendLocation is already populated with a good value
-                    if friendLocation.isEmpty || friendLocation.contains(",") {
-                        let formattedCoords = LocationHelpers.formatCoordinates(friendLoc)
-                        LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
-                            DispatchQueue.main.async {
-                                if let address = formattedAddress {
-                                    self.friendLocation = address
-                                    self.isFriendsLocationValid = true
-                                } else {
-                                    // Only update if we don't already have a good value
-                                    if self.friendLocation.isEmpty {
-                                        self.friendLocation = formattedCoords
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // If friendLocation already has a good value, mark it as valid
-                        isFriendsLocationValid = true
-                    }
-                }
-                
-                
-                myLocationHistory = LocationHistoryManager.shared.getLocationHistory(isMyLocation: true)
-                friendLocationHistory = LocationHistoryManager.shared.getLocationHistory(isMyLocation: false)
-                locationHistoryText = LocationHistoryManager.shared.getCombinedHistoryText()
-                
+                setupInitialState()
             }
             .onChange(of: myLocation) { newValue in
-                myDebounceWorkItem?.cancel()
-                let workItem = DispatchWorkItem {
-                    mySearchCompleter.updateQuery(newValue)
-                    if LocationHelpers.isLikelyCoordinates(newValue) {
-                        isMyLocationValid = true
-                        performGeocoding {
-                            LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                                DispatchQueue.main.async {
-                                    if let coordinate = coordinate {
-                                        self.viewModel.userLocation = coordinate
-                                    }
-                                    if let formattedAddress = formattedAddress {
-                                        self.myLocation = formattedAddress
-                                        self.viewModel.sharableUserLocation = formattedAddress
-                                    }
-                                    self.geocodingCompleted()
-                                }
-                            }
-                        }
-                    } else {
-                        isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
-                        if isMyLocationValid && viewModel.userLocation == nil {
-                            geocodeIfNeeded(newValue, isMyLocation: true)
-                        }
-                    }
-                }
-                myDebounceWorkItem = workItem
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+                handleMyLocationChange(newValue)
             }
-            
-            
             .onChange(of: friendLocation) { newValue in
-                friendDebounceWorkItem?.cancel()
-                let workItem = DispatchWorkItem {
-                    friendSearchCompleter.updateQuery(newValue)
-                    if LocationHelpers.isLikelyCoordinates(newValue) {
-                        isFriendsLocationValid = true
-                        performGeocoding {
-                            LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
-                                DispatchQueue.main.async {
-                                    if let coordinate = coordinate {
-                                        self.viewModel.friendLocation = coordinate
-                                    }
-                                    if let formattedAddress = formattedAddress {
-                                        self.friendLocation = formattedAddress
-                                    }
-                                    self.geocodingCompleted()
-                                }
-                            }
-                        }
-                    } else {
-                        isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
-                        if isFriendsLocationValid && viewModel.friendLocation == nil {
-                            geocodeIfNeeded(newValue, isMyLocation: false)
-                        }
+                handleFriendLocationChange(newValue)
+            }
+            .onChange(of: selectedMyTransport) { newValue in
+                handleMyTransportChange(newValue)
+            }
+            .onChange(of: selectedFriendTransport) { newValue in
+                handleFriendTransportChange(newValue)
+            }
+            .sheet(isPresented: $showSaveLocationSheet) {
+                saveLocationSheet
+            }
+            .fullScreenCover(isPresented: $showCustomLocationsSheet) {
+                customLocationSheet
+            }
+            .fullScreenCover(isPresented: $showAddHomeAddressSheet) {
+                homeAddressSheet
+            }
+            .fullScreenCover(isPresented: $showAddWorkAddressSheet) {
+                workAddressSheet
+            }
+            .fullScreenCover(isPresented: $showAddCustomAddressSheet) {
+                customAddressSheet
+            }
+            .alert("Contacts Permission Required", isPresented: $showContactPermissionAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
                     }
                 }
-                friendDebounceWorkItem = workItem
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
-            }
-            
-            // When "My Transport" changes, update friend's transport (if the friend hasn't been manually changed).
-            .onChange(of: selectedMyTransport) { newValue in
-                if !friendTransportManuallyChanged {
-                    selectedFriendTransport = newValue
-                }
-            }
-            // If the friend’s selection deviates from "My Transport," mark it as manually changed.
-            .onChange(of: selectedFriendTransport) { newValue in
-                if newValue != selectedMyTransport {
-                    friendTransportManuallyChanged = true
-                } else {
-                    friendTransportManuallyChanged = false
-                }
-            }
-            
-            
-            // Show save location sheet
-               .sheet(isPresented: $showSaveLocationSheet) {
-                   if let coordinate = tempCoordinate {
-                       SaveLocationOptionSheet(
-                           address: locationToSave,
-                           onSaveHome: {
-                               locationsManager.saveHomeLocation(address: locationToSave, coordinate: coordinate)
-                               showSaveLocationSheet = false
-                           },
-                           onSaveWork: {
-                               locationsManager.saveWorkLocation(address: locationToSave, coordinate: coordinate)
-                               showSaveLocationSheet = false
-                           },
-                           onSaveCustom: { name in
-                               let customLocation = SavedLocation(
-                                   id: UUID().uuidString,
-                                   name: name,
-                                   address: locationToSave,
-                                   latitude: coordinate.latitude,
-                                   longitude: coordinate.longitude
-                               )
-                               locationsManager.addCustomLocation(customLocation)
-                               showSaveLocationSheet = false
-                           },
-                           onCancel: {
-                               showSaveLocationSheet = false
-                           }
-                       )
-                   }
-               }
-               .fullScreenCover(isPresented: $showCustomLocationsSheet) {
-                   CustomLocationSheet(
-                       isPresented: $showCustomLocationsSheet,
-                       onLocationSelected: { location in
-                           // Update the active field with the selected location
-                           if isMyLocationFocused {
-                               myLocation = location.address
-                               isMyLocationValid = true
-                               viewModel.userLocation = location.coordinate
-                               
-                               // Move focus to next field
-                               isMyLocationFocused = false
-                               isFriendsLocationFocused = true
-                           } else if isFriendsLocationFocused {
-                               friendLocation = location.address
-                               isFriendsLocationValid = true
-                               viewModel.friendLocation = location.coordinate
-                               
-                               // Hide keyboard
-                               isFriendsLocationFocused = false
-                           }
-                       }
-                   )
-               }
-            
-            .fullScreenCover(isPresented: $showAddHomeAddressSheet) {
-                AddressInputView(
-                    viewModel: viewModel,
-                    addressType: .home
-                )
-                { savedLocation in
-                    handleSavedLocation(savedLocation)
-                }
-            }
-            
-            .fullScreenCover(isPresented: $showAddWorkAddressSheet) {
-                AddressInputView(
-                    viewModel: viewModel,
-                    addressType: .work
-                )
-                { savedLocation in
-                    handleSavedLocation(savedLocation)
-                }
-            }
-            
-            .fullScreenCover(isPresented: $showAddCustomAddressSheet) {
-                AddressInputView(
-                    viewModel: viewModel,
-                    addressType: .custom
-                ) { savedLocation in
-                    handleSavedLocation(savedLocation)
-                }
+            } message: {
+                Text("Please enable contacts access in Settings to share your location request with friends.")
             }
         }
         .overlay(
@@ -1186,13 +1049,311 @@ struct MeetingSearchSheetView: View {
                 }
                 
                 if showingShareArrowPointer {
-                  ShareSheetPointerView()
-                    .transition(.opacity)
+                    ShareSheetPointerView()
+                        .transition(.opacity)
                 }
             }
         )
     }
+    
+    // MARK: - Setup and Event Handlers
+    private func setupInitialState() {
+        viewModel.requestUserLocation()
+        setupKeyboardObservers()
+        setupInitialLocation()
+        setupSearchCompleters()
+        loadLocationHistory()
+    }
+    
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { notification in
+            if let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation {
+                    keyboardHeight = UIScreen.main.bounds.height - frame.origin.y
+                    isKeyboardShow = true
+                }
+            }
+        }
+        NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+            withAnimation {
+                keyboardHeight = 0
+                isKeyboardShow = false
+            }
+        }
+    }
+    
+    private func setupInitialLocation() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if let userCoord = viewModel.userLocation {
+                let location = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+                CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
+                    if let placemark = placemarks?.first, error == nil {
+                        let address = [
+                            placemark.name,
+                            placemark.locality,
+                            placemark.administrativeArea
+                        ]
+                        .compactMap { $0 }
+                        .joined(separator: ", ")
+
+                        DispatchQueue.main.async {
+                            self.myLocation = address
+                            self.isMyLocationValid = true
+                            self.viewModel.userLocation = userCoord
+                            self.isMyLocationFocused = false
+                            self.isFriendsLocationFocused = true
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            let fallback = String(format: "%.4f, %.4f", userCoord.latitude, userCoord.longitude)
+                            self.myLocation = fallback
+                            self.isMyLocationValid = true
+                            self.viewModel.userLocation = userCoord
+                            self.isMyLocationFocused = false
+                            self.isFriendsLocationFocused = true
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Setup existing locations if available
+        if let userLoc = viewModel.userLocation {
+            setupUserLocation(userLoc)
+        }
+        
+        if let friendLoc = viewModel.friendLocation {
+            setupFriendLocation(friendLoc)
+        }
+    }
+    
+    private func setupUserLocation(_ userLoc: CLLocationCoordinate2D) {
+        if myLocation.isEmpty || myLocation.contains(",") {
+            let formattedCoords = LocationHelpers.formatCoordinates(userLoc)
+            LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
+                DispatchQueue.main.async {
+                    if let address = formattedAddress {
+                        self.myLocation = address
+                        self.isMyLocationValid = true
+                        
+                        if self.friendLocation.isEmpty {
+                            self.isFriendsLocationFocused = true
+                        }
+                    } else {
+                        if self.myLocation.isEmpty {
+                            self.myLocation = formattedCoords
+                            self.isMyLocationFocused = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func setupFriendLocation(_ friendLoc: CLLocationCoordinate2D) {
+        if friendLocation.isEmpty || friendLocation.contains(",") {
+            let formattedCoords = LocationHelpers.formatCoordinates(friendLoc)
+            LocationHelpers.geocodeAddress(formattedCoords) { _, formattedAddress in
+                DispatchQueue.main.async {
+                    if let address = formattedAddress {
+                        self.friendLocation = address
+                        self.isFriendsLocationValid = true
+                    } else {
+                        if self.friendLocation.isEmpty {
+                            self.friendLocation = formattedCoords
+                        }
+                    }
+                }
+            }
+        } else {
+            isFriendsLocationValid = true
+        }
+    }
+    
+    private func setupSearchCompleters() {
+        mySearchCompleter.updateQuery(myLocation)
+        friendSearchCompleter.updateQuery(friendLocation)
+    }
+    
+    private func loadLocationHistory() {
+        myLocationHistory = LocationHistoryManager.shared.getLocationHistory(isMyLocation: true)
+        friendLocationHistory = LocationHistoryManager.shared.getLocationHistory(isMyLocation: false)
+        locationHistoryText = LocationHistoryManager.shared.getCombinedHistoryText()
+    }
+    
+    private func handleMyLocationChange(_ newValue: String) {
+        // Skip processing if this change was due to a suggestion selection
+        if didSelectMySuggestion {
+            didSelectMySuggestion = false
+            return
+        }
+        
+        myDebounceWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            mySearchCompleter.updateQuery(newValue)
+            if LocationHelpers.isLikelyCoordinates(newValue) {
+                isMyLocationValid = true
+                performGeocoding {
+                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                        DispatchQueue.main.async {
+                            if let coordinate = coordinate {
+                                self.viewModel.userLocation = coordinate
+                            }
+                            if let formattedAddress = formattedAddress {
+                                self.myLocation = formattedAddress
+                                self.viewModel.sharableUserLocation = formattedAddress
+                            }
+                            self.geocodingCompleted()
+                        }
+                    }
+                }
+            } else {
+                isMyLocationValid = validateAddress(newValue, using: mySearchCompleter)
+                if isMyLocationValid && viewModel.userLocation == nil {
+                    geocodeIfNeeded(newValue, isMyLocation: true)
+                }
+            }
+        }
+        myDebounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+    }
+
+    private func handleFriendLocationChange(_ newValue: String) {
+        // Skip processing if this change was due to a suggestion selection
+        if didSelectFriendSuggestion {
+            didSelectFriendSuggestion = false
+            return
+        }
+        
+        friendDebounceWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            friendSearchCompleter.updateQuery(newValue)
+            if LocationHelpers.isLikelyCoordinates(newValue) {
+                isFriendsLocationValid = true
+                performGeocoding {
+                    LocationHelpers.geocodeAddress(newValue) { coordinate, formattedAddress in
+                        DispatchQueue.main.async {
+                            if let coordinate = coordinate {
+                                self.viewModel.friendLocation = coordinate
+                            }
+                            if let formattedAddress = formattedAddress {
+                                self.friendLocation = formattedAddress
+                            }
+                            self.geocodingCompleted()
+                        }
+                    }
+                }
+            } else {
+                isFriendsLocationValid = validateAddress(newValue, using: friendSearchCompleter)
+                if isFriendsLocationValid && viewModel.friendLocation == nil {
+                    geocodeIfNeeded(newValue, isMyLocation: false)
+                }
+            }
+        }
+        friendDebounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+    }
+    
+    private func handleMyTransportChange(_ newValue: TransportMode?) {
+        if !friendTransportManuallyChanged {
+            selectedFriendTransport = newValue
+        }
+    }
+    
+    private func handleFriendTransportChange(_ newValue: TransportMode?) {
+        if newValue != selectedMyTransport {
+            friendTransportManuallyChanged = true
+        } else {
+            friendTransportManuallyChanged = false
+        }
+    }
+    
+    // MARK: - Sheet Views
+    @ViewBuilder
+    private var saveLocationSheet: some View {
+        if let coordinate = tempCoordinate {
+            SaveLocationOptionSheet(
+                address: locationToSave,
+                onSaveHome: {
+                    locationsManager.saveHomeLocation(address: locationToSave, coordinate: coordinate)
+                    showSaveLocationSheet = false
+                },
+                onSaveWork: {
+                    locationsManager.saveWorkLocation(address: locationToSave, coordinate: coordinate)
+                    showSaveLocationSheet = false
+                },
+                onSaveCustom: { name in
+                    let customLocation = SavedLocation(
+                        id: UUID().uuidString,
+                        name: name,
+                        address: locationToSave,
+                        latitude: coordinate.latitude,
+                        longitude: coordinate.longitude
+                    )
+                    locationsManager.addCustomLocation(customLocation)
+                    showSaveLocationSheet = false
+                },
+                onCancel: {
+                    showSaveLocationSheet = false
+                }
+            )
+        }
+    }
+    
+    @ViewBuilder
+    private var customLocationSheet: some View {
+        CustomLocationSheet(
+            isPresented: $showCustomLocationsSheet,
+            onLocationSelected: { location in
+                if isMyLocationFocused {
+                    myLocation = location.address
+                    isMyLocationValid = true
+                    viewModel.userLocation = location.coordinate
+                    
+                    isMyLocationFocused = false
+                    isFriendsLocationFocused = true
+                } else if isFriendsLocationFocused {
+                    friendLocation = location.address
+                    isFriendsLocationValid = true
+                    viewModel.friendLocation = location.coordinate
+                    
+                    isFriendsLocationFocused = false
+                }
+            }
+        )
+    }
+    
+    @ViewBuilder
+    private var homeAddressSheet: some View {
+        AddressInputView(
+            viewModel: viewModel,
+            addressType: .home
+        ) { savedLocation in
+            handleSavedLocation(savedLocation)
+        }
+    }
+    
+    @ViewBuilder
+    private var workAddressSheet: some View {
+        AddressInputView(
+            viewModel: viewModel,
+            addressType: .work
+        ) { savedLocation in
+            handleSavedLocation(savedLocation)
+        }
+    }
+    
+    @ViewBuilder
+    private var customAddressSheet: some View {
+        AddressInputView(
+            viewModel: viewModel,
+            addressType: .custom
+        ) { savedLocation in
+            handleSavedLocation(savedLocation)
+        }
+    }
 }
+
 
 #Preview {
     MeetingSearchSheetView(
@@ -1202,5 +1363,4 @@ struct MeetingSearchSheetView: View {
         onDone: { print("Done tapped") }
     )
 }
-
 
