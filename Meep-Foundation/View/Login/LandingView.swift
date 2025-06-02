@@ -14,6 +14,7 @@ struct LandingView: View {
     @State private var showCreateAccountView = false
     @State private var createAccount: Bool = false
     @State private var videoLoaded: Bool = false
+    @State private var didCheckAuth = false
     
     // Environment
     @Environment(\.colorScheme) var colorScheme
@@ -121,19 +122,15 @@ struct LandingView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
                     
-                    // Terms and conditions
-                    ZStack {
-                        Text("By tapping 'Sign in' / 'Create account' you agree to our ")
-                            .font(.footnote) +
-                        Text("Terms")
-                            .font(.footnote)
-                            .fontWeight(.bold) +
-                        Text(" and ")
-                            .font(.footnote) +
-                        Text("Privacy Policy")
-                            .font(.footnote)
-                            .fontWeight(.bold)
-                    } .padding(.horizontal, 20)
+                    TermsAndPrivacyText()
+                        .padding(.horizontal, 24)
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .tint(.blue)
+                        .environment(\.openURL, OpenURLAction { url in
+                            UIApplication.shared.open(url)
+                            return .handled
+                        })
                     
                     
                 }
@@ -170,11 +167,7 @@ struct LandingView: View {
                 .zIndex(5)
             }
         }
-        .task {
-            try? await Task.sleep(nanoseconds: 500_000_000) // Wait 0.5 seconds
-            if let user = Auth.auth().currentUser, user.phoneNumber != nil {
-                coordinator.showMainApp(isNewUser: false)
-            }
-        }
     }
 }
+
+

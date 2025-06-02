@@ -1,12 +1,20 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>aps-environment</key>
-	<string>development</string>
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>applinks:meep-2681f.firebaseapp.com</string>
-	</array>
+    <key>aps-environment</key>
+    <string>development</string>
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <!-- Your existing Firebase domain -->
+        <string>applinks:meep-2681f.firebaseapp.com</string>
+        
+        <!-- AASA subdomain (where your AASA file will be hosted) -->
+        <string>applinks:aasa.meep.earth</string>
+        <string>webcredentials:aasa.meep.earth</string>
+        
+        <!-- Main domain (where your website/share page is hosted) -->
+        <string>applinks:meep.earth</string>
+        <string>webcredentials:meep.earth</string>
+    </array>
 </dict>
 </plist>

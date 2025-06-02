@@ -248,7 +248,7 @@ struct MeetingSearchSheetView: View {
         // Create deep link URL
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "meep.earth"
+        components.host = "aasa.meep.earth"
         components.path = "/share"
         components.queryItems = [
             URLQueryItem(name: "requestID", value: requestID),
@@ -264,7 +264,7 @@ struct MeetingSearchSheetView: View {
         }
         
         // Create message
-        let message = "\(fullName) wants to figure out where to meet."
+        let message = "\(firstName) wants to figure out where to meet."
         
         // Find the top-most presented controller to present on
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
