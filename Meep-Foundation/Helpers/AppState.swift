@@ -23,6 +23,7 @@ enum AppState {
 
 /// Coordinator for handling app-wide navigation and state
 class AppCoordinator: ObservableObject {
+    static let shared = AppCoordinator()
     /// Current app state determining which view to show
     @Published var currentState: AppState = .launching
 

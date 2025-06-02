@@ -8,6 +8,8 @@
 import SwiftUI
 import FirebaseAuth
 
+
+
 struct ProfileBottomSheet: View {
     // Optional imageUrl parameter for backward compatibility
     var imageUrl: String?
@@ -215,6 +217,7 @@ struct ProfileBottomSheet: View {
             isLoading = false
             if success {
                 dismiss()
+                AppCoordinator.shared.showLanding()
             } else if let error = error {
                 self.errorMessage = error
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {

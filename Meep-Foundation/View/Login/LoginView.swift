@@ -215,9 +215,8 @@ struct LoginView: View {
                     case .locationAccess:
                         LocationPermissionView(onContinue: {
                             viewModel.requestUserLocation()
-                            
                             step = .registrationComplete
-                        },fullName: fullName)
+                        }, profileImageUrl: profileImageUrl, fullName: fullName)
                     
                     case .registrationComplete:
                         CelebrationScreenView(onComplete: {
