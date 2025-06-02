@@ -371,3 +371,18 @@ class FirebaseService: ObservableObject {
         }
     }
 }
+
+extension FirebaseService {
+    /// Load user profile and return when complete
+    func loadUser(uid: String, completion: @escaping (Bool) -> Void) {
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
+            if let data = snapshot?.data() {
+                self?.updateMeepUserFromFirestore(data: data)
+                completion(true)
+            } else {
+                completion(false)
+            }
+        }
+    }
+}
