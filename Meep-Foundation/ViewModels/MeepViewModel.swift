@@ -16,6 +16,11 @@ import CoreLocation
 import Combine
 import GooglePlaces
 
+// MARK: – Google Photo Limits & Auto‐Load Config
+private var googlePhotoCallCount = 0
+private let googlePhotoDailyCap = 30
+private let maxAutoPhotosPerSearch = 5
+
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // MARK: - 🌍 Map & Meeting Point Management
@@ -407,7 +412,25 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                     MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
                 }
                 self.updateCategoriesFromSearchResults() // Ensure categories are synced
-                self.fetchGooglePlacesMetadata(for: sortedPoints)
+                self.fetchPhotosForTopFive()
+            }
+        }
+    }
+
+    // MARK: – 🔢 Fetch Google Photos for Only Top N Results
+    private func fetchPhotosForTopFive() {
+        let placesClient = GMSPlacesClient.shared()
+        let firstBatch = self.meetingPoints.prefix(maxAutoPhotosPerSearch)
+        for (index, place) in firstBatch.enumerated() {
+            guard googlePhotoCallCount < googlePhotoDailyCap else {
+                print("🚫 Google photo daily cap reached; skipping remaining auto‐loads.")
+                return
+            }
+            googlePhotoCallCount += 1
+            if let placeID = place.googlePlaceID {
+                self.fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: index)
+            } else {
+                self.findNearbyPlace(placesClient, place: place, index: index)
             }
         }
     }
@@ -822,43 +845,79 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         userLocation == nil && friendLocation == nil
     }
     
-    // Enhanced function to fetch place details including photos
-    func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
-        // Request fields we're interested in
+
+    // MARK: – 🔄 Overload for Single Photo Fetch (Floating Card)
+    func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int? = nil) {
         let fields: GMSPlaceField = [.name, .photos, .formattedAddress]
-        
-        placesClient.fetchPlace(
-            fromPlaceID: placeID,
-            placeFields: fields,
-            sessionToken: nil
-        ) { [weak self] (place, error) in
+        placesClient.fetchPlace(fromPlaceID: placeID, placeFields: fields, sessionToken: nil) { [weak self] place, error in
             guard let self = self else { return }
-            
             if let error = error {
                 print("⚠️ Error fetching place details: \(error.localizedDescription)")
                 return
             }
-            
             guard let place = place else {
-                print("⚠️ No place details found")
+                print("⚠️ No place details found for ID: \(placeID)")
                 return
             }
-            
-            // Update on main thread
-            OperationQueue.main.addOperation {
-                guard meetingPointIndex < self.meetingPoints.count else { return }
-                
-                // Update address if available
-                if let address = place.formattedAddress {
-                    // If you have an address field in MeetingPoint, use it
-                    // self.meetingPoints[meetingPointIndex].address = address
-                    print("📍 Address: \(address)")
-                }
-                
-                // Load photo if available
+            if let idx = meetingPointIndex, idx < self.meetingPoints.count {
                 if let photos = place.photos, !photos.isEmpty {
-                    self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: meetingPointIndex)
+                    self.loadAndUpdatePhoto(placesClient, photo: photos[0], meetingPointIndex: idx)
                 }
+            } else {
+                if let photos = place.photos, !photos.isEmpty {
+                    placesClient.loadPlacePhoto(photos[0]) { image, error in
+                        guard let uiImg = image, error == nil else {
+                            print("⚠️ Could not load single photo for selectedPoint: \(error?.localizedDescription ?? "Unknown")")
+                            return
+                        }
+                        if let imgData = uiImg.jpegData(compressionQuality: 0.7) {
+                            let base64 = imgData.base64EncodedString()
+                            DispatchQueue.main.async {
+                                if let sel = self.selectedPoint {
+                                    self.selectedPoint?.imageUrl = "data:image/jpeg;base64,\(base64)"
+                                    print("✅ Fetched single‐photo for \(sel.name)")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Legacy call—forward to overloaded version
+    func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
+        fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: meetingPointIndex)
+    }
+
+    // MARK: – 🔄 Fetch Exactly One Photo on Demand
+    func fetchSinglePhotoFor(point: MeetingPoint) {
+        let placesClient = GMSPlacesClient.shared()
+        let filter = GMSAutocompleteFilter()
+        filter.type = .establishment
+        var searchQuery = point.name
+        if point.category.lowercased() != "unknown" {
+            searchQuery += " \(point.category)"
+        }
+        let midpointLoc = CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude)
+        CLGeocoder().reverseGeocodeLocation(midpointLoc) { [weak self] placemarks, _ in
+            guard let self = self else { return }
+            var finalQuery = searchQuery
+            if let city = placemarks?.first?.locality {
+                finalQuery += " \(city)"
+            }
+            placesClient.findAutocompletePredictions(fromQuery: finalQuery, filter: filter, sessionToken: nil) { [weak self] predictions, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("⚠️ Autocomplete failed for “\(point.name)”: \(error.localizedDescription)")
+                    return
+                }
+                guard let preds = predictions, !preds.isEmpty else {
+                    print("⚠️ No autocomplete results for “\(point.name)”")
+                    return
+                }
+                let placeID = preds[0].placeID
+                self.fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: nil)
             }
         }
     }

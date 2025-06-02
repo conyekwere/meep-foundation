@@ -8,6 +8,8 @@
 import SwiftUI
 import FirebaseAuth
 
+
+
 struct ProfileBottomSheet: View {
     // Optional imageUrl parameter for backward compatibility
     var imageUrl: String?
@@ -174,14 +176,14 @@ struct ProfileBottomSheet: View {
     
     fileprivate func termsAndPrivacySection() -> some View {
         HStack(spacing: 12) {
-            Link("Terms", destination: URL(string: "https://meep.earth/terms")!)
+            Link("Terms", destination: URL(string: "https://meep.earth/#/terms")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
             
             Text("·")
                 .foregroundColor(.gray)
             
-            Link("Privacy", destination: URL(string: "https://meep.earth/privacy")!)
+            Link("Privacy", destination: URL(string: "https://meep.earth/#/privacy")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
         }
@@ -215,6 +217,7 @@ struct ProfileBottomSheet: View {
             isLoading = false
             if success {
                 dismiss()
+                AppCoordinator.shared.showLanding()
             } else if let error = error {
                 self.errorMessage = error
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
