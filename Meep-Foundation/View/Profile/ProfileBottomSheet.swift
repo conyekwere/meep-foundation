@@ -174,14 +174,14 @@ struct ProfileBottomSheet: View {
     
     fileprivate func termsAndPrivacySection() -> some View {
         HStack(spacing: 12) {
-            Link("Terms", destination: URL(string: "https://meep.earth/terms")!)
+            Link("Terms", destination: URL(string: "https://meep.earth/#/terms")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
             
             Text("·")
                 .foregroundColor(.gray)
             
-            Link("Privacy", destination: URL(string: "https://meep.earth/privacy")!)
+            Link("Privacy", destination: URL(string: "https://meep.earth/#/privacy")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
         }
