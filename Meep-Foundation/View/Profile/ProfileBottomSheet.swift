@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import UIKit
 
 
 
@@ -28,6 +29,7 @@ struct ProfileBottomSheet: View {
     
     // Environment
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var coordinator: AppCoordinator
     
     var body: some View {
         ZStack {
@@ -142,14 +144,16 @@ struct ProfileBottomSheet: View {
     
     fileprivate func menuOptions() -> some View {
         VStack(spacing: 12) {
-            ProfileMenuItem(icon: "plus", title: "Meep Plus", subtitle: "Get access to time-saving features", isRotated: false)
-                .onTapGesture {
-                    // Implement Meep Plus subscription flow
-                }
+//            ProfileMenuItem(icon: "plus", title: "Meep Plus", subtitle: "Get access to time-saving features", isRotated: false)
+//                .onTapGesture {
+//                    // Implement Meep Plus subscription flow
+//                }
             
             ProfileMenuItem(icon: "pencil.tip", title: "Give Feedback", subtitle: "Help us improve with your thoughts", isRotated: false)
                 .onTapGesture {
-                    // Implement feedback submission
+                    if let url = URL(string: "https://tally.so/r/wagLMB") {
+                        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                    }
                 }
             
             ProfileMenuItem(icon: "person.fill", title: "Edit Profile", subtitle: "Update your profile information", isRotated: false)
@@ -216,8 +220,8 @@ struct ProfileBottomSheet: View {
         firebaseService.signOut { success, error in
             isLoading = false
             if success {
+                coordinator.showLanding()
                 dismiss()
-                AppCoordinator.shared.showLanding()
             } else if let error = error {
                 self.errorMessage = error
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
@@ -232,6 +236,7 @@ struct ProfileBottomSheet: View {
         firebaseService.deleteAccount { success, error in
             isLoading = false
             if success {
+                coordinator.showLanding()
                 dismiss()
             } else if let error = error {
                 self.errorMessage = error

@@ -18,7 +18,7 @@ import GooglePlaces
 
 // MARK: – Google Photo Limits & Auto‐Load Config
 private var googlePhotoCallCount = 0
-private let googlePhotoDailyCap = 30
+private let googlePhotoDailyCap = 3000
 private let maxAutoPhotosPerSearch = 5
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
@@ -85,37 +85,79 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // Mapping from MKLocalSearch place types to our categories.
     let categoryMapping: [String: (category: String, emoji: String)] = [
-        "restaurant": ("Restaurant", "🍴"),
+        // Apple MKPointOfInterestCategory (alphabetical)
+        "mkpoicategoryairport": ("Airport", "✈️"),
+        "mkpoicategoryamusementpark": ("Amusement Park", "🎢"),
+        "mkpoicategoryaquarium": ("Aquarium", "🐠"),
+        "mkpoicategoryatm": ("ATM", "🏧"),
+        "mkpoicategorybakery": ("Bakery", "🍞"),
+        "mkpoicategorybank": ("Bank", "🏦"),
+        "mkpoicategorybeach": ("Beach", "🏖"),
+        "mkpoicategorybrewery": ("Brewery", "🍺"),
+        "mkpoicategorycafe": ("Cafe", "☕"),
+        "mkpoicategorycampground": ("Campground", "🏕"),
+        "mkpoicategorycarrental": ("Car Rental", "🚗"),
+        "mkpoicategoryevcharger": ("EV Charger", "🔌"),
+        "mkpoicategoryfirestation": ("Fire Station", "🚒"),
+        "mkpoicategoryfitnesscenter": ("Gym", "🏋️"),
+        "mkpoicategoryfoodmarket": ("Groceries", "🍎"),
+        "mkpoicategorygasstation": ("Gas Station", "⛽️"),
+        "mkpoicategoryhospital": ("Hospital", "🏥"),
+        "mkpoicategoryhotel": ("Hotel", "🏨"),
+        "mkpoicategorylaundry": ("Laundry", "🧺"),
+        "mkpoicategorylibrary": ("Library", "📚"),
+        "mkpoicategorymarina": ("Marina", "🚤"),
+        "mkpoicategorymovietheater": ("Movie Theater", "🎬"),
+        "mkpoicategorymuseum": ("Museum", "🎨"),
+        "mkpoicategorynationalpark": ("National Park", "🏞"),
+        "mkpoicategorynightlife": ("Bar", "🍺"),
+        "mkpoicategorypark": ("Park", "🌳"),
+        "mkpoicategoryparking": ("Parking", "🅿️"),
+        "mkpoicategorypharmacy": ("Pharmacy", "💊"),
+        "mkpoicategorypolice": ("Police", "🚓"),
+        "mkpoicategorypostoffice": ("Post Office", "📮"),
+        "mkpoicategorypublictransport": ("Public Transport", "🚉"),
+        "mkpoicategoryrestaurant": ("Restaurant", "🍴"),
+        "mkpoicategoryrestroom": ("Restroom", "🚻"),
+        "mkpoicategoryschool": ("School", "🏫"),
+        "mkpoicategorystadium": ("Stadium", "🏟"),
+        "mkpoicategorystore": ("Store", "🛍"),
+        "mkpoicategorytheater": ("Theater", "🎭"),
+        "mkpoicategoryuniversity": ("University", "🎓"),
+        "mkpoicategorywinery": ("Winery", "🍷"),
+        "mkpoicategoryzoo": ("Zoo", "🦁"),
+        // Other generic/legacy mappings
+        "airport": ("Airport", "✈️"),
+        "art gallery": ("Museum", "🎨"),
+        "bakery": ("Bakery", "🍞"),
         "bar": ("Bar", "🍺"),
         "brewery": ("Bar", "🍺"),
-        "nightlife": ("Bar", "🍺"),   // Added for MKPOICategoryNightlife
-        "mkpoicategorynightlife": ("Bar", "🍺"),  // Added specifically for your case
-        "cafe": ("Coffee shop", "☕"),
-        "bakery": ("Bakery", "🍞"),
-        "night club": ("Nightlife", "🪩"),
-        "mkpoicategorytheater":("Theater", "🎭"),
-        "theater": ("Theater", "🎭"),
-        "movie theater": ("Theater", "🎭"),
-        "stadium": ("Stadium", "🏟"),
-        "museum": ("Museum", "🎨"),
-        "mkpoicategorymusicvenue": ("Music Venue", "🎶"),
-        "mkpoicategorymarina": ("Marina", "🚤"),
-        "library": ("Library", "📚"),
-        "art gallery": ("Museum", "🎨"),
-        "park": ("Park", "🌳"),
-        "national park": ("National Park", "🏞"),
-        "zoo": ("Zoo", "🦁"),
-        "supermarket": ("Groceries", "🍎"),
-        "grocery store": ("Groceries", "🍎"),
-        "department store": ("Retail", "🛍"),
-        "train station": ("Public Transport", "🚉"),
-        "airport": ("Airport", "✈️"),
         "bus station": ("Public Transport", "🚉"),
-        "hotel": ("Hotel", "🏨"),
-        "resort": ("Hotel", "🏨"),
-        "gym": ("Gym", "🏋️"),
+        "cafe": ("Coffee shop", "☕"),
+        "department store": ("Retail", "🛍"),
         "fitness center": ("Gym", "🏋️"),
-        "winery": ("Winery", "🍷")
+        "food market": ("Groceries", "🍎"),
+        "grocery store": ("Groceries", "🍎"),
+        "gym": ("Gym", "🏋️"),
+        "hotel": ("Hotel", "🏨"),
+        "library": ("Library", "📚"),
+        "movie theater": ("Theater", "🎭"),
+        "museum": ("Museum", "🎨"),
+        "national park": ("National Park", "🏞"),
+        "night club": ("Bar", "🍺"),
+        "nightlife": ("Bar", "🍺"),
+        "park": ("Park", "🌳"),
+        "restaurant": ("Restaurant", "🍴"),
+        "resort": ("Hotel", "🏨"),
+        "stadium": ("Stadium", "🏟"),
+        "supermarket": ("Groceries", "🍎"),
+        "theater": ("Theater", "🎭"),
+        "train station": ("Public Transport", "🚉"),
+        "winery": ("Winery", "🍷"),
+        "zoo": ("Zoo", "🦁"),
+        // Custom/legacy values
+        "mkpoicategorymusicvenue": ("Music Venue", "🎶"),
+        "mkpoicategoryfood-market":("Groceries", "🍎")
     ]
     
     
@@ -255,6 +297,24 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         return results
     }
     
+//    var annotationsWithSubway: [MeepAnnotation] {
+//        var results = annotations
+//        
+//        // Add subway stations when train mode is selected
+//        if (userTransportMode == .train || friendTransportMode == .train) {
+//            let subwayStations = subwayOverlayManager.subwayAnnotations.map { station in
+//                MeepAnnotation(
+//                    coordinate: station.coordinate,
+//                    title: station.title ?? "Station",
+//                    type: .place(emoji: "🚇")
+//                )
+//            }
+//            results.append(contentsOf: subwayStations)
+//        }
+//        
+//        return results
+//    }
+//    
     
     
 
@@ -373,6 +433,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         
     // MARK: - 📌 Search Nearby Places (Apple Maps + Google Places)
     func searchNearbyPlaces() {
+        guard userLocation != nil && friendLocation != nil else {
+            print("⚠️ Skipping search — both user and friend locations are not available.")
+            return
+        }
         print("🔍 Searching Apple Maps for places near midpoint...")
 
         let delta = searchRadius * 0.0145  // Roughly converts miles to degrees
@@ -885,10 +949,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
-    // Legacy call—forward to overloaded version
-    func fetchPlaceDetails(_ placesClient: GMSPlacesClient, placeID: String, meetingPointIndex: Int) {
-        fetchPlaceDetails(placesClient, placeID: placeID, meetingPointIndex: meetingPointIndex)
-    }
 
     // MARK: – 🔄 Fetch Exactly One Photo on Demand
     func fetchSinglePhotoFor(point: MeetingPoint) {

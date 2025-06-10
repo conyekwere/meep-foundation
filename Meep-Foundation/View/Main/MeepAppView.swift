@@ -14,6 +14,9 @@ enum UIState {
 }
 
 struct MeepAppView: View {
+    
+    @StateObject private var subwayOverlayManager = OptimizedSubwayMapManager()
+    
     @StateObject private var viewModel = MeepViewModel()
     
     @StateObject private var firebaseService = FirebaseService.shared
@@ -39,7 +42,7 @@ struct MeepAppView: View {
     private let sheetMax: CGFloat = UIScreen.main.bounds.height * 0.8
 
     // Offsets for the draggable sheets along with last offset values
-    @State private var onboardingOffset: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var onboardingOffset: CGFloat = UIScreen.main.bounds.height * 0.82
     @State private var lastOnboardingDragOffset: CGFloat = UIScreen.main.bounds.height * 0.5
 
     @State private var meetingResultsOffset: CGFloat = UIScreen.main.bounds.height * 0.82
@@ -50,6 +53,22 @@ struct MeepAppView: View {
     @State private var searchRadius: Double = 1
     
     @State private var selectedAnnotation: MeepAnnotation? = nil
+    @State private var selectedAnnotationID: UUID?
+    
+    var activeMapAnnotations: [MeepAnnotation] {
+        return viewModel.annotations
+    }
+
+    // Helper to load subway data if needed
+    private func loadSubwayDataIfNeeded() {
+         if (myTransit == .train || friendTransit == .train) &&
+            viewModel.userLocation != nil &&
+            viewModel.friendLocation != nil &&
+            uiState == .results &&
+            !subwayOverlayManager.hasLoadedData {
+             subwayOverlayManager.loadSubwayData()
+         }
+     }
     
     
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
@@ -124,47 +143,43 @@ struct MeepAppView: View {
         }
     }
     
+    
 
     var body: some View {
         ZStack {
 
-            Map(coordinateRegion: $viewModel.mapRegion,
-                interactionModes: .all,
-                showsUserLocation: true,
-                annotationItems: viewModel.annotations) { annotation in
-                    MapAnnotation(coordinate: annotation.coordinate) {
-                        annotation.annotationView(isSelected: Binding(
-                            get: { selectedAnnotation?.id == annotation.id },
-                            set: { newValue in
-                                withAnimation(.spring()) {
-                                    if newValue {
-                                        selectedAnnotation = annotation
-                                        setSelectedMeetingPoint(for: annotation)
-                                    } else {
-                                        selectedAnnotation = nil
-                                        viewModel.isFloatingCardVisible = false
-                                    }
-                                }
-                            }
-                        ))
-                    }
-                }
-                .mapStyle(.standard(elevation: .flat,
-                                                pointsOfInterest: .excludingAll,
-                                                showsTraffic: false))
-            
-                .gesture(
-                    DragGesture()
-                        .onChanged { _ in viewModel.isUserInteractingWithMap = true } // ✅ Start Tracking Drag
-                        .onEnded { _ in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                viewModel.isUserInteractingWithMap = false // ✅ Only Recalculate AFTER Drag Stops
-                                viewModel.searchNearbyPlaces() // ✅ Refresh Search When Drag Ends
-                            }
-                        }
-                )
-            .ignoresSafeArea()
 
+            let shouldShowSubwayLines = (myTransit == .train || friendTransit == .train) &&
+                                       viewModel.userLocation != nil &&
+                                       viewModel.friendLocation != nil
+            
+            let annotationSelectionHandler: (MeepAnnotation) -> Void = { annotation in
+                withAnimation(.spring()) {
+                    selectedAnnotationID = annotation.id
+                    selectedAnnotation = annotation
+                    setSelectedMeetingPoint(for: annotation)
+                }
+            }
+
+            NativeMapView(
+                region: $viewModel.mapRegion,
+                annotations: activeMapAnnotations,
+                showSubwayLines: shouldShowSubwayLines,
+                subwayManager: subwayOverlayManager,
+                selectedAnnotationID: selectedAnnotationID,
+                onAnnotationSelected: annotationSelectionHandler
+            )
+            .ignoresSafeArea()
+//           .gesture(
+//                DragGesture()
+//                    .onChanged { _ in viewModel.isUserInteractingWithMap = true }
+//                    .onEnded { _ in
+//                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+//                            viewModel.isUserInteractingWithMap = false
+//                            viewModel.searchNearbyPlaces()
+//                        }
+//                    }
+//            )
             
             // MARK: Top Search Bars Based on UIState
             VStack {
@@ -211,9 +226,15 @@ struct MeepAppView: View {
                     .shadow(radius: 16)
                 }
                 Spacer()
+                
+                
+
+
             }
             .padding()
             .zIndex(3)
+            
+            
             
             // MARK: Onboarding Sheet (Draggable)
             if uiState == .onboarding {
@@ -236,7 +257,7 @@ struct MeepAppView: View {
             }
             
             // MARK: Meeting Results Sheet (Draggable)
-            if uiState == .results {
+            if uiState == .results && !viewModel.isFloatingCardVisible {
                 MeetingResultsSheetView(viewModel: viewModel)
                     .background(Color(.tertiarySystemBackground))
                     .cornerRadius(meetingResultsOffset == sheetMin ? 0 : 24)
@@ -253,17 +274,26 @@ struct MeepAppView: View {
             
             // MARK: Floating Card for Selected Point
             if let selectedPoint = viewModel.selectedPoint, viewModel.isFloatingCardVisible {
-                Spacer()
-                FloatingCardView(meetingPoint: selectedPoint) {
-                    withAnimation {
-                        viewModel.isFloatingCardVisible = false
-                        viewModel.selectedPoint = nil
-                        selectedAnnotation = nil // Deselect annotation when closing
-                    }
+                VStack {
+                    Spacer()
+                    FloatingCardView(
+                        viewModel: viewModel,
+                        meetingPoint: selectedPoint,
+                        onClose: {
+                            withAnimation {
+                                viewModel.isFloatingCardVisible = false
+                                viewModel.selectedPoint = nil
+                                selectedAnnotation = nil
+                                uiState = .results
+                            }
+                        }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 16)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(3)
                 }
-                .padding(.horizontal)
-                .transition(.move(edge: .bottom))
-                .zIndex(3)
+                .ignoresSafeArea(edges: .bottom)
             }
         }
         
@@ -301,6 +331,9 @@ struct MeepAppView: View {
                 onDone: {
                     isSearching = false
                     uiState = .results
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        loadSubwayDataIfNeeded()
+                    }
                 }
             )
             .background(Color(.tertiarySystemBackground))
@@ -308,7 +341,7 @@ struct MeepAppView: View {
         
         .sheet(isPresented: $isProfilePresented) {
             ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
-                .presentationDetents([.fraction(0.75)])
+                .presentationDetents([.fraction(0.62)])
                 
         }
         
@@ -323,10 +356,38 @@ struct MeepAppView: View {
             )
             .presentationDetents([.fraction(0.85)])
         }
+        .onAppear {
+            viewModel.requestUserLocation()
+
+        }
         .onChange(of: searchRequest) { newValue in
             if newValue {
                 isSearching = true
                 searchRequest = false
+            }
+        }
+        .onChange(of: myTransit) { _ in
+            viewModel.userTransportMode = myTransit
+        }
+        .onChange(of: friendTransit) { _ in
+            viewModel.friendTransportMode = friendTransit
+        }
+        .onChange(of: viewModel.userLocation?.latitude) { _ in
+            if viewModel.userLocation != nil &&
+               viewModel.friendLocation != nil &&
+               (myTransit == .train || friendTransit == .train) &&
+               uiState == .results {
+       
+                loadSubwayDataIfNeeded()
+            }
+        }
+        .onChange(of: viewModel.friendLocation?.latitude) { _ in
+            if viewModel.userLocation != nil &&
+               viewModel.friendLocation != nil &&
+               (myTransit == .train || friendTransit == .train) &&
+               uiState == .results {
+        
+                loadSubwayDataIfNeeded()
             }
         }
     }
