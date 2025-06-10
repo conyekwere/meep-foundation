@@ -32,6 +32,10 @@ struct MeetingSearchSheetView: View {
     @State private var locationToSave = ""
     @State private var tempCoordinate: CLLocationCoordinate2D? = nil
     
+    // MARK: - Geocode Error State
+    @State private var geocodeError: String? = nil
+    @State private var showGeocodeErrorAlert: Bool = false
+    
     // MARK: - Transport State
     @State private var selectedMyTransport: TransportMode? = nil
     @State private var selectedFriendTransport: TransportMode? = nil
@@ -82,7 +86,8 @@ struct MeetingSearchSheetView: View {
     }
     
     private func handleDoneButtonTap() {
-        if isMyLocationValid && isFriendsLocationValid {
+        if isMyLocationValid && isFriendsLocationValid &&
+           viewModel.userLocation != nil && viewModel.friendLocation != nil {
             processBothLocations {
                 onDone()
             }
@@ -254,7 +259,8 @@ struct MeetingSearchSheetView: View {
             URLQueryItem(name: "requestID", value: requestID),
             URLQueryItem(name: "userName", value: fullName),
             URLQueryItem(name: "username", value: firstName),
-            URLQueryItem(name: "userId", value: userId)
+            URLQueryItem(name: "userId", value: userId),
+            URLQueryItem(name: "profileImageUrl", value: firebaseService.meepUser?.profileImageUrl ?? "")
         ]
         
         guard let url = components.url else {
@@ -421,7 +427,8 @@ struct MeetingSearchSheetView: View {
         LocationHelpers.cancelGeocoding()
         LocationHelpers.geocodeAddress(myLocation) { coordinate, _ in
             guard let userCoord = coordinate else {
-                print("❌ Failed to geocode My Location: \(self.myLocation)")
+                self.geocodeError = "Failed to find your location. Please try again."
+                self.showGeocodeErrorAlert = true
                 completion()
                 return
             }
@@ -442,7 +449,8 @@ struct MeetingSearchSheetView: View {
         LocationHelpers.cancelGeocoding()
         LocationHelpers.geocodeAddress(friendLocation) { coordinate, _ in
             guard let friendCoord = coordinate else {
-                print("❌ Failed to geocode Friend's Location: \(self.friendLocation)")
+                self.geocodeError = "Failed to find your friend's location. Please try again."
+                self.showGeocodeErrorAlert = true
                 completion()
                 return
             }
@@ -582,7 +590,7 @@ struct MeetingSearchSheetView: View {
                 .buttonStyle(PlainButtonStyle())
                 .disabled(isGeocodingInProgress)
             }
-            
+
             ToolbarItem(placement: .principal) {
                 VStack(alignment: .center, spacing: 2) {
                     Text("Set meeting point")
@@ -593,15 +601,16 @@ struct MeetingSearchSheetView: View {
                 }
                 .padding(.vertical, 8)
             }
-            
+
             ToolbarItem(placement: .topBarTrailing) {
-                if isMyLocationValid && isFriendsLocationValid {
-                    Button(action: handleDoneButtonTap) {
-                        Text("Done")
-                            .foregroundColor(isGeocodingInProgress ? .gray : .primary)
-                    }
-                    .disabled(isGeocodingInProgress)
+                let isReadyToSearch = isMyLocationValid && isFriendsLocationValid &&
+                                      viewModel.userLocation != nil && viewModel.friendLocation != nil
+
+                Button(action: handleDoneButtonTap) {
+                    Text(isGeocodingInProgress ? "Loading..." : "Done")
+                        .foregroundColor(isReadyToSearch && !isGeocodingInProgress ? .primary : .gray)
                 }
+                .disabled(!isReadyToSearch || isGeocodingInProgress)
             }
         }
     }
@@ -837,38 +846,38 @@ struct MeetingSearchSheetView: View {
                 }
                 
                 // Ask for Friend's Location button (shown for all states)
-                Button(action: {
-                    requestContactAccess { granted in
-                        if granted {
-                            // Show share sheet pointer and present share sheet
-                            withAnimation {
-                                self.showingShareArrowPointer = true
-                            }
-                            self.presentShareSheet()
-                        }
-                    }
-                }) {
-                    HStack(spacing: 16) {
-                        Image(systemName: "message")
-                            .font(.callout)
-                            .foregroundColor(.blue)
-                            .frame(width: 40, height: 40)
-                            .background(Color(hex: "E8F0FE"))
-                            .clipShape(Circle())
-                        
-                        VStack(alignment: .leading) {
-                            Text("Ask for a Friend's Location")
-                                .foregroundColor(.primary)
-                                .font(.body)
-                            Text("Exact coordinates are hidden")
-                                .font(.callout)
-                                .foregroundColor(Color(.darkGray))
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
+//                Button(action: {
+//                    requestContactAccess { granted in
+//                        if granted {
+//                            // Show share sheet pointer and present share sheet
+//                            withAnimation {
+//                                self.showingShareArrowPointer = true
+//                            }
+//                            self.presentShareSheet()
+//                        }
+//                    }
+//                }) {
+//                    HStack(spacing: 16) {
+//                        Image(systemName: "message")
+//                            .font(.callout)
+//                            .foregroundColor(.blue)
+//                            .frame(width: 40, height: 40)
+//                            .background(Color(hex: "E8F0FE"))
+//                            .clipShape(Circle())
+//
+//                        VStack(alignment: .leading) {
+//                            Text("Ask for a Friend's Location")
+//                                .foregroundColor(.primary)
+//                                .font(.body)
+//                            Text("Exact coordinates are hidden")
+//                                .font(.callout)
+//                                .foregroundColor(Color(.darkGray))
+//                                .lineLimit(1)
+//                        }
+//                    }
+//                    .padding(.horizontal, 16)
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                }
                 
                 if onboardingManager.shouldShowOnboardingElement() {
                     Image(systemName: "chevron.up")
@@ -1039,6 +1048,11 @@ struct MeetingSearchSheetView: View {
                 }
             } message: {
                 Text("Please enable contacts access in Settings to share your location request with friends.")
+            }
+            .alert("Geocoding Failed", isPresented: $showGeocodeErrorAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(geocodeError ?? "Unable to find location.")
             }
         }
         .overlay(
