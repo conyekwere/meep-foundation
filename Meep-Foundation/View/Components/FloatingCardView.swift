@@ -9,140 +9,86 @@
 import SwiftUI
 import MapKit
 
-//struct FloatingCardView: View {
-//    let meetingPoint: MeetingPoint
-//    let onClose: () -> Void
-//
-//    var body: some View {
-//        
-//        
-//        VStack(alignment: .leading) {
-//            // Dismiss Button
-//            HStack {
-//                Spacer()
-//                Button(action: onClose) {
-//                    Image(systemName: "xmark.circle.fill")
-//                        .foregroundColor(.gray)
-//                        .imageScale(.large)
-//                }
-//            }
-//            .padding(.top)
-//
-//            // Meeting Point Image
-//            AsyncImage(url: URL(string: meetingPoint.imageUrl ?? "")) { image in
-//                image.resizable()
-//            } placeholder: {
-//                Color.gray.opacity(0.3)
-//            }
-//            .frame(height: 150)
-//            .cornerRadius(10)
-//
-//            // Meeting Point Name & Category
-//            Text(meetingPoint.name)
-//                .font(.title2)
-//                .bold()
-//            HStack {
-//                Text(meetingPoint.emoji)
-//                Text(meetingPoint.category)
-//                    .font(.subheadline)
-//                    .foregroundColor(.gray)
-//            }
-//
-//            // Distance Info
-////            Text("\(meetingPoint.distance ?? 0.0, specifier: "%.2f") miles away")
-////                .font(.subheadline)
-////                .foregroundColor(.gray)
-//
-//
-//            // "Get Directions" Button
-//            Button(action: {
-//                let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: meetingPoint.coordinate))
-//                mapItem.name = meetingPoint.name
-//                mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
-//            }) {
-//                HStack {
-//                    Image(systemName: "tram.fill")
-//                    Text("Get Directions")
-//                        .bold()
-//                }
-//                .frame(maxWidth: .infinity)
-//                .padding()
-//                .background(Color.black)
-//                .foregroundColor(.white)
-//                .cornerRadius(10)
-//            }
-//        }
-//        .padding()
-//        .background(Color.white)
-//        .cornerRadius(15)
-//        .shadow(radius: 5)
-//        .padding(.horizontal)
-//    }
-//}
-//
-//
-//#Preview {
-//    FloatingCardView(meetingPoint: MeetingPoint(
-//        name: "Central Park",
-//        emoji: "🌳",
-//        category: "Park",
-//        coordinate: CLLocationCoordinate2D(latitude: 40.785091, longitude: -73.968285),
-//        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
-//    )) {
-//        print("FloatingCardView closed")
-//    }
-//}
-//
 struct FloatingCardView: View {
+    @ObservedObject var viewModel: MeepViewModel
     let meetingPoint: MeetingPoint
     let onClose: () -> Void
-    
+
     @State private var isImageLoaded = false
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Image section with Google Places photo
+        
+    VStack(alignment: .leading, spacing: 0) {
+
+        
+        HStack{
+            // Image section with Google Places or placeholder
             ZStack {
-                // Image loading with state handling
-                AsyncImage(url: URL(string: meetingPoint.imageUrl)) { phase in
-                    switch phase {
-                    case .empty:
-                        // Loading state
-                        ZStack {
-                            Color.gray.opacity(0.2)
-                            ProgressView()
-                        }
-                        .frame(height: 160)
-                    case .success(let image):
-                        // Successful image load
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 160)
-                            .clipped()
-                            .onAppear {
-                                isImageLoaded = true
+                // If we already have a valid dataURL or remote URL:
+                if let url = URL(string: meetingPoint.imageUrl), !meetingPoint.imageUrl.isEmpty {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ZStack {
+                                Color.gray.opacity(0.2)
+                                ProgressView()
                             }
-                    case .failure:
-                        // Fallback with place emoji
-                        ZStack {
-                            Color.gray.opacity(0.2)
-                            VStack {
-                                Text(meetingPoint.emoji)
-                                    .font(.system(size: 60))
-                                Text(meetingPoint.name)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                            .cornerRadius(10)
+                            .cornerRadius(10)
+                            
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width:112 , height: 112)
+                                .clipped()
+                                .onAppear {
+                                    isImageLoaded = true
+                                }
+                                .cornerRadius(10)
+                            
+                        case .failure:
+                            ZStack {
+                                Color.gray.opacity(0.2)
+                                VStack {
+                                    Text(meetingPoint.emoji)
+                                        .font(.callout)
+                                    Text(meetingPoint.name)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .multilineTextAlignment(.center)
+                                }
                             }
+                            .cornerRadius(10)
+                            .frame(width:112 , height: 112)
+                            .cornerRadius(10)
+                        @unknown default:
+                            Color.gray.opacity(0.2)
+                                .frame(height: 160)
                         }
-                        .frame(height: 160)
-                    @unknown default:
-                        Color.gray.opacity(0.2)
-                            .frame(height: 160)
                     }
                 }
+                // If no imageUrl yet, show placeholder:
+                else {
+                    ZStack {
+                        Color.gray.opacity(0.2)
+                        VStack {
+                            Text(meetingPoint.emoji)
+                                .font(.callout)
+                            Text(meetingPoint.name)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .cornerRadius(10)
+                    .frame(width:112 , height: 112)
+                    .cornerRadius(10)
+                }
                 
-                // Attribution overlay (bottom right)
+                // Attribution if it was a Google‐loaded photo:
                 if let photoRef = meetingPoint.photoReference, !photoRef.isEmpty {
                     VStack {
                         Spacer()
@@ -160,108 +106,119 @@ struct FloatingCardView: View {
                 }
             }
             .frame(height: 160)
-            
-            // Place information
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(meetingPoint.emoji)
-                        .font(.title2)
-                    
-                    Text(meetingPoint.name)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    Button(action: onClose) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.title3)
-                    }
-                }
-                
-                HStack {
-                    Text(meetingPoint.category)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    // If we have an original place type and it's different from category, show it
-                    if let originalType = meetingPoint.originalPlaceType,
-                       originalType.capitalized != meetingPoint.category {
-                        Text("(\(originalType.capitalized))")
-                            .font(.caption)
-                            .foregroundColor(.secondary.opacity(0.7))
-                    }
-                }
-                
-                Divider()
-                    .padding(.vertical, 8)
-                
-                // Action buttons
-                HStack(spacing: 12) {
-                    ActionButton(
-                        icon: "arrow.triangle.turn.up.right.circle.fill",
-                        title: "Share",
-                        color: .blue
-                    )
-                    
-                    ActionButton(
-                        icon: "location.fill",
-                        title: "Directions",
-                        color: .green
-                    )
-                    
-                    ActionButton(
-                        icon: "star",
-                        title: "Save",
-                        color: .orange
-                    )
+            .onAppear {
+                // If no imageUrl yet → fetch single photo for selectedPoint
+                if meetingPoint.imageUrl.isEmpty {
+                    viewModel.fetchSinglePhotoFor(point: meetingPoint)
                 }
             }
+            
+
+            
+            // Place Name & Travel Time
+            VStack(alignment: .leading, spacing: 8) {
+                Text(meetingPoint.name)
+                    .font(.title2)
+                    .fontWidth(.expanded)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                // Example: "15 min away" (you can replace with dynamic text if available)
+                Text(String(format: "%.2f miles away", meetingPoint.distance(from: viewModel.userLocation)))
+                    .font(.headline)
+                    .fontWidth(.expanded)
+                    .fontWeight(.regular)
+                    .foregroundColor(.primary)
+                
+                // Category Badge
+                HStack(spacing: 4) {
+                    Text(meetingPoint.emoji)
+                        .font(.caption)
+                    Text(meetingPoint.category)
+                        .font(.footnote)
+                        .foregroundColor(.primary)
+                        .fontWidth(.expanded)
+                }
+
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .overlay(RoundedRectangle(cornerRadius:4).stroke(Color(.lightGray).opacity(0.8), lineWidth: 1))
+
+            }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 8)
+            
         }
+            .padding(.horizontal, 16)
+
+
+          
+        
+        // Get Directions Button
+        Button(action: {
+            // Use Apple Maps directions
+            let placemark = MKPlacemark(coordinate: meetingPoint.coordinate)
+            let mapItem = MKMapItem(placemark: placemark)
+            mapItem.name = meetingPoint.name
+            mapItem.openInMaps(launchOptions: [
+                MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+            ])
+        }) {
+            HStack {
+                Image(systemName: "tram.fill")
+                    .font(.headline)
+                Text("Get Directions")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.black)
+            .cornerRadius(10)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+
+    }
         .background(Color(.systemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
-    }
-}
-
-// Helper view for action buttons
-struct ActionButton: View {
-    let icon: String
-    let title: String
-    let color: Color
-    
-    var body: some View {
-        Button(action: {}) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .foregroundColor(color)
-                    .font(.system(size: 18))
-                
-                Text(title)
-                    .font(.caption)
-                    .foregroundColor(.primary)
+        .padding(.horizontal, 8)
+        .overlay {
+            // Dismiss Button (top right)
+            HStack {
+                Spacer()
+              
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(8)
+            .padding (.trailing, 20)
+            .offset(y: -90)
+            
         }
     }
 }
 
+
 #Preview {
-    FloatingCardView(meetingPoint: MeetingPoint(
-        name: "Central Park",
-        emoji: "🌳",
-        category: "Park",
-        coordinate: CLLocationCoordinate2D(latitude: 40.785091, longitude: -73.968285),
-        imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
-    )) {
-        print("FloatingCardView closed")
-    }
+    FloatingCardView(
+        viewModel: MeepViewModel(),
+        meetingPoint: MeetingPoint(
+            name: "Central Park",
+            emoji: "🌳",
+            category: "Park",
+            coordinate: CLLocationCoordinate2D(latitude: 40.785091, longitude: -73.968285),
+            imageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg/1599px-Global_Citizen_Festival_Central_Park_New_York_City_from_NYonAir_%2815351915006%29.jpg"
+        ),
+        onClose: {
+            print("FloatingCardView closed")
+        }
+    )
 }
+

@@ -39,6 +39,7 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var profileImageUrl: String = ""
+    @State private var profileImageThumbnailUrl: String = ""
 
     private var progressBarWidth: CGFloat {
         let steps: [AuthStep] = [
@@ -204,8 +205,9 @@ struct LoginView: View {
                     case .registerPhoto:
                         RegistrationAddProfilePhotoView(onContinue: { image in
                             Task {
-                                if let url = try? await ImageUploadService().uploadImage(image: image) {
-                                    profileImageUrl = url
+                                if let (fullSizeUrl, thumbnailUrl) = try? await ImageUploadService().uploadImageWithThumbnail(image: image) {
+                                    profileImageUrl = fullSizeUrl
+                                    profileImageThumbnailUrl = thumbnailUrl
                                     step = .locationAccess
                                 } else {
                                     errorMessage = "Failed to upload profile image"
@@ -246,6 +248,7 @@ struct LoginView: View {
             username: username,
             phoneNumber: phoneNumber,
             profileImageUrl: profileImageUrl,
+            profileImageThumbnailUrl: profileImageThumbnailUrl,
             gender: gender,
             dateOfBirth: dateOfBirth,
             completion: { success, error in

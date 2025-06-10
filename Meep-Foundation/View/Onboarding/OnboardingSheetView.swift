@@ -24,7 +24,7 @@ struct OnboardingSheetView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // First Card: Allow Location
-                        if viewModel.userLocation == nil {
+                        if !isLocationAllowed {
                             OnboardingCardView(
                                 title: "Enable location",
                                 subtitle: "You‘ll need to enable your location in order to use Meep",

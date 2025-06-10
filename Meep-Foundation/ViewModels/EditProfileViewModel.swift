@@ -47,20 +47,22 @@ class EditProfileViewModel: ObservableObject {
     }
 
     func uploadProfileImage(_ uiImage: UIImage) async {
-        do{
-            let profileImageUrl = try await imageUploader.uploadImage(image: uiImage)
-            try await storeUserProfileImageUrl(profileImageUrl)
+        do {
+            let profileImageUrl = try await imageUploader.uploadImage(image: uiImage, as: .full)
+            let thumbnailUrl = try await imageUploader.uploadImage(image: uiImage, as: .thumbnail)
+            try await storeUserProfileImageUrls(profileImageUrl, thumbnailUrl)
         } catch {
             print("DEBUG: Handle image upload error here..")
         }
     }
     
-    private func storeUserProfileImageUrl(_ imageUrl: String?) async throws {
-        guard let imageUrl else { return }
+    private func storeUserProfileImageUrls(_ imageUrl: String?, _ thumbnailUrl: String?) async throws {
+        guard let imageUrl, let thumbnailUrl else { return }
         guard let currentUid = Auth.auth().currentUser?.uid else { return }
         
         try await FirestoreConstants.UsersCollection.document(currentUid).updateData([
-            "profileImageUrl": imageUrl
+            "profileImageUrl": imageUrl,
+            "profileImageThumbnailUrl": thumbnailUrl
         ])
     }
 }

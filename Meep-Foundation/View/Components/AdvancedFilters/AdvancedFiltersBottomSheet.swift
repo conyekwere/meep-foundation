@@ -149,7 +149,7 @@ struct AdvancedFiltersBottomSheet: View {
                 .foregroundColor(.black)
                 .cornerRadius(10)
 
-                Button("Show results") {
+                Button("Show Results") {
                     viewModel.updateActiveFilterCount(myTransit: myTransit, friendTransit: friendTransit, searchRadius: searchRadius, departureTime: departureTime)
 
                     viewModel.searchRadius = searchRadius // ✅ Sync with ViewModel
