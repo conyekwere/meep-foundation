@@ -169,6 +169,7 @@ struct MeepAppView: View {
                 selectedAnnotationID: selectedAnnotationID,
                 onAnnotationSelected: annotationSelectionHandler
             )
+
             .ignoresSafeArea()
 //           .gesture(
 //                DragGesture()
@@ -226,9 +227,6 @@ struct MeepAppView: View {
                     .shadow(radius: 16)
                 }
                 Spacer()
-                
-                
-
 
             }
             .padding()
@@ -372,6 +370,7 @@ struct MeepAppView: View {
         .onChange(of: friendTransit) { _ in
             viewModel.friendTransportMode = friendTransit
         }
+        
         .onChange(of: viewModel.userLocation?.latitude) { _ in
             if viewModel.userLocation != nil &&
                viewModel.friendLocation != nil &&
@@ -390,6 +389,27 @@ struct MeepAppView: View {
                 loadSubwayDataIfNeeded()
             }
         }
+        
+        
+        .onChange(of: viewModel.mapRegion.center.latitude) { _ in
+            // Update subway station visibility when map moves
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
+        .onChange(of: viewModel.mapRegion.center.longitude) { _ in
+            // Update subway station visibility when map moves
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
+        .onChange(of: viewModel.mapRegion.span.latitudeDelta) { _ in
+            // Update subway station visibility when zoom changes
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
+        
     }
 }
 
