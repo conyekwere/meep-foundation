@@ -4,12 +4,7 @@
 //
 //  Created by Chima Onyekwere on 6/9/25.
 //
-//
-//  NativeMapView.swift
-//  Meep-Foundation
-//
-//  Created by Chima Onyekwere on 6/9/25.
-//
+
 
 import SwiftUI
 import MapKit
@@ -26,13 +21,15 @@ struct NativeMapView: UIViewRepresentable {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
-        mapView.mapType = .standard
+        mapView.mapType = .mutedStandard
         mapView.pointOfInterestFilter = .excludingAll
         mapView.showsTraffic = false
-        mapView.showsBuildings = true
+        mapView.showsBuildings = false
         
         return mapView
     }
+    
+
     
     func updateUIView(_ mapView: MKMapView, context: Context) {
         // Update region if not dragging
@@ -69,8 +66,15 @@ struct NativeMapView: UIViewRepresentable {
         // Add subway lines if enabled
         if showSubwayLines && !subwayManager.visiblePolylines.isEmpty {
             mapView.addOverlays(subwayManager.visiblePolylines)
+            
+            // Add station circles when zoomed in
+            if !subwayManager.visibleStationCircles.isEmpty {
+                mapView.addOverlays(subwayManager.visibleStationCircles)
+                //print("📍 Added \(subwayManager.visibleStationCircles.count) station circles to map")
+            }
         }
     }
+
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -152,14 +156,36 @@ struct NativeMapView: UIViewRepresentable {
                 }
                 
                 // Style to match StreetEasy
-                renderer.lineWidth = 4.0
+                let zoomLevel = parent.subwayManager.getZoomLevel(from: parent.region)
+                renderer.lineWidth = parent.subwayManager.getLineWidth(for: polyline.title ?? "", zoomLevel: zoomLevel)
                 renderer.lineCap = .round
                 renderer.lineJoin = .round
                 renderer.alpha = 0.9
                 
                 return renderer
             }
-            
+            else if let polygon = overlay as? MKPolygon {
+                // Render station circles
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                
+                // Get station colors from manager
+                if let lineName = polygon.title {
+                    let colors = parent.subwayManager.getStationColor(for: lineName)
+                    renderer.fillColor = colors.fill
+                    renderer.strokeColor = colors.stroke
+                } else {
+                    renderer.fillColor = .white
+                    renderer.strokeColor = .systemGray
+                }
+                
+                renderer.lineWidth = 1.5
+                renderer.alpha = 0.9
+                
+                //print("🎨 Rendering station circle for line: \(polygon.title ?? "Unknown")")
+                
+                return renderer
+            }
+
             return MKOverlayRenderer(overlay: overlay)
         }
         
@@ -179,6 +205,11 @@ struct NativeMapView: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             isDragging = false
             parent.region = mapView.region
+            
+            // Update subway station visibility when region changes
+            if parent.showSubwayLines && parent.subwayManager.hasLoadedData {
+                parent.subwayManager.updateVisibleElements(for: mapView.region)
+            }
         }
         
         // Clean up annotation views when they're removed (memory management)
