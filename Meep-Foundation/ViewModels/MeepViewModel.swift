@@ -19,7 +19,7 @@ import GooglePlaces
 // MARK: – Google Photo Limits & Auto‐Load Config
 private var googlePhotoCallCount = 0
 private let googlePhotoDailyCap = 3000
-private let maxAutoPhotosPerSearch = 5
+private let maxAutoPhotosPerSearch = 0
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
@@ -29,7 +29,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
     
-
+    weak var subwayManager: OptimizedSubwayMapManager?
 
     // MARK: - 🎯 Midpoint Calculation & Filtering
     
@@ -167,9 +167,11 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     @Published var activeFilterCount: Int = 0
     
-    @Published var searchRadius: Double = 0.005  // Adjust this value as needed
+    @Published var searchRadius: Double = 0.2  // Default: lowest value (1/5 mile)
     
     @Published var departureTime: Date? = nil    // nil means "Now"
+    
+    
     
     /// Returns the category name for a given emoji.
     func getCategory(for emoji: String) -> String {
@@ -299,7 +301,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
 //    var annotationsWithSubway: [MeepAnnotation] {
 //        var results = annotations
-//        
+//
 //        // Add subway stations when train mode is selected
 //        if (userTransportMode == .train || friendTransportMode == .train) {
 //            let subwayStations = subwayOverlayManager.subwayAnnotations.map { station in
@@ -311,10 +313,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 //            }
 //            results.append(contentsOf: subwayStations)
 //        }
-//        
+//
 //        return results
 //    }
-//    
+//
     
     
 
@@ -378,46 +380,85 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("❌ Missing one or both locations")
             return
         }
-        
+
         // Start with the geographical midpoint
-        let initialMidpoint = midpoint
-        
-        // Pass the departureTime from the advanced filters
-        fetchTravelTime(from: userLoc, to: initialMidpoint, mode: userTransportMode, departureTime: departureTime) { [weak self] userTime in
+        var adjustedMidpoint = midpoint
+
+
+        // If either person is using train, adjust logic for subway data
+        if userTransportMode == .train || friendTransportMode == .train {
+
+
+            adjustedMidpoint = adjustMidpointForSubway(from: adjustedMidpoint)
+        }
+
+        // Continue with existing travel time calculation...
+        fetchTravelTime(from: userLoc, to: adjustedMidpoint, mode: userTransportMode, departureTime: departureTime) { [weak self] userTime in
             guard let self = self else { return }
-            
-            self.fetchTravelTime(from: friendLoc, to: initialMidpoint, mode: self.friendTransportMode, departureTime: self.departureTime) { friendTime in
+
+            self.fetchTravelTime(from: friendLoc, to: adjustedMidpoint, mode: self.friendTransportMode, departureTime: self.departureTime) { friendTime in
                 DispatchQueue.main.async {
-                    // If travel times are already close enough (within 3 minutes), use the midpoint
-                    if abs(userTime - friendTime) < 3 * 60 {
-                        self.meetingPoint = initialMidpoint
-                        print("✅ Travel times balanced: User: \(Int(userTime/60))min, Friend: \(Int(friendTime/60))min")
+                    if abs(userTime - friendTime) < 5 * 60 {
+                        self.meetingPoint = adjustedMidpoint
                     } else {
-                        // Calculate a weighted midpoint to balance travel times
-                        // The weight is inversely proportional to travel time
+                        // Calculate weighted midpoint and adjust for subway if needed
                         let totalTime = userTime + friendTime
-                        let userWeight = friendTime / totalTime  // User gets higher weight when friend has longer travel time
-                        let friendWeight = userTime / totalTime  // Friend gets higher weight when user has longer travel time
-                        
-                        // Apply weights to coordinates
-                        let weightedMidpoint = CLLocationCoordinate2D(
+                        let userWeight = friendTime / totalTime
+                        let friendWeight = userTime / totalTime
+
+                        var weightedMidpoint = CLLocationCoordinate2D(
                             latitude: userLoc.latitude * userWeight + friendLoc.latitude * friendWeight,
                             longitude: userLoc.longitude * userWeight + friendLoc.longitude * friendWeight
                         )
-                        
+
+                        if self.userTransportMode == .train || self.friendTransportMode == .train {
+                            weightedMidpoint = self.adjustMidpointForSubway(from: weightedMidpoint)
+                        }
+
                         self.meetingPoint = weightedMidpoint
-                        print("✅ Adjusted midpoint - User: \(Int(userTime/60))min, Friend: \(Int(friendTime/60))min")
-                        
-                        // Verify the improvement by calculating travel times to the new midpoint
-                        self.verifyMeetingPoint(userLoc: userLoc, friendLoc: friendLoc, meetingPoint: weightedMidpoint)
                     }
-                    
-                    // After setting the meeting point, search for nearby places around it
+
                     self.searchNearbyPlaces()
                 }
             }
         }
     }
+    
+    
+    
+    private func adjustMidpointForSubway(from coordinate: CLLocationCoordinate2D) -> CLLocationCoordinate2D {
+        guard let subwayManager = subwayManager,
+              let nearestStation = subwayManager.findNearestStation(to: coordinate, maxDistance: 0.01) else {
+            return coordinate
+        }
+        
+        let adjustedLat = coordinate.latitude * 0.7 + nearestStation.coordinate.latitude * 0.3
+        let adjustedLon = coordinate.longitude * 0.7 + nearestStation.coordinate.longitude * 0.3
+        
+        return CLLocationCoordinate2D(latitude: adjustedLat, longitude: adjustedLon)
+    }
+    
+    func getSubwayLinesNear(coordinate: CLLocationCoordinate2D, radius: Double = 0.005) -> [String] {
+        guard let manager = subwayManager else { return [] }
+        return manager.getLinesNear(coordinate: coordinate, radius: radius)
+    }
+    
+    var midpointTitle: String {
+        if userTransportMode == .train || friendTransportMode == .train {
+            let lines = getSubwayLinesNear(coordinate: midpoint)
+            print("🚇 DEBUG: Found \(lines.count) subway lines: \(lines)")
+            if !lines.isEmpty {
+                return "Midpoint • Lines: \(lines.joined(separator: ", "))"
+            } else {
+                return "Midpoint"
+            }
+        }
+        return "Midpoint"
+    }
+    
+    
+    
+
     
     
     private func verifyMeetingPoint(userLoc: CLLocationCoordinate2D, friendLoc: CLLocationCoordinate2D, meetingPoint: CLLocationCoordinate2D) {
@@ -433,53 +474,57 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         
     // MARK: - 📌 Search Nearby Places (Apple Maps + Google Places)
     func searchNearbyPlaces() {
-        guard userLocation != nil && friendLocation != nil else {
-            print("⚠️ Skipping search — both user and friend locations are not available.")
-            return
-        }
-        print("🔍 Searching Apple Maps for places near midpoint...")
+          guard userLocation != nil && friendLocation != nil else {
+              print("⚠️ Skipping search — both user and friend locations are not available.")
+              return
+          }
+          
+          // Use more reasonable search radius (1 miles max)
+          let adjustedSearchRadius = min(searchRadius, 1.0)
+          let delta = adjustedSearchRadius * 0.0145
+          
+          let request = MKLocalSearch.Request()
+          request.naturalLanguageQuery = searchQuery
+          request.region = MKCoordinateRegion(
+              center: midpoint,
+              span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
+          )
 
-        let delta = searchRadius * 0.0145  // Roughly converts miles to degrees
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchQuery
-        request.region = MKCoordinateRegion(
-            center: midpoint,
-            span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
-        )
+          let search = MKLocalSearch(request: request)
+          search.start { [weak self] response, error in
+              guard let self = self else { return }
 
-        let search = MKLocalSearch(request: request)
-        search.start { [weak self] response, error in
-            guard let self = self else { return }
+              if let error = error {
+                  print("Apple Maps search error: \(error.localizedDescription)")
+                  return
+              }
 
-            if let error = error {
-                print("Apple Maps search error: \(error.localizedDescription)")
-                return
-            }
+              guard let response = response else {
+                  print("No places found.")
+                  return
+              }
 
-            guard let response = response else {
-                print("No places found.")
-                return
-            }
+              let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
+              let sortedPoints = fetchedMeetingPoints.sorted {
+                  let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                  let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
+                  let midLoc = CLLocation(latitude: self.midpoint.latitude, longitude: self.midpoint.longitude)
+                  return locA.distance(from: midLoc) < locB.distance(from: midLoc)
+              }
 
-            let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
-
-            let sortedPoints = fetchedMeetingPoints.sorted {
-                let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
-                let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
-                let midLoc = CLLocation(latitude: self.midpoint.latitude, longitude: self.midpoint.longitude)
-                return locA.distance(from: midLoc) < locB.distance(from: midLoc)
-            }
-
-            DispatchQueue.main.async {
-                self.meetingPoints = sortedPoints
-                self.searchResults = sortedPoints.map {
-                    MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
-                }
-                self.updateCategoriesFromSearchResults() // Ensure categories are synced
-                self.fetchPhotosForTopFive()
-            }
-        }
-    }
+              DispatchQueue.main.async {
+                  self.meetingPoints = sortedPoints
+                  self.searchResults = sortedPoints.map {
+                      MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+                  }
+                  self.updateCategoriesFromSearchResults()
+                  self.fetchPhotosForTopFive()
+              }
+          }
+      }
+    
+    
+    
 
     // MARK: – 🔢 Fetch Google Photos for Only Top N Results
     private func fetchPhotosForTopFive() {
@@ -533,6 +578,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }.resume()
     }
+    
     
     // Helper method to load photos directly from Google Places
     private func loadPhotoDirectly(_ placesClient: GMSPlacesClient, photo: GMSPlacePhotoMetadata, meetingPointIndex: Int) {
@@ -647,61 +693,27 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         )
     }
 
-    // In your MeepViewModel
-    func listenForLocationResponses() {
-        // For Firebase implementation:
-        /*
-        let db = Firestore.firestore()
-        db.collection("locationResponses")
-          .whereField("userID", isEqualTo: UserDefaults.standard.string(forKey: "userId") ?? "")
-          .addSnapshotListener { snapshot, error in
-              guard let documents = snapshot?.documents else {
-                  print("Error listening for location responses: \(error?.localizedDescription ?? "Unknown error")")
-                  return
-              }
-              
-              for document in documents {
-                  let data = document.data()
-                  if let requestID = data["requestID"] as? String,
-                     let latitude = data["latitude"] as? Double,
-                     let longitude = data["longitude"] as? Double {
-                      
-                      DispatchQueue.main.async {
-                          self.handleLocationResponse(
-                              requestID: requestID,
-                              coordinate: CLLocationCoordinate2D(
-                                  latitude: latitude,
-                                  longitude: longitude
-                              )
-                          )
-                      }
-                  }
-              }
-          }
-        */
+
+    
+    func debugSubwayConnection() {
+        print("🚇 DEBUG Subway Connection:")
+        print("   - Subway manager exists: \(subwayManager != nil)")
+        print("   - Has loaded data: \(subwayManager?.hasLoadedData ?? false)")
+        print("   - User transport: \(userTransportMode)")
+        print("   - Friend transport: \(friendTransportMode)")
+        print("   - Midpoint: \(midpoint)")
         
-        // For demo purposes, simulate a response after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            self.handleLocationResponse(
-                requestID: "simulated-request",
-                coordinate: CLLocationCoordinate2D(
-                    latitude: 40.7128,
-                    longitude: -74.0060
-                )
-            )
+        if let manager = subwayManager {
+            let lines = manager.getLinesNear(coordinate: midpoint, radius: 0.005)
+            print("   - Lines near midpoint: \(lines)")
+            
+            let nearestStation = manager.findNearestStation(to: midpoint, maxDistance: 0.01)
+            print("   - Nearest station: \(nearestStation?.lineName ?? "none")")
         }
     }
+    
 
-    func handleLocationResponse(requestID: String, coordinate: CLLocationCoordinate2D) {
-        // Update friend's location in the UI
-        self.friendLocation = coordinate
-        
-        // Trigger search for meeting places
-        self.searchNearbyPlaces()
-        
-        // Update UI state
-        // uiState = .results
-    }
+
     
     
     // 2. Add a function to update and sync categories from search results
@@ -775,15 +787,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
           }
       }
     
-    // MARK: - 🚗 Show Directions
-    func showDirections(to point: MeetingPoint) {
-        let placemark = MKPlacemark(coordinate: point.coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = point.name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
+
 
     // MARK: - 📍 Update Active FilterCount
     func updateActiveFilterCount(myTransit: TransportMode, friendTransit: TransportMode, searchRadius: Double, departureTime: Date?) {
@@ -791,7 +795,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         if myTransit != .train { count += 1 } // Example: Default is `train`, so any change counts as a filter
         if friendTransit != .train { count += 1 }
-        if searchRadius != 1 { count += 1 } // Default search radius is 1 miles
+        if searchRadius != 0.2 { count += 1 } // Default search radius is 0.2 miles
         if departureTime != nil { count += 1 }
 
         activeFilterCount = count

@@ -29,6 +29,7 @@ struct NativeMapView: UIViewRepresentable {
         return mapView
     }
     
+
     
     func updateUIView(_ mapView: MKMapView, context: Context) {
         // Update region if not dragging
@@ -69,7 +70,7 @@ struct NativeMapView: UIViewRepresentable {
             // Add station circles when zoomed in
             if !subwayManager.visibleStationCircles.isEmpty {
                 mapView.addOverlays(subwayManager.visibleStationCircles)
-                print("📍 Added \(subwayManager.visibleStationCircles.count) station circles to map")
+                //print("📍 Added \(subwayManager.visibleStationCircles.count) station circles to map")
             }
         }
     }
@@ -180,7 +181,7 @@ struct NativeMapView: UIViewRepresentable {
                 renderer.lineWidth = 1.5
                 renderer.alpha = 0.9
                 
-                print("🎨 Rendering station circle for line: \(polygon.title ?? "Unknown")")
+                //print("🎨 Rendering station circle for line: \(polygon.title ?? "Unknown")")
                 
                 return renderer
             }
