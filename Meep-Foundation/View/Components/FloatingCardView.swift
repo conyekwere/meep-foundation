@@ -13,9 +13,13 @@ struct FloatingCardView: View {
     @ObservedObject var viewModel: MeepViewModel
     let meetingPoint: MeetingPoint
     let onClose: () -> Void
+    let myTransit: TransportMode
 
     @State private var isImageLoaded = false
+    @State private var showDirectionsOptions = false
 
+    
+    
     var body: some View {
         
     VStack(alignment: .leading, spacing: 0) {
@@ -158,16 +162,10 @@ struct FloatingCardView: View {
         
         // Get Directions Button
         Button(action: {
-            // Use Apple Maps directions
-            let placemark = MKPlacemark(coordinate: meetingPoint.coordinate)
-            let mapItem = MKMapItem(placemark: placemark)
-            mapItem.name = meetingPoint.name
-            mapItem.openInMaps(launchOptions: [
-                MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-            ])
+            showDirectionsOptions = true
         }) {
             HStack {
-                Image(systemName: "tram.fill")
+                Image(systemName: myTransit.systemImageName)
                     .font(.headline)
                 Text("Get Directions")
                     .font(.headline)
@@ -181,6 +179,34 @@ struct FloatingCardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
+        .confirmationDialog("Get Directions", isPresented: $showDirectionsOptions, titleVisibility: .visible) {
+            Button("Apple Maps") {
+                let placemark = MKPlacemark(coordinate: meetingPoint.coordinate)
+                let mapItem = MKMapItem(placemark: placemark)
+                mapItem.name = meetingPoint.name
+                mapItem.openInMaps(launchOptions: [
+                    MKLaunchOptionsDirectionsModeKey: myTransit.launchOption
+                ])
+            }
+
+            let googleMapsMode: String = {
+                switch myTransit {
+                case .walk: return "walking"
+                case .bike: return "bicycling"
+                case .train: return "transit"
+                case .car: return "driving"
+                }
+            }()
+
+            if let url = URL(string: "comgooglemaps://?daddr=\(meetingPoint.coordinate.latitude),\(meetingPoint.coordinate.longitude)&directionsmode=\(googleMapsMode)"),
+               UIApplication.shared.canOpenURL(url) {
+                Button("Google Maps") {
+                    UIApplication.shared.open(url)
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        }
 
     }
         .background(Color(.systemBackground))
@@ -218,7 +244,7 @@ struct FloatingCardView: View {
         ),
         onClose: {
             print("FloatingCardView closed")
-        }
+        },
+        myTransit: .bike
     )
 }
-
