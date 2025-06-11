@@ -12,6 +12,7 @@ struct MeetingPointCard: View {
     let point: MeetingPoint
     let showDirections: () -> Void
     let userLocation: CLLocationCoordinate2D?
+    let myTransit: TransportMode
 
     var body: some View {
         VStack{
@@ -92,7 +93,7 @@ struct MeetingPointCard: View {
                     showDirections()
                 }) {
                     HStack(spacing: 8) {
-                        Image(systemName: "tram.fill")
+                        Image(systemName: myTransit.systemImageName)
                             .foregroundColor(.white)
                             .font(.subheadline)
                         Text("Get Directions")

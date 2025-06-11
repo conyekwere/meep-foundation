@@ -625,7 +625,10 @@ struct MeetingSearchSheetView: View {
                 placeholder: "What's your location?",
                 text: $myLocation,
                 isDirty: !myLocation.isEmpty,
-                selectedMode: $selectedMyTransport,
+                selectedMode: Binding(
+                    get: { self.viewModel.userTransportMode },
+                    set: { self.viewModel.userTransportMode = $0 ?? .train }
+                ),
                 isValid: !myLocation.isEmpty ? isMyLocationValid : nil
             )
             .focused($isMyLocationFocused)
@@ -647,7 +650,10 @@ struct MeetingSearchSheetView: View {
                 placeholder: "What's your friend's location?",
                 text: $friendLocation,
                 isDirty: !friendLocation.isEmpty,
-                selectedMode: $selectedFriendTransport,
+                selectedMode: Binding(
+                    get: { self.viewModel.friendTransportMode },
+                    set: { self.viewModel.friendTransportMode = $0 ?? .train }
+                ),
                 isValid: !friendLocation.isEmpty ? isFriendsLocationValid : nil
             )
             .focused($isFriendsLocationFocused)
@@ -1269,12 +1275,21 @@ struct MeetingSearchSheetView: View {
     }
     
     private func handleMyTransportChange(_ newValue: TransportMode?) {
-        if !friendTransportManuallyChanged {
-            selectedFriendTransport = newValue
+        if let newValue = newValue {
+            viewModel.userTransportMode = newValue
+
+            if !friendTransportManuallyChanged {
+                selectedFriendTransport = newValue
+                viewModel.friendTransportMode = newValue
+            }
         }
     }
-    
+
     private func handleFriendTransportChange(_ newValue: TransportMode?) {
+        if let newValue = newValue {
+            viewModel.friendTransportMode = newValue
+        }
+
         if newValue != selectedMyTransport {
             friendTransportManuallyChanged = true
         } else {
