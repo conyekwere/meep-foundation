@@ -15,7 +15,7 @@ struct AddressInputView: View {
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var locationManager = UserLocationsManager.shared
     @StateObject private var searchCompleter = LocalSearchCompleterDelegate()
-    
+    @State private var didSelectSuggestion = false
     @ObservedObject var viewModel: MeepViewModel
     
     
@@ -127,6 +127,7 @@ struct AddressInputView: View {
                             AutocompleteSuggestionsView(
                                 completions: searchCompleter.completions,
                                 text: $addressText,
+                                didSelectSuggestion: $didSelectSuggestion,
                                 selectedAddress: $selectedAddress,
                                 geocodeAddress: geocodeAddress
                             )

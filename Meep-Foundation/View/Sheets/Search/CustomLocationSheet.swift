@@ -21,6 +21,7 @@ struct CustomLocationSheet: View {
     @State private var editMode: EditMode = .inactive
     @FocusState private var focusedField: Field?
     
+    
     var onLocationSelected: (SavedLocation) -> Void
     
     enum Field {
@@ -290,6 +291,8 @@ struct AddCustomLocationView: View {
        @State private var selectedCoordinate: CLLocationCoordinate2D? = nil
        @State private var isSearching = false
        @State private var errorMessage: String? = nil
+    
+       @State private var didSelectSuggestion = false
        
        // Add this to force UI refreshes
        @State private var forceRefresh: Bool = false
@@ -447,6 +450,7 @@ struct AddCustomLocationView: View {
                             AutocompleteSuggestionsView(
                                 completions: searchCompleter.completions,
                                 text: $locationAddress,
+                                didSelectSuggestion: $didSelectSuggestion,
                                 geocodeAddress: { completion in
                                     // Call your existing selectCompletion function
                                     selectCompletion(completion)

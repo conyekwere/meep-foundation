@@ -14,13 +14,18 @@ enum UIState {
 }
 
 struct MeepAppView: View {
+    
+    @StateObject private var subwayOverlayManager = OptimizedSubwayMapManager()
+    
     @StateObject private var viewModel = MeepViewModel()
+
+    @State private var showErrorModal: Bool = false
     
     @StateObject private var firebaseService = FirebaseService.shared
     
     var isNewUser: Bool = false
     
-    @State private var departureTime: Date? = nil // ✅ Fix: Add departureTime
+    @State private var departureTime: Date? = nil
     @State private var searchRequest: Bool = false
     
     // Overall UI state for top search bars etc.
@@ -30,8 +35,16 @@ struct MeepAppView: View {
     
     // Separate state variable to control the fullScreenCover presentation.
     @State private var isProfilePresented: Bool = false
+    @State private var didFallbackToWalking: Bool = true
     
     @State private var isAdvancedFiltersPresented: Bool  = false
+
+    // Toast for transit fallback
+    @State private var showTransitFallbackToast: Bool = false
+    
+    @State private var currentToast: TransitFallbackToast?
+    
+    @State private var toastDismissTimer: Timer? = nil
     
     // Sheet height constants
     private let sheetMin: CGFloat = 90
@@ -39,7 +52,7 @@ struct MeepAppView: View {
     private let sheetMax: CGFloat = UIScreen.main.bounds.height * 0.8
 
     // Offsets for the draggable sheets along with last offset values
-    @State private var onboardingOffset: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var onboardingOffset: CGFloat = UIScreen.main.bounds.height * 0.82
     @State private var lastOnboardingDragOffset: CGFloat = UIScreen.main.bounds.height * 0.5
 
     @State private var meetingResultsOffset: CGFloat = UIScreen.main.bounds.height * 0.82
@@ -47,10 +60,250 @@ struct MeepAppView: View {
     
     @State private var myTransit: TransportMode = .train
     @State private var friendTransit: TransportMode = .train
-    @State private var searchRadius: Double = 1
+    @State private var searchRadius: Double = 0.25 {
+        didSet {
+            viewModel.searchRadius = searchRadius
+        }
+    }
     
     @State private var selectedAnnotation: MeepAnnotation? = nil
+    @State private var selectedAnnotationID: UUID?
     
+
+    var activeMapAnnotations: [MeepAnnotation] {
+            var results: [MeepAnnotation] = []
+            
+            // Make sure this only adds ONE midpoint annotation
+        
+//            if viewModel.userLocation != nil && viewModel.friendLocation != nil {
+//                results.append(MeepAnnotation(
+//                    coordinate: viewModel.enhancedMidpoint,
+//                    title: viewModel.midpointTitle,
+//                    type: .midpoint
+//                ))
+//            }
+        
+//
+        if viewModel.userLocation != nil && viewModel.friendLocation != nil {
+            results.append(MeepAnnotation(
+                coordinate: viewModel.realTransitMidpoint, // ✅ Use the real transit midpoint
+                title: viewModel.midpointTitle,
+                type: .midpoint
+            ))
+        }
+//
+        
+        // Check if viewModel.annotations also contains a midpoint
+        // and avoid duplicating it
+        
+        if let uLoc = viewModel.userLocation {
+            results.append(MeepAnnotation(coordinate: uLoc, title: "You", type: .user))
+        }
+        if let fLoc = viewModel.friendLocation {
+            results.append(MeepAnnotation(coordinate: fLoc, title: "Friend", type: .friend))
+        }
+        
+        results.append(contentsOf: viewModel.searchResults)
+        return results
+    }
+    
+    private func debugSubwayState() {
+        print("🐛 === SUBWAY DEBUG STATE ===")
+        print("   - Subway data loaded: \(subwayOverlayManager.hasLoadedData)")
+        print("   - Manager connected: \(viewModel.subwayManager != nil)")
+        print("   - User transport: \(myTransit) / VM: \(viewModel.userTransportMode)")
+        print("   - Friend transport: \(friendTransit) / VM: \(viewModel.friendTransportMode)")
+        print("   - User location: \(viewModel.userLocation?.latitude ?? 0)")
+        print("   - Friend location: \(viewModel.friendLocation?.latitude ?? 0)")
+        print("   - UI State: \(uiState)")
+        print("   - Midpoint: \(viewModel.enhancedMidpoint)")
+        
+        if let manager = viewModel.subwayManager {
+            let userRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.enhancedMidpoint, from: viewModel.userLocation ?? CLLocationCoordinate2D())
+            let friendRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.enhancedMidpoint, from: viewModel.friendLocation ?? CLLocationCoordinate2D())
+            print("   - User routes: \(userRoutes.count)")
+            print("   - Friend routes: \(friendRoutes.count)")
+        }
+        print("=========================")
+    }
+
+    private func outsideMapRegion() {
+        if let userLoc = viewModel.userLocation, !isWithinNYC(userLoc) {
+            print("⚠️ Outside NYC - switching to car and showing beta warning")
+            myTransit = .car
+            viewModel.userTransportMode = .car
+            friendTransit = .car
+            viewModel.friendTransportMode = .car
+            currentToast = TransitFallbackToast(
+                icon: "car.fill",
+                title: "Beta only works in NYC",
+                message: "Try at your own risk",
+                primaryColor: .red,
+                secondaryColor: .red.opacity(0.8)
+            )
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
+        } else if let friendLoc = viewModel.friendLocation, !isWithinNYC(friendLoc) {
+            print("⚠️ Outside NYC - switching to car and showing beta warning")
+            myTransit = .car
+            viewModel.userTransportMode = .car
+            friendTransit = .car
+            viewModel.friendTransportMode = .car
+            currentToast = TransitFallbackToast(
+                icon: "car.fill",
+                title: "Beta only works in NYC",
+                message: "Try at your own risk",
+                primaryColor: .red,
+                secondaryColor: .red.opacity(0.8)
+            )
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
+        }
+    }
+
+    
+    private func handleSubwayDataLoad() {
+        print("🚇 handleSubwayDataLoad called:")
+        print("   - hasLoadedData: \(subwayOverlayManager.hasLoadedData)")
+        print("   - myTransit: \(myTransit), friendTransit: \(friendTransit)")
+        guard subwayOverlayManager.hasLoadedData,
+              (myTransit == .train || friendTransit == .train),
+              let userLoc = viewModel.userLocation,
+              let friendLoc = viewModel.friendLocation,
+              uiState == .results else { return }
+        
+        let midpoint = viewModel.enhancedMidpoint
+        print("🎯 Checking subway viability to midpoint: \(midpoint)")
+        
+        // 1) Run the special-case connectivity analysis first:
+        let connectivityAnalysis = subwayOverlayManager.analyzeSubwayConnectivity(
+            userLocation: userLoc,
+            friendLocation: friendLoc,
+            midpoint: midpoint
+        )
+        
+        var didFallback = false
+        var fallbackMessage = ""
+        
+        // If the analysis says “not viable” (e.g. East ⇄ West Harlem), fallback immediately:
+        if myTransit == .train && !connectivityAnalysis.userViable {
+            print("⚠️ Crosstown inefficiency detected: \(connectivityAnalysis.reason)")
+            myTransit = .walk
+            viewModel.userTransportMode = .walk
+            didFallback = true
+            fallbackMessage = connectivityAnalysis.reason
+        }
+        if friendTransit == .train && !connectivityAnalysis.friendViable {
+            print("⚠️ Crosstown inefficiency detected for friend: \(connectivityAnalysis.reason)")
+            friendTransit = .walk
+            viewModel.friendTransportMode = .walk
+            if !didFallback {
+                didFallback = true
+                fallbackMessage = connectivityAnalysis.reason
+            }
+        }
+        
+        // 2) Only if no special-case ran, fall back on “zero real routes”:
+        if !didFallback {
+            let userRoutes   = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: userLoc)
+            let friendRoutes = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: friendLoc)
+            print("📊 Found routes – User: \(userRoutes.count), Friend: \(friendRoutes.count)")
+            
+            if myTransit == .train && userRoutes.isEmpty {
+                print("⚠️ No routes from user – fallback")
+                myTransit = .walk
+                viewModel.userTransportMode = .walk
+                didFallback = true
+                fallbackMessage = "No direct subway from your location"
+            }
+            if friendTransit == .train && friendRoutes.isEmpty {
+                print("⚠️ No routes from friend – fallback")
+                friendTransit = .walk
+                viewModel.friendTransportMode = .walk
+                if !didFallback {
+                    didFallback = true
+                    fallbackMessage = "No direct subway from friend's location"
+                }
+            }
+        }
+        
+        // 3) Show toast if anything fell back
+        if didFallback {
+            print("🚨 Triggering fallback toast: \(fallbackMessage)")
+            currentToast = TransitFallbackToast.create(for: fallbackMessage)
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                viewModel.searchNearbyPlaces()
+            }
+        }
+    }
+
+    // Helper to load subway data if needed
+    private func loadSubwayDataIfNeeded() {
+        print("🔄 loadSubwayDataIfNeeded called")
+        print("   - Transit modes: user=\(myTransit), friend=\(friendTransit)")
+        print("   - Locations: user=\(viewModel.userLocation != nil), friend=\(viewModel.friendLocation != nil)")
+        print("   - UI state: \(uiState)")
+        
+        guard (myTransit == .train || friendTransit == .train),
+              viewModel.userLocation != nil,
+              viewModel.friendLocation != nil,
+              uiState == .results else {
+            print("❌ Subway data not needed")
+            return
+        }
+        
+        // Connect subway manager IMMEDIATELY
+        viewModel.subwayManager = subwayOverlayManager
+        
+        if !subwayOverlayManager.hasLoadedData {
+            print("📡 Loading subway data...")
+            subwayOverlayManager.loadSubwayData()
+        } else {
+            print("✅ Subway data already loaded, running fallback check")
+            // Data is already loaded, check fallback immediately
+            handleSubwayDataLoad()
+        }
+    }
+    
+    private func isWithinNYC(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        let minLat = 40.4774
+        let maxLat = 40.9176
+        let minLon = -74.2591
+        let maxLon = -73.7002
+
+        return (coordinate.latitude >= minLat && coordinate.latitude <= maxLat) &&
+               (coordinate.longitude >= minLon && coordinate.longitude <= maxLon)
+    }
+
+    
+    
+    private
+    func clearAnnotations() {
+        viewModel.searchResults.removeAll()
+        viewModel.meetingPoints.removeAll()
+        viewModel.userLocation = nil
+        viewModel.friendLocation = nil
+    }
     
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
         // Extract emoji from annotation
@@ -124,47 +377,60 @@ struct MeepAppView: View {
         }
     }
     
+    
+
+    // Computed property for transit fallback toast view
+    private var transitFallbackToastView: some View {
+        TransitFallbackToastView(
+            toast: currentToast ?? TransitFallbackToast.create(for: ""),
+            isVisible: showTransitFallbackToast && currentToast != nil,
+            onDismiss: {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+                toastDismissTimer?.invalidate()
+            }
+        )
+    }
 
     var body: some View {
+
         ZStack {
 
-            Map(coordinateRegion: $viewModel.mapRegion,
-                interactionModes: .all,
-                showsUserLocation: true,
-                annotationItems: viewModel.annotations) { annotation in
-                    MapAnnotation(coordinate: annotation.coordinate) {
-                        annotation.annotationView(isSelected: Binding(
-                            get: { selectedAnnotation?.id == annotation.id },
-                            set: { newValue in
-                                withAnimation(.spring()) {
-                                    if newValue {
-                                        selectedAnnotation = annotation
-                                        setSelectedMeetingPoint(for: annotation)
-                                    } else {
-                                        selectedAnnotation = nil
-                                        viewModel.isFloatingCardVisible = false
-                                    }
-                                }
-                            }
-                        ))
-                    }
-                }
-                .mapStyle(.standard(elevation: .flat,
-                                                pointsOfInterest: .excludingAll,
-                                                showsTraffic: false))
-            
-                .gesture(
-                    DragGesture()
-                        .onChanged { _ in viewModel.isUserInteractingWithMap = true } // ✅ Start Tracking Drag
-                        .onEnded { _ in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                viewModel.isUserInteractingWithMap = false // ✅ Only Recalculate AFTER Drag Stops
-                                viewModel.searchNearbyPlaces() // ✅ Refresh Search When Drag Ends
-                            }
-                        }
-                )
-            .ignoresSafeArea()
 
+            let shouldShowSubwayLines = (myTransit == .train || friendTransit == .train) &&
+                                       viewModel.userLocation != nil &&
+                                       viewModel.friendLocation != nil
+            
+            let annotationSelectionHandler: (MeepAnnotation) -> Void = { annotation in
+                withAnimation(.spring()) {
+                    selectedAnnotationID = annotation.id
+                    selectedAnnotation = annotation
+                    setSelectedMeetingPoint(for: annotation)
+                }
+            }
+
+            NativeMapView(
+                region: $viewModel.mapRegion,
+                annotations: activeMapAnnotations,
+                showSubwayLines: shouldShowSubwayLines,
+                subwayManager: subwayOverlayManager,
+                selectedAnnotationID: selectedAnnotationID,
+                onAnnotationSelected: annotationSelectionHandler
+            )
+
+            .ignoresSafeArea()
+//           .gesture(
+//                DragGesture()
+//                    .onChanged { _ in viewModel.isUserInteractingWithMap = true }
+//                    .onEnded { _ in
+//                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+//                            viewModel.isUserInteractingWithMap = false
+//                            viewModel.searchNearbyPlaces()
+//                        }
+//                    }
+//            )
             
             // MARK: Top Search Bars Based on UIState
             VStack {
@@ -211,12 +477,15 @@ struct MeepAppView: View {
                     .shadow(radius: 16)
                 }
                 Spacer()
+
             }
             .padding()
             .zIndex(3)
             
+            
+            
             // MARK: Onboarding Sheet (Draggable)
-            if uiState == .onboarding {
+            if uiState == .onboarding  && !viewModel.isFloatingCardVisible && !showTransitFallbackToast{
                 OnboardingSheetView(
                     viewModel: viewModel,
                     isLocationAllowed: $viewModel.isLocationAccessGranted,
@@ -236,7 +505,7 @@ struct MeepAppView: View {
             }
             
             // MARK: Meeting Results Sheet (Draggable)
-            if uiState == .results {
+            if uiState == .results && !viewModel.isFloatingCardVisible && !showTransitFallbackToast {
                 MeetingResultsSheetView(viewModel: viewModel)
                     .background(Color(.tertiarySystemBackground))
                     .cornerRadius(meetingResultsOffset == sheetMin ? 0 : 24)
@@ -251,21 +520,38 @@ struct MeepAppView: View {
                     .zIndex(1)
             }
             
+            // MARK: Toast Overlay (transit fallback)
+            if showTransitFallbackToast {
+                transitFallbackToastView
+            }
+            
             // MARK: Floating Card for Selected Point
             if let selectedPoint = viewModel.selectedPoint, viewModel.isFloatingCardVisible {
-                Spacer()
-                FloatingCardView(meetingPoint: selectedPoint) {
-                    withAnimation {
-                        viewModel.isFloatingCardVisible = false
-                        viewModel.selectedPoint = nil
-                        selectedAnnotation = nil // Deselect annotation when closing
-                    }
+                VStack {
+                    Spacer()
+                    FloatingCardView(
+                        viewModel: viewModel,
+                        meetingPoint: selectedPoint,
+                        onClose: {
+                            withAnimation {
+                                viewModel.isFloatingCardVisible = false
+                                viewModel.selectedPoint = nil
+                                selectedAnnotation = nil
+                                uiState = .results
+                            }
+                        },
+                        myTransit: myTransit
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, UIApplication.shared.windows.first?.safeAreaInsets.bottom ?? 16)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(3)
                 }
-                .padding(.horizontal)
-                .transition(.move(edge: .bottom))
-                .zIndex(3)
+                .ignoresSafeArea(edges: .bottom)
             }
         }
+        
+        
         
         // MARK: Full-Screen Search Sheet
         .fullScreenCover(isPresented: $isSearching) {
@@ -284,23 +570,43 @@ struct MeepAppView: View {
                     )
                     
                     // Check if both text fields are empty
-                    if sheetView.areFieldsEmpty() || (viewModel.userLocation == nil && viewModel.friendLocation == nil) {
+                    if sheetView.areFieldsEmpty() || viewModel.searchFieldsAreEmpty {
                         uiState = .onboarding
-                        
+
                         // Reset view model locations and shareable strings
-                        viewModel.userLocation = nil
-                        viewModel.friendLocation = nil
+                        clearAnnotations()
                         viewModel.sharableUserLocation = "My Location"
                         viewModel.sharableFriendLocation = "Friend's Location"
+                        
                     } else {
-                        // Maintain the current UI state
-                        // This will preserve the results view when returning from search
-                        // with existing locations
+      
+      
                     }
+                    
+                    
                 },
                 onDone: {
                     isSearching = false
                     uiState = .results
+                    
+                    viewModel.subwayManager = subwayOverlayManager
+                    
+                    // Check if outside of NYC
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        outsideMapRegion()
+                    }
+                    
+                    // Debug the state right after setting it up
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        debugSubwayState()
+                    }
+                    
+                    // Then load subway data
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        loadSubwayDataIfNeeded()
+                    }
+                    
+
                 }
             )
             .background(Color(.tertiarySystemBackground))
@@ -308,7 +614,7 @@ struct MeepAppView: View {
         
         .sheet(isPresented: $isProfilePresented) {
             ProfileBottomSheet(imageUrl: "https://images.pexels.com/photos/1858175/pexels-photo-1858175.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1")
-                .presentationDetents([.fraction(0.75)])
+                .presentationDetents([.fraction(0.65)])
                 
         }
         
@@ -321,7 +627,51 @@ struct MeepAppView: View {
                 departureTime: $departureTime,
                 viewModel: viewModel // ✅ Pass ViewModel from Parent
             )
-            .presentationDetents([.fraction(0.85)])
+            .presentationDetents([.large])
+        }
+        
+        .sheet(isPresented: $showErrorModal) {
+            VStack(spacing: 32) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .resizable()
+                    .frame(width: 60, height: 60)
+                    .foregroundColor(.red)
+
+                Text("\(viewModel.sharableUserLocation.isEmpty ? "Location" : viewModel.sharableUserLocation) not supported in Beta")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .padding()
+
+                Button(action: {
+                    showErrorModal = false
+                    if let url = URL(string: "https://tally.so/r/wvbPWd") {
+                        UIApplication.shared.open(url)
+                    }
+                }) {
+                    Text("Sign up for waitlist")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            .padding()
+            .presentationDetents([.fraction(0.4)])
+            .interactiveDismissDisabled()
+        }
+        .onAppear {
+            viewModel.requestUserLocation()
+            
+            
+            if let userLocation = viewModel.userLocation, !isWithinNYC(userLocation) {
+                showErrorModal = true
+            }
+            self.searchRadius = viewModel.searchRadius
+            // Sync transport modes with ViewModel
+            self.myTransit = viewModel.userTransportMode
+            self.friendTransit = viewModel.friendTransportMode
         }
         .onChange(of: searchRequest) { newValue in
             if newValue {
@@ -329,8 +679,58 @@ struct MeepAppView: View {
                 searchRequest = false
             }
         }
+        .onChange(of: myTransit) { newMode in
+            print("🔄 myTransit changed to: \(newMode)")
+            viewModel.userTransportMode = newMode
+            
+            // If switching TO train mode, load subway data
+            if newMode == .train && !subwayOverlayManager.hasLoadedData {
+                loadSubwayDataIfNeeded()
+            }
+        }
+
+        .onChange(of: friendTransit) { newMode in
+            print("🔄 friendTransit changed to: \(newMode)")
+            viewModel.friendTransportMode = newMode
+            
+            // If switching TO train mode, load subway data
+            if newMode == .train && !subwayOverlayManager.hasLoadedData {
+                loadSubwayDataIfNeeded()
+            }
+        }
+
+        .onChange(of: subwayOverlayManager.hasLoadedData) { hasLoaded in
+            print("🚇 Subway data loaded state changed: \(hasLoaded)")
+            if hasLoaded {
+                // Add small delay to ensure all state is settled
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    handleSubwayDataLoad()
+                }
+            }
+        }
+        
+        .onChange(of: viewModel.mapRegion.center.latitude) { _ in
+            // Update subway station visibility when map moves
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
+        .onChange(of: viewModel.mapRegion.center.longitude) { _ in
+            // Update subway station visibility when map moves
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
+        .onChange(of: viewModel.mapRegion.span.latitudeDelta) { _ in
+            // Update subway station visibility when zoom changes
+            if subwayOverlayManager.hasLoadedData {
+                subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
+            }
+        }
     }
+    
 }
+
 
 #Preview {
     MeepAppView(isNewUser: true)

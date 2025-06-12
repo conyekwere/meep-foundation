@@ -155,7 +155,7 @@ private struct PlaceAnnotationView: View {
                 .background(Color(.label).opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 100))
                 .overlay(RoundedRectangle(cornerRadius: 100).stroke(Color(.white), lineWidth: 2))
-                .zIndex(1)
+                .zIndex(9999)
                 .matchedGeometryEffect(id: "background-\(title)", in: animationNamespace)
                 .onTapGesture {
 

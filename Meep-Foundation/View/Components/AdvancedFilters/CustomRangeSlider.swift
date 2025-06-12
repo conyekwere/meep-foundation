@@ -11,47 +11,81 @@ struct CustomRangeSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double
-
+    
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
+    
     var body: some View {
-        GeometryReader { geometry in
-            let stepWidth = (geometry.size.width - 32) / CGFloat(range.upperBound - range.lowerBound)
-            let totalSteps = Int((range.upperBound - range.lowerBound) / step)
-
-            VStack(spacing: 8) {
-                ZStack(alignment: .center) {
-                    // Tick marks for reference
-                    HStack(spacing: stepWidth) {
-                        ForEach(0...totalSteps, id: \.self) { index in
-                            Rectangle()
-                                .fill(index == Int((value - range.lowerBound) / step) ? Color.blue : Color.gray.opacity(0.4))
-                                .frame(width: index % 5 == 0 ? 2 : 1, height: index % 5 == 0 ? 20 : 12)
+        VStack(spacing: 16) {
+            // Simple slider that just works
+            Slider(
+                value: Binding(
+                    get: { value },
+                    set: { newValue in
+                        let steps = (range.upperBound - range.lowerBound) / step
+                        let stepValue = (newValue - range.lowerBound) / step
+                        let roundedStep = stepValue.rounded()
+                        let snappedValue = range.lowerBound + (roundedStep * step)
+                        
+                        if snappedValue != value {
+                            haptic.impactOccurred()
+                            value = snappedValue
+  
                         }
                     }
+                ),
+                in: range,
+                step: step
+            )
 
-                    // **Draggable Blue Indicator**
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.blue.opacity(0.6))
-                        .frame(width: 6, height: 40)
-                        .offset(x: -geometry.size.width / 2 + (CGFloat(value - range.lowerBound) / step * stepWidth) + 16)
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { gesture in
-                                    let rawValue = range.lowerBound + Double(gesture.location.x / stepWidth) * step
-                                    let snappedValue = (rawValue / step).rounded() * step
-                                    value = min(max(snappedValue, range.lowerBound), range.upperBound)
-                                }
-                        )
-
-                        // **Tap Gesture to Select Value**
-                        .onTapGesture { location in
-                            let rawValue = range.lowerBound + Double(location.x / stepWidth) * step
-                            let snappedValue = (rawValue / step).rounded() * step
-                            value = min(max(snappedValue, range.lowerBound), range.upperBound)
-                        }
-                }
-                .frame(height: 50)
+            .accentColor(.black)
+            .padding(.horizontal, 16)
+            
+            // Labels
+            HStack {
+                Text("⅕")
+                    .font(.footnote)
+                    .fontWeight(abs(value - 0.2) < 0.01 ? .semibold : .regular)
+                    .foregroundColor(abs(value - 0.2) < 0.01 ? .black : .black.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                
+                Text("⅖")
+                    .font(.footnote)
+                    .fontWeight(abs(value - 0.4) < 0.01 ? .semibold : .regular)
+                    .foregroundColor(abs(value - 0.4) < 0.01 ? .black : .black.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                
+                Text("⅗")
+                    .font(.footnote)
+                    .fontWeight(abs(value - 0.6) < 0.01 ? .semibold : .regular)
+                    .foregroundColor(abs(value - 0.6) < 0.01 ?  .black : .black.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                
+                Text("⅘")
+                    .font(.footnote)
+                    .fontWeight(abs(value - 0.8) < 0.01 ? .semibold : .regular)
+                    .foregroundColor(abs(value - 0.8) < 0.01 ? .black : .black.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                
+                Text("1")
+                    .font(.footnote)
+                    .fontWeight(abs(value - 1.0) < 0.01 ? .semibold : .regular)
+                    .foregroundColor(abs(value - 1.0) < 0.01 ?  .black : .black.opacity(0.7))
+                    .frame(maxWidth: .infinity)
             }
         }
         .frame(height: 60)
     }
+}
+
+#Preview {
+    @State var sliderValue: Double = 0.2
+    
+    return VStack(spacing: 20) {
+        Text("Search Range (\(sliderValue == 0.2 ? "⅕ mile" : sliderValue == 0.4 ? "⅖ mile" : sliderValue == 0.6 ? "⅗ mile" : sliderValue == 0.8 ? "⅘ mile" : "1 mile"))")
+            .font(.headline)
+        
+        CustomRangeSlider(value: $sliderValue, range: 0.2...1.0, step: 0.2)
+            .padding()
+    }
+    .padding()
 }

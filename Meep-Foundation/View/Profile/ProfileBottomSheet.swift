@@ -7,6 +7,9 @@
 
 import SwiftUI
 import FirebaseAuth
+import UIKit
+
+
 
 struct ProfileBottomSheet: View {
     // Optional imageUrl parameter for backward compatibility
@@ -26,6 +29,7 @@ struct ProfileBottomSheet: View {
     
     // Environment
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var coordinator: AppCoordinator
     
     var body: some View {
         ZStack {
@@ -140,14 +144,16 @@ struct ProfileBottomSheet: View {
     
     fileprivate func menuOptions() -> some View {
         VStack(spacing: 12) {
-            ProfileMenuItem(icon: "plus", title: "Meep Plus", subtitle: "Get access to time-saving features", isRotated: false)
-                .onTapGesture {
-                    // Implement Meep Plus subscription flow
-                }
+//            ProfileMenuItem(icon: "plus", title: "Meep Plus", subtitle: "Get access to time-saving features", isRotated: false)
+//                .onTapGesture {
+//                    // Implement Meep Plus subscription flow
+//                }
             
             ProfileMenuItem(icon: "pencil.tip", title: "Give Feedback", subtitle: "Help us improve with your thoughts", isRotated: false)
                 .onTapGesture {
-                    // Implement feedback submission
+                    if let url = URL(string: "https://tally.so/r/wagLMB") {
+                        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                    }
                 }
             
             ProfileMenuItem(icon: "person.fill", title: "Edit Profile", subtitle: "Update your profile information", isRotated: false)
@@ -174,14 +180,14 @@ struct ProfileBottomSheet: View {
     
     fileprivate func termsAndPrivacySection() -> some View {
         HStack(spacing: 12) {
-            Link("Terms", destination: URL(string: "https://meep.earth/terms")!)
+            Link("Terms", destination: URL(string: "https://meep.earth/#/terms")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
             
             Text("·")
                 .foregroundColor(.gray)
             
-            Link("Privacy", destination: URL(string: "https://meep.earth/privacy")!)
+            Link("Privacy", destination: URL(string: "https://meep.earth/#/privacy")!)
                 .font(.footnote)
                 .foregroundColor(.gray)
         }
@@ -214,6 +220,7 @@ struct ProfileBottomSheet: View {
         firebaseService.signOut { success, error in
             isLoading = false
             if success {
+                coordinator.showLanding()
                 dismiss()
             } else if let error = error {
                 self.errorMessage = error
@@ -229,6 +236,7 @@ struct ProfileBottomSheet: View {
         firebaseService.deleteAccount { success, error in
             isLoading = false
             if success {
+                coordinator.showLanding()
                 dismiss()
             } else if let error = error {
                 self.errorMessage = error
