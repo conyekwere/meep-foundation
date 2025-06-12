@@ -96,7 +96,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         print("🔍 All Firebase apps: \(FirebaseApp.allApps ?? [:])")
         
+        application.setStatusBarOrientation(.portrait, animated: false)
         return true
+    }
+    
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        return .portrait
     }
     
     // Handling device token for push notifications (important for phone auth)

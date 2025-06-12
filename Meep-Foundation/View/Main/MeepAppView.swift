@@ -41,6 +41,9 @@ struct MeepAppView: View {
 
     // Toast for transit fallback
     @State private var showTransitFallbackToast: Bool = false
+    
+    @State private var currentToast: TransitFallbackToast?
+    
     @State private var toastDismissTimer: Timer? = nil
     
     // Sheet height constants
@@ -66,22 +69,29 @@ struct MeepAppView: View {
     @State private var selectedAnnotation: MeepAnnotation? = nil
     @State private var selectedAnnotationID: UUID?
     
-    
-    
-//    var activeMapAnnotations: [MeepAnnotation] {
-//        return viewModel.annotations
-//    }
+
     var activeMapAnnotations: [MeepAnnotation] {
-        var results: [MeepAnnotation] = []
+            var results: [MeepAnnotation] = []
+            
+            // Make sure this only adds ONE midpoint annotation
         
-        // Make sure this only adds ONE midpoint annotation
+//            if viewModel.userLocation != nil && viewModel.friendLocation != nil {
+//                results.append(MeepAnnotation(
+//                    coordinate: viewModel.enhancedMidpoint,
+//                    title: viewModel.midpointTitle,
+//                    type: .midpoint
+//                ))
+//            }
+        
+//
         if viewModel.userLocation != nil && viewModel.friendLocation != nil {
             results.append(MeepAnnotation(
-                coordinate: viewModel.midpoint,
-                title: viewModel.midpointTitle,  // This should show subway lines
+                coordinate: viewModel.realTransitMidpoint, // ✅ Use the real transit midpoint
+                title: viewModel.midpointTitle,
                 type: .midpoint
             ))
         }
+//
         
         // Check if viewModel.annotations also contains a midpoint
         // and avoid duplicating it
@@ -106,15 +116,61 @@ struct MeepAppView: View {
         print("   - User location: \(viewModel.userLocation?.latitude ?? 0)")
         print("   - Friend location: \(viewModel.friendLocation?.latitude ?? 0)")
         print("   - UI State: \(uiState)")
-        print("   - Midpoint: \(viewModel.midpoint)")
+        print("   - Midpoint: \(viewModel.enhancedMidpoint)")
         
         if let manager = viewModel.subwayManager {
-            let userRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.midpoint, from: viewModel.userLocation ?? CLLocationCoordinate2D())
-            let friendRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.midpoint, from: viewModel.friendLocation ?? CLLocationCoordinate2D())
+            let userRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.enhancedMidpoint, from: viewModel.userLocation ?? CLLocationCoordinate2D())
+            let friendRoutes = manager.getHelpfulSubwayRoutesToward(midpoint: viewModel.enhancedMidpoint, from: viewModel.friendLocation ?? CLLocationCoordinate2D())
             print("   - User routes: \(userRoutes.count)")
             print("   - Friend routes: \(friendRoutes.count)")
         }
         print("=========================")
+    }
+
+    private func outsideMapRegion() {
+        if let userLoc = viewModel.userLocation, !isWithinNYC(userLoc) {
+            print("⚠️ Outside NYC - switching to car and showing beta warning")
+            myTransit = .car
+            viewModel.userTransportMode = .car
+            friendTransit = .car
+            viewModel.friendTransportMode = .car
+            currentToast = TransitFallbackToast(
+                icon: "car.fill",
+                title: "Beta only works in NYC",
+                message: "Try at your own risk",
+                primaryColor: .red,
+                secondaryColor: .red.opacity(0.8)
+            )
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
+        } else if let friendLoc = viewModel.friendLocation, !isWithinNYC(friendLoc) {
+            print("⚠️ Outside NYC - switching to car and showing beta warning")
+            myTransit = .car
+            viewModel.userTransportMode = .car
+            friendTransit = .car
+            viewModel.friendTransportMode = .car
+            currentToast = TransitFallbackToast(
+                icon: "car.fill",
+                title: "Beta only works in NYC",
+                message: "Try at your own risk",
+                primaryColor: .red,
+                secondaryColor: .red.opacity(0.8)
+            )
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
+        }
     }
 
     
@@ -122,85 +178,84 @@ struct MeepAppView: View {
         print("🚇 handleSubwayDataLoad called:")
         print("   - hasLoadedData: \(subwayOverlayManager.hasLoadedData)")
         print("   - myTransit: \(myTransit), friendTransit: \(friendTransit)")
-        print("   - userLocation: \(viewModel.userLocation != nil)")
-        print("   - friendLocation: \(viewModel.friendLocation != nil)")
-        print("   - uiState: \(uiState)")
-        
-        // Ensure subway manager is connected FIRST
-        viewModel.subwayManager = subwayOverlayManager
-        
         guard subwayOverlayManager.hasLoadedData,
               (myTransit == .train || friendTransit == .train),
               let userLoc = viewModel.userLocation,
               let friendLoc = viewModel.friendLocation,
-              uiState == .results else {
-            print("❌ handleSubwayDataLoad guard failed")
-            return
-        }
-
-        let midpoint = viewModel.midpoint
-        print("🎯 Checking subway routes to midpoint: \(midpoint)")
-        // Debug the current detection first
-        print("🔍 === USER ROUTE DETECTION ===")
-        subwayOverlayManager.debugRouteDetection(midpoint: midpoint, from: userLoc)
-
-        print("🔍 === FRIEND ROUTE DETECTION ===")
-        subwayOverlayManager.debugRouteDetection(midpoint: midpoint, from: friendLoc)
-
-        // Use enhanced detection with stricter criteria
-        let userRoutes = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: userLoc)
-        let friendRoutes = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: friendLoc)
+              uiState == .results else { return }
         
-        print("📊 Found routes - User: \(userRoutes.count), Friend: \(friendRoutes.count)")
+        let midpoint = viewModel.enhancedMidpoint
+        print("🎯 Checking subway viability to midpoint: \(midpoint)")
+        
+        // 1) Run the special-case connectivity analysis first:
+        let connectivityAnalysis = subwayOverlayManager.analyzeSubwayConnectivity(
+            userLocation: userLoc,
+            friendLocation: friendLoc,
+            midpoint: midpoint
+        )
         
         var didFallback = false
         var fallbackMessage = ""
-
-        // Check user transit fallback
-        if myTransit == .train && userRoutes.isEmpty {
-            print("⚠️ No viable subway routes from user location — falling back to walk")
+        
+        // If the analysis says “not viable” (e.g. East ⇄ West Harlem), fallback immediately:
+        if myTransit == .train && !connectivityAnalysis.userViable {
+            print("⚠️ Crosstown inefficiency detected: \(connectivityAnalysis.reason)")
             myTransit = .walk
             viewModel.userTransportMode = .walk
             didFallback = true
-            fallbackMessage = "No direct subway from your location"
+            fallbackMessage = connectivityAnalysis.reason
         }
-
-        // Check friend transit fallback
-        if friendTransit == .train && friendRoutes.isEmpty {
-            print("⚠️ No viable subway routes from friend location — falling back to walk")
+        if friendTransit == .train && !connectivityAnalysis.friendViable {
+            print("⚠️ Crosstown inefficiency detected for friend: \(connectivityAnalysis.reason)")
             friendTransit = .walk
             viewModel.friendTransportMode = .walk
-            didFallback = true
-            
-            if fallbackMessage.isEmpty {
-                fallbackMessage = "No direct subway from friend's location"
-            } else {
-                fallbackMessage = "No direct subway routes available"
+            if !didFallback {
+                didFallback = true
+                fallbackMessage = connectivityAnalysis.reason
             }
         }
-
-        // Show fallback toast if needed
-        if didFallback {
-            print("🚨 Triggering fallback toast: \(fallbackMessage)")
-            showTransitFallbackToast = true
+        
+        // 2) Only if no special-case ran, fall back on “zero real routes”:
+        if !didFallback {
+            let userRoutes   = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: userLoc)
+            let friendRoutes = subwayOverlayManager.getHelpfulSubwayRoutesToward(midpoint: midpoint, from: friendLoc)
+            print("📊 Found routes – User: \(userRoutes.count), Friend: \(friendRoutes.count)")
             
-            // Cancel existing timer
-            toastDismissTimer?.invalidate()
-            
-            // Set new timer
-            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
-                withAnimation(.easeOut(duration: 0.3)) {
-                    showTransitFallbackToast = false
+            if myTransit == .train && userRoutes.isEmpty {
+                print("⚠️ No routes from user – fallback")
+                myTransit = .walk
+                viewModel.userTransportMode = .walk
+                didFallback = true
+                fallbackMessage = "No direct subway from your location"
+            }
+            if friendTransit == .train && friendRoutes.isEmpty {
+                print("⚠️ No routes from friend – fallback")
+                friendTransit = .walk
+                viewModel.friendTransportMode = .walk
+                if !didFallback {
+                    didFallback = true
+                    fallbackMessage = "No direct subway from friend's location"
                 }
             }
-            
-            // Force recalculation with new transport modes
+        }
+        
+        // 3) Show toast if anything fell back
+        if didFallback {
+            print("🚨 Triggering fallback toast: \(fallbackMessage)")
+            currentToast = TransitFallbackToast.create(for: fallbackMessage)
+            showTransitFallbackToast = true
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 viewModel.searchNearbyPlaces()
             }
         }
     }
-
 
     // Helper to load subway data if needed
     private func loadSubwayDataIfNeeded() {
@@ -324,7 +379,23 @@ struct MeepAppView: View {
     
     
 
+    // Computed property for transit fallback toast view
+    private var transitFallbackToastView: some View {
+        TransitFallbackToastView(
+            toast: currentToast ?? TransitFallbackToast.create(for: ""),
+            isVisible: showTransitFallbackToast && currentToast != nil,
+            onDismiss: {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    showTransitFallbackToast = false
+                    currentToast = nil
+                }
+                toastDismissTimer?.invalidate()
+            }
+        )
+    }
+
     var body: some View {
+
         ZStack {
 
 
@@ -451,36 +522,7 @@ struct MeepAppView: View {
             
             // MARK: Toast Overlay (transit fallback)
             if showTransitFallbackToast {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Image(systemName: "figure.walk.motion")
-                            .foregroundColor(.white)
-                            .font(.title2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Switched to walking")
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
-                                .font(.callout)
-                            Text("No direct subway routes for this meetup")
-                                .foregroundColor(.white.opacity(0.8))
-                                .font(.caption)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.black.opacity(0.85))
-                    )
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 48)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: showTransitFallbackToast)
-                .zIndex(10) // Higher z-index to ensure visibility
+                transitFallbackToastView
             }
             
             // MARK: Floating Card for Selected Point
@@ -509,6 +551,8 @@ struct MeepAppView: View {
             }
         }
         
+        
+        
         // MARK: Full-Screen Search Sheet
         .fullScreenCover(isPresented: $isSearching) {
             MeetingSearchSheetView(
@@ -535,9 +579,8 @@ struct MeepAppView: View {
                         viewModel.sharableFriendLocation = "Friend's Location"
                         
                     } else {
-                        // Maintain the current UI state
-                        // This will preserve the results view when returning from search
-                        // with existing locations
+      
+      
                     }
                     
                     
@@ -548,6 +591,11 @@ struct MeepAppView: View {
                     
                     viewModel.subwayManager = subwayOverlayManager
                     
+                    // Check if outside of NYC
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        outsideMapRegion()
+                    }
+                    
                     // Debug the state right after setting it up
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         debugSubwayState()
@@ -557,6 +605,8 @@ struct MeepAppView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         loadSubwayDataIfNeeded()
                     }
+                    
+
                 }
             )
             .background(Color(.tertiarySystemBackground))
@@ -613,10 +663,15 @@ struct MeepAppView: View {
         }
         .onAppear {
             viewModel.requestUserLocation()
+            
+            
             if let userLocation = viewModel.userLocation, !isWithinNYC(userLocation) {
                 showErrorModal = true
             }
             self.searchRadius = viewModel.searchRadius
+            // Sync transport modes with ViewModel
+            self.myTransit = viewModel.userTransportMode
+            self.friendTransit = viewModel.friendTransportMode
         }
         .onChange(of: searchRequest) { newValue in
             if newValue {
@@ -673,11 +728,10 @@ struct MeepAppView: View {
             }
         }
     }
+    
 }
 
 
 #Preview {
     MeepAppView(isNewUser: true)
 }
-
-
