@@ -626,8 +626,8 @@ struct MeetingSearchSheetView: View {
                 text: $myLocation,
                 isDirty: !myLocation.isEmpty,
                 selectedMode: Binding(
-                    get: { self.viewModel.userTransportMode },
-                    set: { self.viewModel.userTransportMode = $0 ?? .train }
+                  get: { viewModel.userTransportMode },
+                  set: { viewModel.userTransportMode = $0! }
                 ),
                 isValid: !myLocation.isEmpty ? isMyLocationValid : nil
             )
@@ -651,8 +651,8 @@ struct MeetingSearchSheetView: View {
                 text: $friendLocation,
                 isDirty: !friendLocation.isEmpty,
                 selectedMode: Binding(
-                    get: { self.viewModel.friendTransportMode },
-                    set: { self.viewModel.friendTransportMode = $0 ?? .train }
+                  get: { viewModel.userTransportMode },
+                  set: { viewModel.userTransportMode = $0! }
                 ),
                 isValid: !friendLocation.isEmpty ? isFriendsLocationValid : nil
             )
