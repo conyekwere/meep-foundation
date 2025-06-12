@@ -2,24 +2,120 @@
 //  OptimizedSubwayMapManager.swift
 //  Meep-Foundation
 //
-//  Created by Chima Onyekwere on 6/9/25.
+//  Enhanced with GTFS routing capabilities while maintaining all existing functionality
 //
-// Advanced OptimizedSubwayMapManager with route variants support
 
 import Foundation
 import MapKit
 import SwiftUI
 import os.log
 
+// MARK: - GTFS Data Structures
+
+struct GTFSStop {
+    let stopId: String
+    let stopName: String
+    let latitude: Float
+    let longitude: Float
+    let parentStation: String?
+    let locationType: Int
+    
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: Double(latitude), longitude: Double(longitude))
+    }
+    
+    var isStation: Bool {
+        locationType == 1 || parentStation != nil
+    }
+}
+
+struct GTFSRoute {
+    let routeId: String
+    let routeShortName: String
+    let routeColor: String
+    let routeType: Int
+    
+    var isSubway: Bool {
+        routeType == 1
+    }
+}
+
+struct GTFSTrip {
+    let tripId: String
+    let routeId: String
+    let directionId: Int
+    let shapeId: String?
+}
+
+struct GTFSStopTime {
+    let tripId: String
+    let stopId: String
+    let stopSequence: Int
+}
+
+struct RouteDirection {
+    let routeId: String
+    let directionId: Int
+    let orderedStops: [String]
+}
+
+
+
+
+struct SpatialIndex {
+    private var grid: [Int: [GTFSStop]] = [:]
+    private let gridSize: Double = 0.01
+    
+    mutating func addStop(_ stop: GTFSStop) {
+        let key = gridKey(for: stop.coordinate)
+        if grid[key] == nil {
+            grid[key] = []
+        }
+        grid[key]?.append(stop)
+    }
+    
+    func findStopsNear(_ coordinate: CLLocationCoordinate2D, radius: Double) -> [GTFSStop] {
+        let centerKey = gridKey(for: coordinate)
+        let centerLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        
+        var nearbyStops: [GTFSStop] = []
+        let gridRadius = Int(ceil(radius / (gridSize * 111000))) + 1
+        
+        for dx in -gridRadius...gridRadius {
+            for dy in -gridRadius...gridRadius {
+                let key = centerKey + dx + (dy * 10000)
+                
+                if let stopsInCell = grid[key] {
+                    for stop in stopsInCell {
+                        let stopLocation = CLLocation(latitude: Double(stop.latitude),
+                                                     longitude: Double(stop.longitude))
+                        let distance = centerLocation.distance(from: stopLocation)
+                        
+                        if distance <= radius {
+                            nearbyStops.append(stop)
+                        }
+                    }
+                }
+            }
+        }
+        
+        return nearbyStops
+    }
+    
+    private func gridKey(for coordinate: CLLocationCoordinate2D) -> Int {
+        let x = Int(coordinate.longitude / gridSize)
+        let y = Int(coordinate.latitude / gridSize)
+        return x + (y * 10000)
+    }
+}
+
 // MARK: - Enhanced Data Structures
 
-
-// MARK: - Also Make SubwayTrackPoint Hashable (if needed)
 struct SubwayTrackPoint: Hashable {
     let latitude: Double
     let longitude: Double
     let sequence: Int
-    let stationId: String? // Station identifier from CSV
+    let stationId: String?
     
     var coordinate: CLLocationCoordinate2D {
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -29,7 +125,6 @@ struct SubwayTrackPoint: Hashable {
         return stationId != nil && !stationId!.isEmpty
     }
     
-    // MARK: - Hashable Conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(latitude)
         hasher.combine(longitude)
@@ -50,19 +145,16 @@ struct SubwayRoute: Hashable {
     let baseLine: String
     let variant: String?
     let coordinates: [CLLocationCoordinate2D]
-    let stations: [SubwayTrackPoint] // Store station points separately
+    let stations: [SubwayTrackPoint]
     
     var displayName: String {
         return baseLine
     }
     
-    // MARK: - Hashable Conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(routeId)
         hasher.combine(baseLine)
         hasher.combine(variant)
-        // Don't hash coordinates and stations arrays as they're expensive
-        // routeId should be unique enough
     }
     
     static func == (lhs: SubwayRoute, rhs: SubwayRoute) -> Bool {
@@ -79,11 +171,244 @@ struct SubwayStation {
     let routeId: String
 }
 
+// MARK: - Utility Classes
+
+class GeographicAnalyzer {
+    
+    static func isInFinancialDistrict(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.704 && coord.latitude <= 40.712 &&
+               coord.longitude >= -74.017 && coord.longitude <= -74.005
+    }
+
+    static func isInBatteryPark(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.703 && coord.latitude <= 40.706 &&
+               coord.longitude >= -74.020 && coord.longitude <= -74.015
+    }
+
+    static func isInBrookynHeights(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.694 && coord.latitude <= 40.700 &&
+               coord.longitude >= -73.998 && coord.longitude <= -73.990
+    }
+
+    static func isInDUMBO(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.701 && coord.latitude <= 40.705 &&
+               coord.longitude >= -73.991 && coord.longitude <= -73.986
+    }
+
+    static func isInLowerEastSide(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.714 && coord.latitude <= 40.722 &&
+               coord.longitude >= -73.994 && coord.longitude <= -73.982
+    }
+
+    static func isInChinatown(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.714 && coord.latitude <= 40.720 &&
+               coord.longitude >= -74.005 && coord.longitude <= -73.994
+    }
+
+    static func isInLittleItaly(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.718 && coord.latitude <= 40.723 &&
+               coord.longitude >= -74.000 && coord.longitude <= -73.994
+    }
+
+    static func isInEastVillage(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.722 && coord.latitude <= 40.732 &&
+               coord.longitude >= -73.994 && coord.longitude <= -73.979
+    }
+
+    static func isInUpperEastSide(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.768 && coord.latitude <= 40.799 &&
+               coord.longitude >= -73.966 && coord.longitude <= -73.945
+    }
+
+    static func isInUpperWestSide(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.768 && coord.latitude <= 40.799 &&
+               coord.longitude >= -73.989 && coord.longitude <= -73.968
+    }
+
+    static func isOnRooseveltIsland(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.751 && coord.latitude <= 40.766 &&
+               coord.longitude >= -73.955 && coord.longitude <= -73.948
+    }
+
+    static func isInStatenIsland(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.477 && coord.latitude <= 40.651 &&
+               coord.longitude >= -74.259 && coord.longitude <= -74.052
+    }
+
+    static func isInFarQueens(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.754 && coord.latitude <= 40.794 &&
+               coord.longitude >= -73.817 && coord.longitude <= -73.774
+    }
+
+    static func isInWilliamsburg(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.701 && coord.latitude <= 40.721 &&
+               coord.longitude >= -73.968 && coord.longitude <= -73.936
+    }
+
+    static func isInRedHook(_ coord: CLLocationCoordinate2D) -> Bool {
+        return coord.latitude >= 40.674 && coord.latitude <= 40.686 &&
+               coord.longitude >= -74.020 && coord.longitude <= -74.000
+    }
+    
+    static func calculateGeographicMidpoint(_ point1: CLLocationCoordinate2D,
+                                           _ point2: CLLocationCoordinate2D) -> CLLocationCoordinate2D {
+        let lat1 = point1.latitude * .pi / 180
+        let lon1 = point1.longitude * .pi / 180
+        let lat2 = point2.latitude * .pi / 180
+        let lon2 = point2.longitude * .pi / 180
+        
+        let dLon = lon2 - lon1
+        
+        let Bx = cos(lat2) * cos(dLon)
+        let By = cos(lat2) * sin(dLon)
+        
+        let lat3 = atan2(sin(lat1) + sin(lat2), sqrt((cos(lat1) + Bx) * (cos(lat1) + Bx) + By * By))
+        let lon3 = lon1 + atan2(By, cos(lat1) + Bx)
+        
+        return CLLocationCoordinate2D(
+            latitude: lat3 * 180 / .pi,
+            longitude: lon3 * 180 / .pi
+        )
+    }
+    
+    static func isWrongDirection(userLocation: CLLocationCoordinate2D,
+                                friendLocation: CLLocationCoordinate2D,
+                                midpoint: CLLocationCoordinate2D,
+                                onLine: String) -> Bool {
+        let userToMidpoint = userLocation.latitude - midpoint.latitude
+        let friendToMidpoint = friendLocation.latitude - midpoint.latitude
+        
+        if (userToMidpoint > 0.01 && friendToMidpoint < -0.01) ||
+           (userToMidpoint < -0.01 && friendToMidpoint > 0.01) {
+            return true
+        }
+        
+        return false
+    }
+}
+
+class TransferAnalyzer {
+    
+    private static let majorTransferHubs: [String: [String]] = [
+        "Times Square": ["1", "2", "3", "7", "N", "Q", "R", "W"],
+        "Union Square": ["4", "5", "6", "L", "N", "Q", "R", "W"],
+        "14th St-Union Sq": ["4", "5", "6", "L", "N", "Q", "R", "W"],
+        "42nd St-Times Sq": ["1", "2", "3", "7", "N", "Q", "R", "W"],
+        "59th St-Columbus Circle": ["A", "B", "C", "D", "1"],
+        "125th St": ["4", "5", "6", "A", "B", "C", "D"],
+        "Fulton St": ["4", "5", "6", "A", "C", "J", "Z", "R", "W"],
+        "Atlantic Ave": ["B", "D", "N", "Q", "R", "W", "2", "3", "4", "5"],
+        "Lexington Ave/59th St": ["4", "5", "6", "N", "Q", "R", "W"],
+        "14th St-8th Ave": ["A", "C", "E", "L"],
+        "West 4th St": ["A", "B", "C", "D", "E", "F", "M"],
+        "Canal St": ["J", "Z", "N", "Q", "R", "W", "6"],
+        "96th St": ["1", "2", "3", "B", "C"]
+    ]
+    
+    private static let hubCoordinates: [String: CLLocationCoordinate2D] = [
+        "Times Square": CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855),
+        "Union Square": CLLocationCoordinate2D(latitude: 40.7359, longitude: -73.9906),
+        "14th St-Union Sq": CLLocationCoordinate2D(latitude: 40.7359, longitude: -73.9906),
+        "42nd St-Times Sq": CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855),
+        "59th St-Columbus Circle": CLLocationCoordinate2D(latitude: 40.7677, longitude: -73.9811),
+        "125th St": CLLocationCoordinate2D(latitude: 40.8075, longitude: -73.9370),
+        "Fulton St": CLLocationCoordinate2D(latitude: 40.7095, longitude: -74.0066),
+        "Atlantic Ave": CLLocationCoordinate2D(latitude: 40.6840, longitude: -73.9769),
+        "Lexington Ave/59th St": CLLocationCoordinate2D(latitude: 40.7625, longitude: -73.9673),
+        "14th St-8th Ave": CLLocationCoordinate2D(latitude: 40.7394, longitude: -74.0020),
+        "West 4th St": CLLocationCoordinate2D(latitude: 40.7323, longitude: -74.0004),
+        "Canal St": CLLocationCoordinate2D(latitude: 40.7185, longitude: -74.0057),
+        "96th St": CLLocationCoordinate2D(latitude: 40.7947, longitude: -73.9724)
+    ]
+    
+    static func checkTransferConnections(fromLine: String, toLines: [String],
+                                        fromStation: CLLocationCoordinate2D,
+                                        toMidpoint: CLLocationCoordinate2D) -> Bool {
+        
+        print("         🔄 Checking transfer connections from \(fromLine) to \(toLines)")
+        
+        for (hubName, hubLines) in majorTransferHubs {
+            if hubLines.contains(fromLine) {
+                let destinationLinesAtHub = Set(hubLines).intersection(Set(toLines))
+                
+                if !destinationLinesAtHub.isEmpty {
+                    print("         🚇 Transfer hub '\(hubName)' connects \(fromLine) to \(Array(destinationLinesAtHub))")
+                    
+                    let hubCoordinate = getTransferHubCoordinate(hubName)
+                    let isTransferViable = isTransferGeographicallyViable(
+                        from: fromStation,
+                        via: hubCoordinate,
+                        to: toMidpoint
+                    )
+                    
+                    if isTransferViable {
+                        print("         ✅ Transfer via \(hubName) is geographically viable")
+                        return true
+                    }
+                }
+            }
+        }
+        
+        print("         ❌ No viable transfer connections found")
+        return false
+    }
+    
+    static func getTransferHubCoordinate(_ hubName: String) -> CLLocationCoordinate2D {
+        return hubCoordinates[hubName] ?? CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855)
+    }
+    
+    static func isTransferGeographicallyViable(from origin: CLLocationCoordinate2D,
+                                              via transfer: CLLocationCoordinate2D,
+                                              to destination: CLLocationCoordinate2D) -> Bool {
+        
+        let directDistance = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+            .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))
+        
+        let viaTransferDistance =
+            CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+                .distance(from: CLLocation(latitude: transfer.latitude, longitude: transfer.longitude)) +
+            CLLocation(latitude: transfer.latitude, longitude: transfer.longitude)
+                .distance(from: CLLocation(latitude: destination.latitude, longitude: destination.longitude))
+        
+        let detourRatio = viaTransferDistance / directDistance
+        
+        print("           Direct: \(Int(directDistance))m, Via transfer: \(Int(viaTransferDistance))m, Ratio: \(String(format: "%.1f", detourRatio))")
+        
+        return detourRatio < 2.5
+    }
+    
+    static func hasWeekendServiceLimitations(_ lines: [String]) -> Bool {
+        let weekendLimitedLines = ["B", "Z", "W"]
+        return lines.contains(where: weekendLimitedLines.contains)
+    }
+    
+    static func isWeekend() -> Bool {
+        let weekday = Calendar.current.component(.weekday, from: Date())
+        return weekday == 1 || weekday == 7
+    }
+    
+    static func hasViableTransferConnection(fromLines: [String], toLines: [String],
+                                           fromLocation: CLLocationCoordinate2D,
+                                           toLocation: CLLocationCoordinate2D) -> Bool {
+        
+        for fromLine in fromLines {
+            if checkTransferConnections(fromLine: fromLine, toLines: toLines,
+                                      fromStation: fromLocation, toMidpoint: toLocation) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+
+// MARK: - Main Class
+
 class OptimizedSubwayMapManager: ObservableObject {
     // MARK: - Published Properties
     @Published var visiblePolylines: [MKPolyline] = []
     @Published var visibleStations: [MKPointAnnotation] = []
-    @Published var visibleStationCircles: [MKPolygon] = [] // Station circles as polygons
+    @Published var visibleStationCircles: [MKPolygon] = []
     @Published var isLoading = false
     @Published var loadingError: SubwayLoadingError?
     @Published var hasLoadedData = false
@@ -91,87 +416,64 @@ class OptimizedSubwayMapManager: ObservableObject {
     // MARK: - Private Properties
     private var allPolylines: [MKPolyline] = []
     private var allStations: [MKPointAnnotation] = []
-    private var allStationCircles: [MKPolygon] = [] // Store all station circles
-    private var allSubwayStations: [SubwayStation] = [] // Store subway station data
+    private var allStationCircles: [MKPolygon] = []
+    private var allSubwayStations: [SubwayStation] = []
     private var loadedRoutes: [SubwayRoute] = []
+    
+    // MARK: - GTFS Data Properties
+    private var gtfsStops: [String: GTFSStop] = [:]
+    private var gtfsRoutes: [String: GTFSRoute] = [:]
+    private var gtfsTrips: [String: GTFSTrip] = [:]
+    private var gtfsRouteDirections: [String: [RouteDirection]] = [:]
+    private var gtfsSpatialIndex: SpatialIndex = SpatialIndex()
+    private var isGTFSLoaded = false
+    
+    // Helper classes
+    
     
     // Performance monitoring
     private let logger = Logger(subsystem: "com.meep.subway", category: "performance")
     
-    // MARK: - Route Configuration Based on NYC subway List
+    // MARK: - Route Configuration
     private let routeFiles = [
-        // Single route lines
         "1", "2", "3", "4", "5", "6", "7",
         "B", "C", "E", "F", "G", "J", "L", "M", "Q", "R",
-        
-        // Multi-route lines (with variants)
-        "A-1", "A-2",              // A train variants
-        "D-1", "D-2", "D-3",       // D train variants
-        "N-1", "N-2",              // N train variants
-        
-        // Shuttle services
-        "FS",                      // Franklin Ave Shuttle
-        "GS",                      // Grand Central Shuttle
-        "H",                       // Rockaway Park Shuttle
-        
-        // Staten Island Railway
-        "SI"                       // Staten Island Railway
+        "A-1", "A-2", "D-1", "D-2", "D-3", "N-1", "N-2",
+        "FS", "GS", "H", "SI"
     ]
     
-    // Complete NYC subway line colors matching MTA standards
+    // Complete NYC subway line colors
     private let lineColors: [String: UIColor] = [
-        // Red lines (1, 2, 3)
         "1": UIColor(red: 238/255, green: 53/255, blue: 46/255, alpha: 1),
         "2": UIColor(red: 238/255, green: 53/255, blue: 46/255, alpha: 1),
         "3": UIColor(red: 238/255, green: 53/255, blue: 46/255, alpha: 1),
-        
-        // Green lines (4, 5, 6)
         "4": UIColor(red: 0/255, green: 147/255, blue: 60/255, alpha: 1),
         "5": UIColor(red: 0/255, green: 147/255, blue: 60/255, alpha: 1),
         "6": UIColor(red: 0/255, green: 147/255, blue: 60/255, alpha: 1),
-        
-        // Purple (7)
         "7": UIColor(red: 185/255, green: 51/255, blue: 173/255, alpha: 1),
-        
-        // Blue lines (A, C, E)
         "A": UIColor(red: 40/255, green: 80/255, blue: 173/255, alpha: 1),
         "C": UIColor(red: 40/255, green: 80/255, blue: 173/255, alpha: 1),
         "E": UIColor(red: 40/255, green: 80/255, blue: 173/255, alpha: 1),
-        
-        // Orange lines (B, D, F, M)
         "B": UIColor(red: 255/255, green: 99/255, blue: 25/255, alpha: 1),
         "D": UIColor(red: 255/255, green: 99/255, blue: 25/255, alpha: 1),
         "F": UIColor(red: 255/255, green: 99/255, blue: 25/255, alpha: 1),
         "M": UIColor(red: 255/255, green: 99/255, blue: 25/255, alpha: 1),
-        
-        // Light Green (G)
         "G": UIColor(red: 108/255, green: 190/255, blue: 69/255, alpha: 1),
-        
-        // Brown lines (J, Z)
         "J": UIColor(red: 153/255, green: 102/255, blue: 51/255, alpha: 1),
         "Z": UIColor(red: 153/255, green: 102/255, blue: 51/255, alpha: 1),
-        
-        // Gray (L)
         "L": UIColor(red: 167/255, green: 169/255, blue: 172/255, alpha: 1),
-        
-        // Yellow lines (N, Q, R, W)
         "N": UIColor(red: 252/255, green: 204/255, blue: 10/255, alpha: 1),
         "Q": UIColor(red: 252/255, green: 204/255, blue: 10/255, alpha: 1),
         "R": UIColor(red: 252/255, green: 204/255, blue: 10/255, alpha: 1),
         "W": UIColor(red: 252/255, green: 204/255, blue: 10/255, alpha: 1),
-        
-        // Shuttle lines (Gray)
         "FS": UIColor(red: 128/255, green: 129/255, blue: 131/255, alpha: 1),
         "GS": UIColor(red: 128/255, green: 129/255, blue: 131/255, alpha: 1),
         "H": UIColor(red: 128/255, green: 129/255, blue: 131/255, alpha: 1),
-        
-        // Staten Island Railway (Blue)
         "SI": UIColor(red: 40/255, green: 80/255, blue: 173/255, alpha: 1)
     ]
     
     // MARK: - CSV Loading Methods
     
-    /// Load subway data from CSV files using NYC line format
     func loadSubwayDataFromCSV() {
         guard !hasLoadedData && !isLoading else {
             return
@@ -189,8 +491,6 @@ class OptimizedSubwayMapManager: ObservableObject {
             DispatchQueue.main.async {
                 self.hasLoadedData = true
                 self.isLoading = false
-                
-                // Show all loaded polylines
                 self.visiblePolylines = self.allPolylines
                 self.visibleStations = []
             }
@@ -205,34 +505,24 @@ class OptimizedSubwayMapManager: ObservableObject {
             
             if let route = parseRouteCSVFile(fileName, routeId: routeFile) {
                 allRoutes.append(route)
-                //print("✅ Loaded route \(routeFile): \(route.coordinates.count) coordinates, \(route.stations.count) stations")
             } else {
                 print("❌ Failed to load route file: \(fileName)")
             }
         }
         
-        print("📊 Total routes loaded: \(allRoutes.count)")
+        print("📊 Total CSV routes loaded: \(allRoutes.count)")
         
-        // Convert routes to polylines with offset handling for overlapping lines
         var tempPolylines: [MKPolyline] = []
-        
-        // Group routes by their display name to handle overlapping lines
         let groupedRoutes = Dictionary(grouping: allRoutes) { $0.displayName }
         
-        print("📊 Grouped into \(groupedRoutes.count) line groups")
-        
         for (lineName, routes) in groupedRoutes {
-            // Check if routes have different colors (only offset if they do)
             let uniqueColors = Set(routes.map { getLineColor(for: $0.displayName) })
             let needsOffset = routes.count > 1 && uniqueColors.count > 1
-            
-           // print("🚇 Processing line \(lineName): \(routes.count) variants, needs offset: \(needsOffset)")
             
             for (index, route) in routes.enumerated() {
                 if route.coordinates.count >= 2 {
                     var offsetCoordinates = route.coordinates
                     
-                    // Apply offset only if multiple variants with different colors exist
                     if needsOffset && index > 0 {
                         offsetCoordinates = applyLineOffset(to: route.coordinates,
                                                           offsetIndex: index,
@@ -241,19 +531,11 @@ class OptimizedSubwayMapManager: ObservableObject {
                     
                     let polyline = MKPolyline(coordinates: offsetCoordinates, count: offsetCoordinates.count)
                     polyline.title = route.displayName
-                    
-                    // Store additional metadata for rendering
-                    polyline.subtitle = route.routeId // Store full route ID for reference
-                    
+                    polyline.subtitle = route.routeId
                     tempPolylines.append(polyline)
                 }
                 
-                // Create station annotations and polygons from route stations
-                //print("🚉 Creating stations for route \(route.routeId): \(route.stations.count) track points")
-                
-                // Deduplicate stations by location (group nearby coordinates)
-                let uniqueStations = deduplicateStations(route.stations, tolerance: 0.003) // ~33 meters - more aggressive
-               // print("🎯 Deduplicated to \(uniqueStations.count) unique stations")
+                let uniqueStations = deduplicateStations(route.stations, tolerance: 0.003)
                 
                 for station in uniqueStations {
                     let stationAnnotation = MKPointAnnotation()
@@ -262,13 +544,11 @@ class OptimizedSubwayMapManager: ObservableObject {
                     stationAnnotation.subtitle = station.stationId
                     allStations.append(stationAnnotation)
                     
-                    // Create circular polygon for station
                     let stationCircle = createStationCircle(at: station.coordinate,
                                                           lineName: route.displayName,
                                                           stationId: station.stationId ?? "")
                     allStationCircles.append(stationCircle)
                     
-                    // Also store in our subway stations array
                     let subwayStation = SubwayStation(
                         coordinate: station.coordinate,
                         stationId: station.stationId ?? "",
@@ -283,12 +563,12 @@ class OptimizedSubwayMapManager: ObservableObject {
         self.loadedRoutes = allRoutes
         self.allPolylines = tempPolylines
         
-        print("✅ Final results: \(tempPolylines.count) polylines, \(allStations.count) station annotations, \(allStationCircles.count) station circles, \(allSubwayStations.count) subway stations")
+        print("✅ CSV loading complete: \(tempPolylines.count) polylines, \(allStations.count) stations")
     }
     
     private func parseRouteCSVFile(_ fileName: String, routeId: String) -> SubwayRoute? {
         guard let url = Bundle.main.url(forResource: fileName, withExtension: "csv") else {
-            return nil // File doesn't exist
+            return nil
         }
         
         do {
@@ -298,27 +578,16 @@ class OptimizedSubwayMapManager: ObservableObject {
             var coordinates: [CLLocationCoordinate2D] = []
             var stations: [SubwayTrackPoint] = []
             
-           // print("📄 Parsing \(fileName): \(lines.count) lines")
-            
             for (index, line) in lines.enumerated() {
                 if let point = parseNYCCSVLine(line, sequence: index) {
                     coordinates.append(point.coordinate)
                     
-                    // If this point represents a station, add it to stations array
                     if point.isStation {
                         stations.append(point)
-                        if index < 5 { // Debug first 5 stations
-                          //  print("🚉 Found station \(index): \(point.stationId ?? "nil") at (\(point.latitude), \(point.longitude))")
-                        }
                     }
-                } else if index < 5 { // Debug first 5 failed parses
-                    print("❌ Failed to parse line \(index): '\(line)'")
                 }
             }
             
-          //  print("📊 \(fileName) results: \(coordinates.count) coordinates, \(stations.count) stations")
-            
-            // Parse route info from routeId
             let (baseLine, variant) = parseRouteId(routeId)
             
             return SubwayRoute(
@@ -336,31 +605,21 @@ class OptimizedSubwayMapManager: ObservableObject {
     }
     
     private func parseNYCCSVLine(_ line: String, sequence: Int) -> SubwayTrackPoint? {
-        // Clean the line and split by comma
         let cleanLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
         let components = cleanLine.components(separatedBy: ",")
         
-        // Format: "6..N01R,40.713065,-74.004131,0,"
-        // Components: [0: lineId/stationId, 1: latitude, 2: longitude, 3: sequence, 4: empty]
-        guard components.count >= 4 else {
-            return nil
-        }
+        guard components.count >= 4 else { return nil }
         
-        // Parse latitude (component 1) and longitude (component 2)
         guard let latitude = Double(components[1].trimmingCharacters(in: .whitespacesAndNewlines)),
               let longitude = Double(components[2].trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return nil
         }
         
-        // Validate coordinates are reasonable for NYC area
         let isValidNYC = latitude >= 40.4 && latitude <= 41.0 &&
                          longitude >= -74.3 && longitude <= -73.7
         
-        guard isValidNYC else {
-            return nil
-        }
+        guard isValidNYC else { return nil }
         
-        // Extract station ID from first component (like "6..N01R")
         let stationId = components[0].trimmingCharacters(in: .whitespacesAndNewlines)
         
         return SubwayTrackPoint(
@@ -372,7 +631,6 @@ class OptimizedSubwayMapManager: ObservableObject {
     }
 
     private func parseRouteId(_ routeId: String) -> (baseLine: String, variant: String?) {
-        // Handle cases like "A-1", "A-2", "D-1", "D-2", "D-3", "N-1", "N-2"
         if routeId.contains("-") {
             let parts = routeId.components(separatedBy: "-")
             if parts.count == 2 {
@@ -380,37 +638,754 @@ class OptimizedSubwayMapManager: ObservableObject {
             }
         }
         
-        // Handle special cases
         switch routeId {
-        case "SI":
-            return (baseLine: "SIR", variant: nil)
-        case "FS":
-            return (baseLine: "FS", variant: nil)
-        case "GS":
-            return (baseLine: "GS", variant: nil)
-        case "H":
-            return (baseLine: "H", variant: nil)
-        default:
-            return (baseLine: routeId, variant: nil)
+        case "SI": return (baseLine: "SIR", variant: nil)
+        case "FS": return (baseLine: "FS", variant: nil)
+        case "GS": return (baseLine: "GS", variant: nil)
+        case "H": return (baseLine: "H", variant: nil)
+        default: return (baseLine: routeId, variant: nil)
         }
     }
     
-    // MARK: - Line Offset Methods for Better Visual Separation
+    // MARK: - GTFS Loading Methods
     
-    /// Apply slight offset to subway line coordinates to prevent exact overlap
+    private func loadGTFSDataForRouting() {
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                try self.loadGTFSStops()
+                try self.loadGTFSRoutes()
+                try self.loadGTFSTrips()
+                try self.loadGTFSStopTimes()
+                self.buildGTFSSpatialIndex()
+                
+                DispatchQueue.main.async {
+                    self.isGTFSLoaded = true
+                    print("✅ GTFS routing data loaded successfully")
+                }
+            } catch {
+                print("❌ GTFS loading failed: \(error) - using CSV fallback")
+            }
+        }
+    }
+    
+    private func loadGTFSStops() throws {
+        guard let url = Bundle.main.url(forResource: "stops", withExtension: "txt") else {
+            throw GTFSError.fileNotFound("stops.txt")
+        }
+        
+        let content = try String(contentsOf: url)
+        let lines = content.components(separatedBy: .newlines)
+        guard lines.count > 1 else { throw GTFSError.invalidFormat }
+        
+        let headers = parseCSVLine(lines[0])
+        guard let stopIdIdx = headers.firstIndex(of: "stop_id"),
+              let stopNameIdx = headers.firstIndex(of: "stop_name"),
+              let latIdx = headers.firstIndex(of: "stop_lat"),
+              let lonIdx = headers.firstIndex(of: "stop_lon"),
+              let locationTypeIdx = headers.firstIndex(of: "location_type") else {
+            throw GTFSError.invalidFormat
+        }
+        
+        let parentStationIdx = headers.firstIndex(of: "parent_station")
+        var tempStops: [String: GTFSStop] = [:]
+        
+        for line in lines.dropFirst() {
+            guard !line.isEmpty else { continue }
+            
+            let fields = parseCSVLine(line)
+            guard fields.count > max(stopIdIdx, stopNameIdx, latIdx, lonIdx, locationTypeIdx) else {
+                continue
+            }
+            
+            guard let latitude = Float(fields[latIdx]),
+                  let longitude = Float(fields[lonIdx]),
+                  let locationType = Int(fields[locationTypeIdx]) else {
+                continue
+            }
+            
+            let stopId = fields[stopIdIdx]
+            if isSubwayStop(stopId) {
+                let stop = GTFSStop(
+                    stopId: stopId,
+                    stopName: fields[stopNameIdx],
+                    latitude: latitude,
+                    longitude: longitude,
+                    parentStation: parentStationIdx.map { idx in
+                        idx < fields.count ? fields[idx] : nil
+                    } ?? nil,
+                    locationType: locationType
+                )
+                tempStops[stopId] = stop
+            }
+        }
+        
+        self.gtfsStops = tempStops
+        print("📊 Loaded \(tempStops.count) GTFS stops")
+    }
+    
+    private func loadGTFSRoutes() throws {
+        guard let url = Bundle.main.url(forResource: "routes", withExtension: "txt") else {
+            throw GTFSError.fileNotFound("routes.txt")
+        }
+        
+        let content = try String(contentsOf: url)
+        let lines = content.components(separatedBy: .newlines)
+        guard lines.count > 1 else { throw GTFSError.invalidFormat }
+        
+        let headers = parseCSVLine(lines[0])
+        guard let routeIdIdx = headers.firstIndex(of: "route_id"),
+              let routeShortNameIdx = headers.firstIndex(of: "route_short_name"),
+              let routeTypeIdx = headers.firstIndex(of: "route_type") else {
+            throw GTFSError.invalidFormat
+        }
+        
+        let routeColorIdx = headers.firstIndex(of: "route_color")
+        var tempRoutes: [String: GTFSRoute] = [:]
+        
+        for line in lines.dropFirst() {
+            guard !line.isEmpty else { continue }
+            
+            let fields = parseCSVLine(line)
+            guard fields.count > max(routeIdIdx, routeShortNameIdx, routeTypeIdx) else {
+                continue
+            }
+            
+            guard let routeType = Int(fields[routeTypeIdx]) else { continue }
+            
+            if routeType == 1 { // Subway only
+                let route = GTFSRoute(
+                    routeId: fields[routeIdIdx],
+                    routeShortName: fields[routeShortNameIdx],
+                    routeColor: routeColorIdx.map { idx in
+                        idx < fields.count ? fields[idx] : "000000"
+                    } ?? "000000",
+                    routeType: routeType
+                )
+                tempRoutes[route.routeId] = route
+            }
+        }
+        
+        self.gtfsRoutes = tempRoutes
+        print("📊 Loaded \(tempRoutes.count) GTFS routes")
+    }
+    
+    private func loadGTFSTrips() throws {
+        guard let url = Bundle.main.url(forResource: "trips", withExtension: "txt") else {
+            throw GTFSError.fileNotFound("trips.txt")
+        }
+        
+        let content = try String(contentsOf: url)
+        let lines = content.components(separatedBy: .newlines)
+        guard lines.count > 1 else { throw GTFSError.invalidFormat }
+        
+        let headers = parseCSVLine(lines[0])
+        guard let tripIdIdx = headers.firstIndex(of: "trip_id"),
+              let routeIdIdx = headers.firstIndex(of: "route_id"),
+              let directionIdIdx = headers.firstIndex(of: "direction_id") else {
+            throw GTFSError.invalidFormat
+        }
+        
+        var tempTrips: [String: GTFSTrip] = [:]
+        
+        for line in lines.dropFirst() {
+            guard !line.isEmpty else { continue }
+            
+            let fields = parseCSVLine(line)
+            guard fields.count > max(tripIdIdx, routeIdIdx, directionIdIdx) else {
+                continue
+            }
+            
+            let routeId = fields[routeIdIdx]
+            
+            if gtfsRoutes[routeId] != nil {
+                guard let directionId = Int(fields[directionIdIdx]) else { continue }
+                
+                let trip = GTFSTrip(
+                    tripId: fields[tripIdIdx],
+                    routeId: routeId,
+                    directionId: directionId,
+                    shapeId: nil
+                )
+                tempTrips[trip.tripId] = trip
+            }
+        }
+        
+        self.gtfsTrips = tempTrips
+        print("📊 Loaded \(tempTrips.count) GTFS trips")
+    }
+    
+    private func loadGTFSStopTimes() throws {
+        guard let url = Bundle.main.url(forResource: "stop_times", withExtension: "txt") else {
+            throw GTFSError.fileNotFound("stop_times.txt")
+        }
+        
+        let content = try String(contentsOf: url)
+        let lines = content.components(separatedBy: .newlines)
+        guard lines.count > 1 else { throw GTFSError.invalidFormat }
+        
+        let headers = parseCSVLine(lines[0])
+        guard let tripIdIdx = headers.firstIndex(of: "trip_id"),
+              let stopIdIdx = headers.firstIndex(of: "stop_id"),
+              let stopSequenceIdx = headers.firstIndex(of: "stop_sequence") else {
+            throw GTFSError.invalidFormat
+        }
+        
+        var tripStopTimes: [String: [GTFSStopTime]] = [:]
+        
+        for line in lines.dropFirst() {
+            guard !line.isEmpty else { continue }
+            
+            let fields = parseCSVLine(line)
+            guard fields.count > max(tripIdIdx, stopIdIdx, stopSequenceIdx) else {
+                continue
+            }
+            
+            let tripId = fields[tripIdIdx]
+            let stopId = fields[stopIdIdx]
+            
+            guard gtfsTrips[tripId] != nil, gtfsStops[stopId] != nil else { continue }
+            guard let stopSequence = Int(fields[stopSequenceIdx]) else { continue }
+            
+            let stopTime = GTFSStopTime(
+                tripId: tripId,
+                stopId: stopId,
+                stopSequence: stopSequence
+            )
+            
+            if tripStopTimes[tripId] == nil {
+                tripStopTimes[tripId] = []
+            }
+            tripStopTimes[tripId]?.append(stopTime)
+        }
+        
+        buildGTFSRouteDirections(from: tripStopTimes)
+        print("📊 Processed stop times and built route directions")
+    }
+    
+    private func buildGTFSRouteDirections(from tripStopTimes: [String: [GTFSStopTime]]) {
+        var tempDirections: [String: [RouteDirection]] = [:]
+        
+        let tripsByRoute = Dictionary(grouping: gtfsTrips.values) { $0.routeId }
+        
+        for (routeId, trips) in tripsByRoute {
+            let tripsByDirection = Dictionary(grouping: trips) { $0.directionId }
+            var routeDirections: [RouteDirection] = []
+            
+            for (directionId, directionTrips) in tripsByDirection {
+                if let representativeTrip = directionTrips.first,
+                   let stopTimes = tripStopTimes[representativeTrip.tripId] {
+                    
+                    let orderedStops = stopTimes
+                        .sorted { $0.stopSequence < $1.stopSequence }
+                        .map { $0.stopId }
+                    
+                    let direction = RouteDirection(
+                        routeId: routeId,
+                        directionId: directionId,
+                        orderedStops: orderedStops
+                    )
+                    routeDirections.append(direction)
+                }
+            }
+            
+            tempDirections[routeId] = routeDirections
+        }
+        
+        self.gtfsRouteDirections = tempDirections
+        print("📊 Built directions for \(tempDirections.count) GTFS routes")
+    }
+    
+    private func buildGTFSSpatialIndex() {
+        var tempIndex = SpatialIndex()
+        
+        for (_, stop) in gtfsStops {
+            tempIndex.addStop(stop)
+        }
+        
+        self.gtfsSpatialIndex = tempIndex
+        print("📊 Built GTFS spatial index with \(gtfsStops.count) stops")
+    }
+    
+    // MARK: - Smart Routing Methods
+    
+    func shouldUseSubway(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> Bool {
+        if isGTFSLoaded {
+            return shouldUseSubwayGTFS(from: origin, to: destination)
+        } else {
+            return shouldUseSubwayCSV(from: origin, to: destination)
+        }
+    }
+    
+    private func shouldUseSubwayGTFS(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> Bool {
+        let originStations = gtfsSpatialIndex.findStopsNear(origin, radius: 800)
+        let destinationStations = gtfsSpatialIndex.findStopsNear(destination, radius: 800)
+        
+        guard !originStations.isEmpty && !destinationStations.isEmpty else {
+            return false
+        }
+        
+        let viableRoutes = getGTFSViableRoutes(from: origin, to: destination)
+        return !viableRoutes.isEmpty
+    }
+    
+    private func shouldUseSubwayCSV(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> Bool {
+        let helpfulRoutes = getHelpfulSubwayRoutesToward(midpoint: destination, from: origin)
+        return !helpfulRoutes.isEmpty
+    }
+    
+    private func getGTFSViableRoutes(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) -> [String] {
+        let originStations = gtfsSpatialIndex.findStopsNear(origin, radius: 800)
+        guard !originStations.isEmpty else { return [] }
+        
+        var viableRoutes: Set<String> = []
+        
+        for originStation in originStations {
+            let routesAtOrigin = getGTFSRoutesForStop(originStation.stopId)
+            
+            for routeId in routesAtOrigin {
+                if gtfsRouteHeadsToward(routeId: routeId, fromStation: originStation.stopId, toward: destination) {
+                    if let route = gtfsRoutes[routeId] {
+                        viableRoutes.insert(route.routeShortName)
+                    }
+                }
+            }
+        }
+        
+        return Array(viableRoutes)
+    }
+    
+    private func getGTFSRoutesForStop(_ stopId: String) -> [String] {
+        var routes: [String] = []
+        
+        for (routeId, directions) in gtfsRouteDirections {
+            for direction in directions {
+                if direction.orderedStops.contains(stopId) {
+                    routes.append(routeId)
+                    break
+                }
+            }
+        }
+        
+        return routes
+    }
+    
+    private func gtfsRouteHeadsToward(routeId: String, fromStation: String, toward destination: CLLocationCoordinate2D) -> Bool {
+        guard let directions = gtfsRouteDirections[routeId] else { return false }
+        
+        for direction in directions {
+            if gtfsDirectionHeadsToward(direction: direction, fromStation: fromStation, toward: destination) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    private func gtfsDirectionHeadsToward(direction: RouteDirection, fromStation: String, toward destination: CLLocationCoordinate2D) -> Bool {
+        guard let startIndex = direction.orderedStops.firstIndex(of: fromStation) else { return false }
+        guard startIndex + 2 < direction.orderedStops.count else { return false }
+        
+        let currentStopId = direction.orderedStops[startIndex]
+        let futureStopId = direction.orderedStops[startIndex + 2]
+        
+        guard let currentStop = gtfsStops[currentStopId],
+              let futureStop = gtfsStops[futureStopId] else {
+            return false
+        }
+        
+        let routeVector = CGVector(
+            dx: Double(futureStop.longitude - currentStop.longitude),
+            dy: Double(futureStop.latitude - currentStop.latitude)
+        )
+        
+        let destinationVector = CGVector(
+            dx: destination.longitude - Double(currentStop.longitude),
+            dy: destination.latitude - Double(currentStop.latitude)
+        )
+        
+        let dot = normalizedDotProduct(routeVector, destinationVector)
+        return dot > 0.2
+    }
+    
+    // MARK: - Enhanced Existing Methods
+    
+    func loadSubwayData(userLocation: CLLocationCoordinate2D? = nil) {
+        loadSubwayDataFromCSV()
+        loadGTFSDataForRouting()
+    }
+    
+    func getHelpfulSubwayRoutesToward(midpoint: CLLocationCoordinate2D, from userCoordinate: CLLocationCoordinate2D) -> [SubwayRoute] {
+        if isGTFSLoaded {
+            let gtfsRoutes = getGTFSViableRoutes(from: userCoordinate, to: midpoint)
+            if !gtfsRoutes.isEmpty {
+                let matchingRoutes = loadedRoutes.filter { route in
+                    gtfsRoutes.contains(route.baseLine)
+                }
+                if !matchingRoutes.isEmpty {
+                    print("✅ GTFS found \(matchingRoutes.count) viable routes: \(gtfsRoutes)")
+                    return matchingRoutes
+                }
+            }
+        }
+        
+        guard hasLoadedData else {
+            print("❌ No subway data loaded")
+            return []
+        }
+
+        let nearbyStations = getNearbyStations(to: userCoordinate, maxDistance: 0.015, limit: 8)
+        
+        print("🔍 CSV fallback route search:")
+        print("   📍 User: (\(String(format: "%.6f", userCoordinate.latitude)), \(String(format: "%.6f", userCoordinate.longitude)))")
+        print("   🎯 Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
+        print("   🚉 Nearby stations: \(nearbyStations.count)")
+
+        var helpfulRoutes: [SubwayRoute] = []
+
+        for stationInfo in nearbyStations {
+            let station = stationInfo.station
+            let distance = stationInfo.distance
+            
+            print("   🚉 Checking station: \(station.stationId) (\(station.lineName)) - \(Int(distance))m away")
+            
+            if distance > 1200 {
+                print("     ⏭️ Skipping - too far (\(Int(distance))m)")
+                continue
+            }
+
+            let matchingRoutes = loadedRoutes.filter { route in
+                route.displayName == station.lineName &&
+                route.stations.contains { routeStation in
+                    let stationLoc = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+                    let routeStationLoc = CLLocation(latitude: routeStation.coordinate.latitude, longitude: routeStation.coordinate.longitude)
+                    return stationLoc.distance(from: routeStationLoc) < 150
+                }
+            }
+
+            print("     🚇 Found \(matchingRoutes.count) matching routes for line \(station.lineName)")
+
+            for route in matchingRoutes {
+                if let closestRouteStation = route.stations.min(by: { station1, station2 in
+                    let dist1 = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+                        .distance(from: CLLocation(latitude: station1.coordinate.latitude, longitude: station1.coordinate.longitude))
+                    let dist2 = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+                        .distance(from: CLLocation(latitude: station2.coordinate.latitude, longitude: station2.coordinate.longitude))
+                    return dist1 < dist2
+                }) {
+                    
+                    let isHeadingToward = isSubwayViableSimple(midpoint: midpoint, from: closestRouteStation, in: route)
+                    
+                    if isHeadingToward {
+                        print("     ✅ Route \(route.routeId) (\(route.displayName)) is helpful")
+                        helpfulRoutes.append(route)
+                    } else {
+                        print("     ❌ Route \(route.routeId) (\(route.displayName)) not heading toward midpoint")
+                    }
+                }
+            }
+        }
+
+        print("   📊 Final helpful routes: \(helpfulRoutes.count)")
+        return Array(Set(helpfulRoutes))
+    }
+    
+    // MARK: - Main Analysis Methods
+    
+    func updateVisibleElements(for region: MKCoordinateRegion) {
+        guard hasLoadedData else { return }
+        
+        visiblePolylines = allPolylines
+        
+        if region.span.latitudeDelta < 0.02 {
+            let buffer = region.span.latitudeDelta * 0.3
+            let minLat = region.center.latitude - region.span.latitudeDelta/2 - buffer
+            let maxLat = region.center.latitude + region.span.latitudeDelta/2 + buffer
+            let minLon = region.center.longitude - region.span.longitudeDelta/2 - buffer
+            let maxLon = region.center.longitude + region.span.longitudeDelta/2 + buffer
+            
+            let filteredStations = allStations.filter { station in
+                station.coordinate.latitude >= minLat &&
+                station.coordinate.latitude <= maxLat &&
+                station.coordinate.longitude >= minLon &&
+                station.coordinate.longitude <= maxLon
+            }
+            
+            let filteredStationCircles = allStationCircles.filter { circle in
+                let centerCoord = circle.coordinate
+                return centerCoord.latitude >= minLat &&
+                       centerCoord.latitude <= maxLat &&
+                       centerCoord.longitude >= minLon &&
+                       centerCoord.longitude <= maxLon
+            }
+            
+            visibleStations = filteredStations
+            visibleStationCircles = filteredStationCircles
+        } else {
+            visibleStations = []
+            visibleStationCircles = []
+        }
+    }
+    
+    func getNearbyStations(to coordinate: CLLocationCoordinate2D, maxDistance: Double = 0.015, limit: Int = 8) -> [(station: SubwayStation, distance: Double)] {
+        guard hasLoadedData else { return [] }
+        
+        let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let maxDistanceMeters = maxDistance * 111000
+        
+        var nearbyStations: [(station: SubwayStation, distance: Double)] = []
+        
+        for station in allSubwayStations {
+            let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+            let distance = targetLocation.distance(from: stationLocation)
+            
+            if distance <= maxDistanceMeters {
+                nearbyStations.append((station: station, distance: distance))
+            }
+        }
+        
+        nearbyStations.sort { $0.distance < $1.distance }
+        return Array(nearbyStations.prefix(limit))
+    }
+
+    func isSubwayHeadingTowardMidpoint(midpoint: CLLocationCoordinate2D, from station: SubwayTrackPoint, in route: SubwayRoute) -> Bool {
+        let current = station.coordinate
+        let stationToMidpoint = CLLocation(latitude: current.latitude, longitude: current.longitude)
+            .distance(from: CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude))
+        
+        print("       🎯 NYC Subway Connection Analysis:")
+        print("         Station: (\(String(format: "%.6f", current.latitude)), \(String(format: "%.6f", current.longitude)))")
+        print("         Line: \(route.displayName)")
+        print("         Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
+        print("         Distance to midpoint: \(Int(stationToMidpoint))m")
+        
+        let linesNearMidpoint = getLinesNear(coordinate: midpoint, radius: 0.008)
+        print("         Lines near midpoint: \(linesNearMidpoint)")
+        
+        if linesNearMidpoint.contains(route.displayName) {
+            print("         ✅ Direct line connection available")
+            return true
+        }
+        
+        let hasViableTransfer = TransferAnalyzer.checkTransferConnections(
+            fromLine: route.displayName,
+            toLines: linesNearMidpoint,
+            fromStation: current,
+            toMidpoint: midpoint
+        )
+        
+        if hasViableTransfer {
+            print("         ✅ Viable transfer connection found")
+            return true
+        } else {
+            print("         ❌ No viable subway connection to midpoint area")
+            return false
+        }
+    }
+
+    func analyzeSubwayConnectivity(userLocation: CLLocationCoordinate2D,
+                                 friendLocation: CLLocationCoordinate2D,
+                                 midpoint: CLLocationCoordinate2D) -> (userViable: Bool, friendViable: Bool, reason: String) {
+        
+        print("🔍 === NYC SUBWAY CONNECTIVITY ANALYSIS ===")
+        
+        let userLines = getLinesNear(coordinate: userLocation, radius: 0.008)
+        let friendLines = getLinesNear(coordinate: friendLocation, radius: 0.008)
+        let midpointLines = getLinesNear(coordinate: midpoint, radius: 0.008)
+        
+        print("   User lines: \(userLines)")
+        print("   Friend lines: \(friendLines)")
+        print("   Midpoint lines: \(midpointLines)")
+        
+        var userViable = true
+        var friendViable = true
+        var reason = ""
+        
+        // SPECIAL CASE 1: East Harlem ↔ West Harlem (geographic)
+        let userIsEastHarlem = userLocation.latitude >= 40.785 && userLocation.latitude <= 40.825 && userLocation.longitude >= -73.95
+        let userIsWestHarlem = userLocation.latitude >= 40.785 && userLocation.latitude <= 40.825 && userLocation.longitude < -73.95
+        let friendIsEastHarlem = friendLocation.latitude >= 40.785 && friendLocation.latitude <= 40.825 && friendLocation.longitude >= -73.95
+        let friendIsWestHarlem = friendLocation.latitude >= 40.785 && friendLocation.latitude <= 40.825 && friendLocation.longitude < -73.95
+        
+        print("   User in East Harlem: \(userIsEastHarlem), West Harlem: \(userIsWestHarlem)")
+        print("   Friend in East Harlem: \(friendIsEastHarlem), West Harlem: \(friendIsWestHarlem)")
+        
+        if (userIsEastHarlem && friendIsWestHarlem) || (userIsWestHarlem && friendIsEastHarlem) {
+            print("   🚨 DETECTED: East Harlem ↔ West Harlem connection")
+            reason = "East Harlem  ↔  West Harlem requires inefficient downtown transfer - walking/taxi recommended"
+            userViable = false
+            friendViable = false
+        } else if userIsEastHarlem && friendIsEastHarlem {
+            let distance = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                .distance(from: CLLocation(latitude: friendLocation.latitude, longitude: friendLocation.longitude))
+            
+            if distance < 2000 {
+                reason = "Both users in East Harlem area - walking is more efficient"
+                userViable = false
+                friendViable = false
+            }
+        } else if userIsWestHarlem && friendIsWestHarlem {
+            let distance = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                .distance(from: CLLocation(latitude: friendLocation.latitude, longitude: friendLocation.longitude))
+            
+            if distance < 2000 {
+                reason = "Both users in West Harlem area - walking is more efficient"
+                userViable = false
+                friendViable = false
+            }
+        }
+        
+        // Additional special cases using GeographicAnalyzer
+        if GeographicAnalyzer.isInFinancialDistrict(userLocation) && GeographicAnalyzer.isInBatteryPark(friendLocation) ||
+           GeographicAnalyzer.isInBatteryPark(userLocation) && GeographicAnalyzer.isInFinancialDistrict(friendLocation) {
+            reason += "Financial District to Battery Park is more efficient by foot. "
+            userViable = false
+            friendViable = false
+        }
+        
+        if GeographicAnalyzer.isInBrookynHeights(userLocation) && GeographicAnalyzer.isInDUMBO(friendLocation) ||
+           GeographicAnalyzer.isInDUMBO(userLocation) && GeographicAnalyzer.isInBrookynHeights(friendLocation) {
+            reason += "Brooklyn Heights to DUMBO is faster by foot or taxi. "
+            userViable = false
+            friendViable = false
+        }
+        
+        if (GeographicAnalyzer.isInLowerEastSide(userLocation) && GeographicAnalyzer.isInChinatown(friendLocation)) ||
+           (GeographicAnalyzer.isInChinatown(userLocation) && GeographicAnalyzer.isInLittleItaly(friendLocation)) ||
+           (GeographicAnalyzer.isInLowerEastSide(userLocation) && GeographicAnalyzer.isInLittleItaly(friendLocation)) {
+            reason += "Lower Manhattan neighborhoods are better connected by walking. "
+            userViable = false
+            friendViable = false
+        }
+        
+        if GeographicAnalyzer.isInUpperEastSide(userLocation) && GeographicAnalyzer.isInUpperWestSide(friendLocation) &&
+           (userLocation.latitude > 40.7794 || friendLocation.latitude > 40.7794) {
+            reason += "Upper East/West Side crosstown better by bus or taxi above 86th St. "
+            userViable = false
+            friendViable = false
+        }
+        
+        if GeographicAnalyzer.isOnRooseveltIsland(userLocation) || GeographicAnalyzer.isOnRooseveltIsland(friendLocation) {
+            if !midpointLines.contains("F") && !userLines.contains("F") && !friendLines.contains("F") {
+                reason += "Roosevelt Island requires F train or tram connection. "
+                if GeographicAnalyzer.isOnRooseveltIsland(userLocation) { userViable = false }
+                if GeographicAnalyzer.isOnRooseveltIsland(friendLocation) { friendViable = false }
+            }
+        }
+        
+        if GeographicAnalyzer.isInStatenIsland(userLocation) || GeographicAnalyzer.isInStatenIsland(friendLocation) {
+            reason += "Staten Island requires ferry connection - suggest driving or express bus. "
+            if GeographicAnalyzer.isInStatenIsland(userLocation) { userViable = false }
+            if GeographicAnalyzer.isInStatenIsland(friendLocation) { friendViable = false }
+        }
+        
+        if GeographicAnalyzer.isInFarQueens(userLocation) || GeographicAnalyzer.isInFarQueens(friendLocation) {
+            reason += "Far Queens areas not well served by subway - consider LIRR or driving. "
+            if GeographicAnalyzer.isInFarQueens(userLocation) && userLines.isEmpty { userViable = false }
+            if GeographicAnalyzer.isInFarQueens(friendLocation) && friendLines.isEmpty { friendViable = false }
+        }
+        
+        if (GeographicAnalyzer.isInWilliamsburg(userLocation) && GeographicAnalyzer.isInLowerEastSide(friendLocation)) ||
+           (GeographicAnalyzer.isInLowerEastSide(userLocation) && GeographicAnalyzer.isInWilliamsburg(friendLocation)) ||
+           (GeographicAnalyzer.isInWilliamsburg(userLocation) && GeographicAnalyzer.isInEastVillage(friendLocation)) ||
+           (GeographicAnalyzer.isInEastVillage(userLocation) && GeographicAnalyzer.isInWilliamsburg(friendLocation)) {
+            
+            let distance = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                .distance(from: CLLocation(latitude: friendLocation.latitude, longitude: friendLocation.longitude))
+            
+            if distance < 2500 {
+                reason += "Williamsburg to LES/East Village faster via bridge walk/bike. "
+                userViable = false
+                friendViable = false
+            }
+        }
+        
+        if GeographicAnalyzer.isInRedHook(userLocation) || GeographicAnalyzer.isInRedHook(friendLocation) {
+            reason += "Red Hook has no subway service - use bus or taxi. "
+            if GeographicAnalyzer.isInRedHook(userLocation) { userViable = false }
+            if GeographicAnalyzer.isInRedHook(friendLocation) { friendViable = false }
+        }
+        
+        let commonLines = Set(userLines).intersection(Set(friendLines))
+        if !commonLines.isEmpty {
+            for line in commonLines {
+                if GeographicAnalyzer.isWrongDirection(userLocation: userLocation, friendLocation: friendLocation,
+                                  midpoint: midpoint, onLine: line) {
+                    reason += "Same line but requires inefficient reverse direction travel. "
+                }
+            }
+        }
+        
+        let currentHour = Calendar.current.component(.hour, from: Date())
+        if currentHour >= 1 && currentHour <= 5 {
+            let limitedNightLines = ["B", "Z", "W"]
+            let hasLimitedService = userLines.contains(where: limitedNightLines.contains) ||
+                                   friendLines.contains(where: limitedNightLines.contains)
+            
+            if hasLimitedService {
+                reason += "Limited late night subway service - consider alternatives. "
+            }
+        }
+        
+        if reason.isEmpty {
+            let userDirectConnections = Set(userLines).intersection(Set(midpointLines))
+            let friendDirectConnections = Set(friendLines).intersection(Set(midpointLines))
+            
+            print("   User direct connections: \(Array(userDirectConnections))")
+            print("   Friend direct connections: \(Array(friendDirectConnections))")
+            
+            if userDirectConnections.isEmpty {
+                userViable = false
+                if reason.isEmpty {
+                    reason = "No direct subway connection from user location to midpoint"
+                }
+            }
+            
+            if friendDirectConnections.isEmpty {
+                friendViable = false
+                if reason.isEmpty {
+                    reason = "No direct subway connection from friend location to midpoint"
+                } else if !userViable {
+                    reason = "No direct subway connections available for this trip"
+                }
+            }
+        }
+        
+        print("   Result: User viable=\(userViable), Friend viable=\(friendViable)")
+        print("   Reason: \(reason.isEmpty ? "Good subway connections available" : reason)")
+        print("============================================")
+        
+        return (userViable, friendViable, reason)
+    }
+    
+    func isSubwayViableSimple(midpoint: CLLocationCoordinate2D, from station: SubwayTrackPoint, in route: SubwayRoute) -> Bool {
+        let current = station.coordinate
+        let distanceToMidpoint = CLLocation(latitude: current.latitude, longitude: current.longitude)
+            .distance(from: CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude))
+        
+        let isReasonableDistance = distanceToMidpoint < 25000
+        let isInNYC = midpoint.latitude > 40.4 && midpoint.latitude < 41.0 &&
+                      midpoint.longitude > -74.3 && midpoint.longitude < -73.7
+        
+        print("       🎯 Simple check: distance=\(Int(distanceToMidpoint))m, inNYC=\(isInNYC) -> \(isReasonableDistance && isInNYC)")
+        
+        return isReasonableDistance && isInNYC
+    }
+    
+    // MARK: - Line Offset Methods
+    
     private func applyLineOffset(to coordinates: [CLLocationCoordinate2D],
                                 offsetIndex: Int,
                                 totalVariants: Int) -> [CLLocationCoordinate2D] {
         guard totalVariants > 1 && offsetIndex > 0 else {
-            return coordinates // No offset needed for first variant or single lines
+            return coordinates
         }
         
-        // Much larger offset distance for clear visual separation
-        let baseOffsetDistance: Double = 0.00006 // About 66 meters in NYC - very clear separation
+        let baseOffsetDistance: Double = 0.00006
         let offsetDistance = baseOffsetDistance * Double(offsetIndex)
         
         return coordinates.compactMap { coord in
-            // Calculate perpendicular offset
             let offsetCoord = calculatePerpendicularOffset(coordinate: coord,
                                                          coordinates: coordinates,
                                                          distance: offsetDistance,
@@ -423,7 +1398,6 @@ class OptimizedSubwayMapManager: ObservableObject {
         case left, right
     }
     
-    /// Calculate perpendicular offset for a coordinate along a line
     private func calculatePerpendicularOffset(coordinate: CLLocationCoordinate2D,
                                             coordinates: [CLLocationCoordinate2D],
                                             distance: Double,
@@ -436,161 +1410,70 @@ class OptimizedSubwayMapManager: ObservableObject {
             return coordinate
         }
         
-        // Find the direction vector for this segment
         var directionLat: Double = 0
         var directionLon: Double = 0
         
         if index > 0 && index < coordinates.count - 1 {
-            // Use average of previous and next segments
             let prevCoord = coordinates[index - 1]
             let nextCoord = coordinates[index + 1]
             directionLat = nextCoord.latitude - prevCoord.latitude
             directionLon = nextCoord.longitude - prevCoord.longitude
         } else if index > 0 {
-            // Use previous segment
             let prevCoord = coordinates[index - 1]
             directionLat = coordinate.latitude - prevCoord.latitude
             directionLon = coordinate.longitude - prevCoord.longitude
         } else if index < coordinates.count - 1 {
-            // Use next segment
             let nextCoord = coordinates[index + 1]
             directionLat = nextCoord.latitude - coordinate.latitude
             directionLon = nextCoord.longitude - coordinate.longitude
         } else {
-            return coordinate // Single point, no offset possible
+            return coordinate
         }
         
-        // Normalize the direction vector
         let magnitude = sqrt(directionLat * directionLat + directionLon * directionLon)
         guard magnitude > 0 else { return coordinate }
         
         directionLat /= magnitude
         directionLon /= magnitude
         
-        // Calculate perpendicular vector (rotate 90 degrees)
         let perpLat = side == .right ? -directionLon : directionLon
         let perpLon = side == .right ? directionLat : -directionLat
         
-        // Apply offset
         return CLLocationCoordinate2D(
             latitude: coordinate.latitude + perpLat * distance,
             longitude: coordinate.longitude + perpLon * distance
         )
     }
     
-    /// Get line width for rendering (hairline-thin lines)
+    // MARK: - Visual Methods
+    
     func getLineWidth(for lineName: String, zoomLevel: Double = 1.0) -> CGFloat {
-        // Base width - hairline thin like StreetEasy
         let baseWidth: CGFloat = 1.5
-        
-        // Adjust based on zoom level
         let zoomAdjustedWidth = baseWidth * CGFloat(max(0.2, min(1.0, zoomLevel)))
         
-        // Special cases for certain lines
         switch lineName {
-        case "FS", "GS", "H": // Shuttle services - ultra hairline
+        case "FS", "GS", "H":
             return max(0.3, zoomAdjustedWidth * 0.4)
-        case "SIR": // Staten Island Railway
+        case "SIR":
             return max(0.4, zoomAdjustedWidth * 0.5)
         default:
             return max(0.4, zoomAdjustedWidth)
         }
     }
     
-    // MARK: - Public Methods
-    
-    /// Load subway data (defaults to CSV)
-    func loadSubwayData(userLocation: CLLocationCoordinate2D? = nil) {
-        loadSubwayDataFromCSV()
+    func getLineColor(for lineName: String) -> UIColor {
+        return lineColors[lineName] ?? UIColor.systemGray
     }
     
-    /// Update visible elements based on zoom level and region
-    func updateVisibleElements(for region: MKCoordinateRegion) {
-        guard hasLoadedData else { return }
-        
-        //print("🔄 Updating visible elements for region span: \(region.span.latitudeDelta)")
-        
-        // Always show all polylines
-        visiblePolylines = allPolylines
-        
-        // Show stations as circles when zoomed in (span < 0.02 degrees for closer zoom)
-        if region.span.latitudeDelta < 0.02 {
-           // print("✅ Zoom level allows stations to show")
-            
-            // Filter stations within visible region with buffer
-            let buffer = region.span.latitudeDelta * 0.3
-            let minLat = region.center.latitude - region.span.latitudeDelta/2 - buffer
-            let maxLat = region.center.latitude + region.span.latitudeDelta/2 + buffer
-            let minLon = region.center.longitude - region.span.longitudeDelta/2 - buffer
-            let maxLon = region.center.longitude + region.span.longitudeDelta/2 + buffer
-            
-//            print("🗺 Filtering stations in bounds:")
-//            print("   Lat: \(String(format: "%.6f", minLat)) to \(String(format: "%.6f", maxLat))")
-//            print("   Lon: \(String(format: "%.6f", minLon)) to \(String(format: "%.6f", maxLon))")
-            
-            let filteredStations = allStations.filter { station in
-                let inBounds = station.coordinate.latitude >= minLat &&
-                              station.coordinate.latitude <= maxLat &&
-                              station.coordinate.longitude >= minLon &&
-                              station.coordinate.longitude <= maxLon
-                
-                if inBounds {
-                    //print("   ✅ Station in bounds: \(station.title ?? "Unknown") at (\(String(format: "%.6f", station.coordinate.latitude)), \(String(format: "%.6f", station.coordinate.longitude)))")
-                }
-                
-                return inBounds
-            }
-            
-            // Filter station circles using the same logic
-            let filteredStationCircles = allStationCircles.filter { circle in
-                // Get the center coordinate of the circle polygon
-                let centerCoord = circle.coordinate
-                return centerCoord.latitude >= minLat &&
-                       centerCoord.latitude <= maxLat &&
-                       centerCoord.longitude >= minLon &&
-                       centerCoord.longitude <= maxLon
-            }
-            
-            visibleStations = filteredStations
-            visibleStationCircles = filteredStationCircles
-            //print("📊 Set \(visibleStations.count) visible stations and \(visibleStationCircles.count) station circles")
-            
-        } else {
-           // print("❌ Zoom level too far out for stations")
-            visibleStations = []
-            visibleStationCircles = []
-        }
-        
-       // print("🎯 Final visible stations count: \(visibleStations.count), circles: \(visibleStationCircles.count)")
-    }
-    
-    /// Get station circle radius based on zoom level
-    func getStationRadius(for zoomLevel: Double) -> CGFloat {
-        // Base radius for station circles
-        let baseRadius: CGFloat = 3.0
-        
-        // Adjust based on zoom level
-        let zoomAdjustedRadius = baseRadius * CGFloat(max(0.5, min(2.0, zoomLevel)))
-        
-        return max(2.0, zoomAdjustedRadius)
-    }
-    
-    /// Get station color (same as line color for fill and stroke)
     func getStationColor(for lineName: String) -> (fill: UIColor, stroke: UIColor) {
         let lineColor = getLineColor(for: lineName)
         return (fill: lineColor, stroke: lineColor)
     }
     
-    // MARK: - Station Circle Creation
-    
-    /// Create a circular MKPolygon for a subway station
     private func createStationCircle(at coordinate: CLLocationCoordinate2D,
                                    lineName: String,
                                    stationId: String) -> MKPolygon {
-        // Radius in degrees (approximately 15 meters in NYC)
         let radiusInDegrees: Double = 0.000068
-        
-        // Number of points to create a smooth circle
         let numberOfPoints = 16
         
         var circleCoordinates: [CLLocationCoordinate2D] = []
@@ -614,25 +1497,10 @@ class OptimizedSubwayMapManager: ObservableObject {
         return polygon
     }
     
-    /// Get station circle radius based on zoom level (for dynamic sizing)
-    func getStationCircleRadius(for zoomLevel: Double) -> Double {
-        // Base radius in degrees
-        let baseRadius: Double = 0.000135 // About 15 meters
-        
-        // Adjust based on zoom level
-        let zoomAdjustedRadius = baseRadius * max(0.5, min(2.0, zoomLevel))
-        
-        return zoomAdjustedRadius
-    }
-    
-    // MARK: - Station Deduplication
-    
-    /// Deduplicate stations that are very close to each other (same station, multiple track points)
     private func deduplicateStations(_ stations: [SubwayTrackPoint], tolerance: Double) -> [SubwayTrackPoint] {
         var uniqueStations: [SubwayTrackPoint] = []
         
         for station in stations {
-            // Check if we already have a station very close to this location
             let isDuplicate = uniqueStations.contains { existingStation in
                 let latDiff = abs(station.latitude - existingStation.latitude)
                 let lonDiff = abs(station.longitude - existingStation.longitude)
@@ -647,32 +1515,46 @@ class OptimizedSubwayMapManager: ObservableObject {
         return uniqueStations
     }
     
-    /// Calculate zoom level from map region span
-    func getZoomLevel(from region: MKCoordinateRegion) -> Double {
-        // Convert latitude span to approximate zoom level
-        let latitudeDelta = region.span.latitudeDelta
+    // MARK: - Utility Methods
+    
+    private func normalizedDotProduct(_ v1: CGVector, _ v2: CGVector) -> Double {
+        let magnitude1 = sqrt(v1.dx * v1.dx + v1.dy * v1.dy)
+        let magnitude2 = sqrt(v2.dx * v2.dx + v2.dy * v2.dy)
         
-        // Zoom level calculation (approximate)
-        // Higher zoom = smaller span = more zoomed in
-        if latitudeDelta > 0.5 {
-            return 0.3 // Very zoomed out
-        } else if latitudeDelta > 0.1 {
-            return 0.6 // Zoomed out
-        } else if latitudeDelta > 0.05 {
-            return 1.0 // Normal
-        } else if latitudeDelta > 0.01 {
-            return 1.5 // Zoomed in
-        } else {
-            return 2.0 // Very zoomed in
+        guard magnitude1 > 0, magnitude2 > 0 else { return 0 }
+        
+        return (v1.dx * v2.dx + v1.dy * v2.dy) / (magnitude1 * magnitude2)
+    }
+    
+    private func parseCSVLine(_ line: String) -> [String] {
+        var fields: [String] = []
+        var currentField = ""
+        var inQuotes = false
+        var i = line.startIndex
+        
+        while i < line.endIndex {
+            let char = line[i]
+            
+            if char == "\"" {
+                inQuotes.toggle()
+            } else if char == "," && !inQuotes {
+                fields.append(currentField.trimmingCharacters(in: .whitespacesAndNewlines))
+                currentField = ""
+            } else {
+                currentField.append(char)
+            }
+            
+            i = line.index(after: i)
         }
+        
+        fields.append(currentField.trimmingCharacters(in: .whitespacesAndNewlines))
+        return fields
     }
     
-    /// Get color for subway line
-    func getLineColor(for lineName: String) -> UIColor {
-        return lineColors[lineName] ?? UIColor.systemGray
+    private func isSubwayStop(_ stopId: String) -> Bool {
+        return !stopId.contains("BUS") && !stopId.hasPrefix("MTABC")
     }
     
-    /// Clear all data and reset state
     func clearData() {
         allPolylines.removeAll()
         allStations.removeAll()
@@ -682,369 +1564,124 @@ class OptimizedSubwayMapManager: ObservableObject {
         visibleStations.removeAll()
         visibleStationCircles.removeAll()
         loadedRoutes.removeAll()
+        gtfsStops.removeAll()
+        gtfsRoutes.removeAll()
+        gtfsTrips.removeAll()
+        gtfsRouteDirections.removeAll()
+        gtfsSpatialIndex = SpatialIndex()
         hasLoadedData = false
+        isGTFSLoaded = false
         loadingError = nil
     }
-    // MARK: - Subway Station Proximity Methods
-      
-      /// Find the nearest subway station to a given coordinate
-      func findNearestStation(to coordinate: CLLocationCoordinate2D, maxDistance: Double = 0.01) -> SubwayStation? {
-          guard hasLoadedData else { return nil }
-          
-          let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-          var nearestStation: SubwayStation?
-          var minDistance: Double = Double.infinity
-          
-          for station in allSubwayStations {
-              let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-              let distance = targetLocation.distance(from: stationLocation)
-              
-              // Convert maxDistance from degrees to meters (approximately)
-              let maxDistanceMeters = maxDistance * 111000 // rough conversion
-              
-              if distance < maxDistanceMeters && distance < minDistance {
-                  minDistance = distance
-                  nearestStation = station
-              }
-          }
-          
-          return nearestStation
-      }
-      
-      /// Get all subway lines near a coordinate within a radius
-      func getLinesNear(coordinate: CLLocationCoordinate2D, radius: Double = 0.005) -> [String] {
-          guard hasLoadedData else { return [] }
-          
-          let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-          let radiusMeters = radius * 111000 // Convert degrees to meters
-          
-          var nearbyLines: Set<String> = []
-          
-          for station in allSubwayStations {
-              let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-              let distance = targetLocation.distance(from: stationLocation)
-              
-              if distance <= radiusMeters {
-                  nearbyLines.insert(station.lineName)
-              }
-          }
-          
-          return Array(nearbyLines).sorted()
-      }
-      
-      /// Get the closest station with its distance for a coordinate
-      func getClosestStationInfo(to coordinate: CLLocationCoordinate2D) -> (station: SubwayStation, distance: Double)? {
-          guard hasLoadedData else { return nil }
-          
-          let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-          var closestStation: SubwayStation?
-          var minDistance: Double = Double.infinity
-          
-          for station in allSubwayStations {
-              let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-              let distance = targetLocation.distance(from: stationLocation)
-              
-              if distance < minDistance {
-                  minDistance = distance
-                  closestStation = station
-              }
-          }
-          
-          if let station = closestStation {
-              return (station: station, distance: minDistance)
-          }
-          
-          return nil
-      }
-      
-      /// Find multiple nearby stations within radius, sorted by distance
-        func getNearbyStations(to coordinate: CLLocationCoordinate2D, maxDistance: Double = 0.015, limit: Int = 8) -> [(station: SubwayStation, distance: Double)] {
-            guard hasLoadedData else { return [] }
-            
-            let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            let maxDistanceMeters = maxDistance * 111000 // Increased from 0.01 to 0.015 for better coverage
-            
-            var nearbyStations: [(station: SubwayStation, distance: Double)] = []
-            
-            for station in allSubwayStations {
-                let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-                let distance = targetLocation.distance(from: stationLocation)
-                
-                if distance <= maxDistanceMeters {
-                    nearbyStations.append((station: station, distance: distance))
-                }
-            }
-            
-            // Sort by distance and limit results
-            nearbyStations.sort { $0.distance < $1.distance }
-            return Array(nearbyStations.prefix(limit)) // Increased limit from 5 to 8
-        }
     
+    // MARK: - Station and Line Query Methods
     
-    
-    
-  
-    
-    // MARK: - Subway Route Direction Utility
-
-    /// Determine if a subway route is heading toward a given midpoint from a specific station
-    func isSubwayHeadingTowardMidpoint(midpoint: CLLocationCoordinate2D, from station: SubwayTrackPoint, in route: SubwayRoute) -> Bool {
-        guard let currentIndex = route.stations.firstIndex(where: {
-            let stationLoc = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-            let routeStationLoc = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
-            return stationLoc.distance(from: routeStationLoc) < 100 // Match by proximity
-        }) else {
-            print("       ❌ Station not found in route stations")
-            return false
-        }
+    func findNearestStation(to coordinate: CLLocationCoordinate2D, maxDistance: Double = 0.01) -> SubwayStation? {
+        guard hasLoadedData else { return nil }
         
-        // Need at least 3 more stations for better direction analysis
-        guard currentIndex + 3 < route.stations.count else {
-            print("       ❌ Not enough stations to determine direction")
-            return false
-        }
-
-        let current = route.stations[currentIndex].coordinate
+        let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        var nearestStation: SubwayStation?
+        var minDistance: Double = Double.infinity
         
-        // Use multiple future stations for more robust direction detection
-        let station1 = route.stations[currentIndex + 1].coordinate
-        let station2 = route.stations[currentIndex + 2].coordinate
-        let station3 = route.stations[currentIndex + 3].coordinate
-
-        print("       📐 Direction calculation:")
-        print("         Current: (\(String(format: "%.6f", current.latitude)), \(String(format: "%.6f", current.longitude)))")
-        print("         Station+1: (\(String(format: "%.6f", station1.latitude)), \(String(format: "%.6f", station1.longitude)))")
-        print("         Station+2: (\(String(format: "%.6f", station2.latitude)), \(String(format: "%.6f", station2.longitude)))")
-        print("         Station+3: (\(String(format: "%.6f", station3.latitude)), \(String(format: "%.6f", station3.longitude)))")
-        print("         Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
-
-        // Create multiple direction vectors for more stability
-        let vector1 = CGVector(dx: station1.longitude - current.longitude, dy: station1.latitude - current.latitude)
-        let vector2 = CGVector(dx: station2.longitude - current.longitude, dy: station2.latitude - current.latitude)
-        let vector3 = CGVector(dx: station3.longitude - current.longitude, dy: station3.latitude - current.latitude)
-        
-        // Average the vectors for overall route direction
-        let avgRouteVector = CGVector(
-            dx: (vector1.dx + vector2.dx + vector3.dx) / 3,
-            dy: (vector1.dy + vector2.dy + vector3.dy) / 3
-        )
-        
-        let toMidpointVector = CGVector(dx: midpoint.longitude - current.longitude, dy: midpoint.latitude - current.latitude)
-
-        // Normalize vectors
-        let routeLength = sqrt(pow(avgRouteVector.dx, 2) + pow(avgRouteVector.dy, 2))
-        let midpointLength = sqrt(pow(toMidpointVector.dx, 2) + pow(toMidpointVector.dy, 2))
-        
-        guard routeLength > 0, midpointLength > 0 else {
-            print("       ❌ Zero length vector")
-            return false
-        }
-
-        let dot = (avgRouteVector.dx * toMidpointVector.dx + avgRouteVector.dy * toMidpointVector.dy) / (routeLength * midpointLength)
-        
-        // Check if the midpoint is reachable
-        let distanceToMidpoint = CLLocation(latitude: current.latitude, longitude: current.longitude)
-            .distance(from: CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude))
-        
-        // 🚇 MUCH MORE LENIENT CRITERIA FOR NYC SUBWAY:
-        let isDirectionGood = dot > 0.2        // Very lenient - allows routes that are generally heading in the right direction
-        let isDistanceReasonable = distanceToMidpoint < 15000  // 15km - covers most of Manhattan and beyond
-        
-        // Additional check: Is the midpoint closer than the end of the route?
-        let endStation = route.stations.last?.coordinate ?? current
-        let distanceToEnd = CLLocation(latitude: current.latitude, longitude: current.longitude)
-            .distance(from: CLLocation(latitude: endStation.latitude, longitude: endStation.longitude))
-        let midpointIsCloserThanEnd = distanceToMidpoint < distanceToEnd * 1.2 // Allow 20% buffer
-        
-        print("       📊 dot=\(String(format: "%.3f", dot)), distance=\(Int(distanceToMidpoint))m, endDistance=\(Int(distanceToEnd))m")
-        print("       📊 direction=\(isDirectionGood), distance=\(isDistanceReasonable), closerThanEnd=\(midpointIsCloserThanEnd)")
-        
-        let result = isDirectionGood && isDistanceReasonable && midpointIsCloserThanEnd
-        print("       📊 Final result: \(result)")
-        
-        return result
-    }
-
-    // MARK: - Subway Route & Walking Utilities
-
-
-
-    // MARK: - Enhanced Debug Methods for Subway Route Detection
-
-
-
-    /// Debug method to understand why routes are being found
-    func debugRouteDetection(midpoint: CLLocationCoordinate2D, from userCoordinate: CLLocationCoordinate2D) {
-        guard hasLoadedData else {
-            print("❌ No subway data loaded")
-            return
-        }
-        
-        print("🔍 === FIXED SUBWAY ROUTE DEBUG ===")
-        print("   📍 User location: (\(String(format: "%.6f", userCoordinate.latitude)), \(String(format: "%.6f", userCoordinate.longitude)))")
-        print("   🎯 Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
-        
-        // Find nearby stations using corrected method
-        let nearbyStations = getNearbyStations(to: userCoordinate, maxDistance: 0.01, limit: 5)
-        print("   🚉 Found \(nearbyStations.count) nearby stations:")
-        
-        for (index, stationInfo) in nearbyStations.enumerated() {
-            let station = stationInfo.station
-            let distance = stationInfo.distance
-            print("     \(index + 1). \(station.stationId) (\(station.lineName)) at (\(String(format: "%.6f", station.coordinate.latitude)), \(String(format: "%.6f", station.coordinate.longitude))) - \(Int(distance))m away")
-        }
-        
-        print("========================================")
-    }
-
-    // MARK: - Enhanced getHelpfulSubwayRoutesToward with better filtering
-
-    /// Enhanced version with stricter criteria and better logging
-    func getHelpfulSubwayRoutesToward(midpoint: CLLocationCoordinate2D, from userCoordinate: CLLocationCoordinate2D) -> [SubwayRoute] {
-        guard hasLoadedData else {
-            print("❌ No subway data loaded")
-            return []
-        }
-
-        // Use more generous search radius for nearby stations
-        let nearbyStations = getNearbyStations(to: userCoordinate, maxDistance: 0.015, limit: 8)
-        
-        print("🔍 Enhanced route search:")
-        print("   📍 User: (\(String(format: "%.6f", userCoordinate.latitude)), \(String(format: "%.6f", userCoordinate.longitude)))")
-        print("   🎯 Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
-        print("   🚉 Nearby stations: \(nearbyStations.count)")
-
-        var helpfulRoutes: [SubwayRoute] = []
-
-        for stationInfo in nearbyStations {
-            let station = stationInfo.station
-            let distance = stationInfo.distance
+        for station in allSubwayStations {
+            let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+            let distance = targetLocation.distance(from: stationLocation)
             
-            print("   🚉 Checking station: \(station.stationId) (\(station.lineName)) at (\(String(format: "%.6f", station.coordinate.latitude)), \(String(format: "%.6f", station.coordinate.longitude))) - \(Int(distance))m away")
+            let maxDistanceMeters = maxDistance * 111000
             
-            // More generous distance threshold for NYC (12-15 minute walk)
-            if distance > 1200 {
-                print("     ⏭️ Skipping - too far (\(Int(distance))m)")
-                continue
-            }
-
-            // Find routes that include this station
-            let matchingRoutes = loadedRoutes.filter { route in
-                route.displayName == station.lineName &&
-                route.stations.contains { routeStation in
-                    let stationLoc = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-                    let routeStationLoc = CLLocation(latitude: routeStation.coordinate.latitude, longitude: routeStation.coordinate.longitude)
-                    return stationLoc.distance(from: routeStationLoc) < 150 // Slightly more generous matching
-                }
-            }
-
-            print("     🚇 Found \(matchingRoutes.count) matching routes for line \(station.lineName)")
-
-            for route in matchingRoutes {
-                if let closestRouteStation = route.stations.min(by: { station1, station2 in
-                    let dist1 = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-                        .distance(from: CLLocation(latitude: station1.coordinate.latitude, longitude: station1.coordinate.longitude))
-                    let dist2 = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
-                        .distance(from: CLLocation(latitude: station2.coordinate.latitude, longitude: station2.coordinate.longitude))
-                    return dist1 < dist2
-                }) {
-                    
-                    print("     📍 Using route station at (\(String(format: "%.6f", closestRouteStation.coordinate.latitude)), \(String(format: "%.6f", closestRouteStation.coordinate.longitude)))")
-                    
-                    // Use the enhanced direction checking
-                    let isHeadingToward = isSubwayHeadingTowardMidpoint(
-                        midpoint: midpoint,
-                        from: closestRouteStation,
-                        in: route
-                    )
-                    
-                    if isHeadingToward {
-                        print("     ✅ Route \(route.routeId) (\(route.displayName)) is helpful")
-                        helpfulRoutes.append(route)
-                    } else {
-                        print("     ❌ Route \(route.routeId) (\(route.displayName)) not heading toward midpoint")
-                    }
-                }
+            if distance < maxDistanceMeters && distance < minDistance {
+                minDistance = distance
+                nearestStation = station
             }
         }
-
-        print("   📊 Final helpful routes: \(helpfulRoutes.count)")
-        return Array(Set(helpfulRoutes)) // Remove duplicates
+        
+        return nearestStation
     }
-
-    // MARK: - Enhanced direction checking with stricter criteria
-
-    /// Enhanced version of isSubwayHeadingTowardMidpoint with stricter criteria
-    func isSubwayHeadingTowardMidpointEnhanced(midpoint: CLLocationCoordinate2D, from station: SubwayTrackPoint, in route: SubwayRoute, userLocation: CLLocationCoordinate2D) -> Bool {
-        guard let currentIndex = route.stations.firstIndex(where: {
-            $0.stationId == station.stationId
-        }) else {
-            print("     ❌ Station not found in route")
-            return false
+    
+    func getLinesNear(coordinate: CLLocationCoordinate2D, radius: Double = 0.005) -> [String] {
+        guard hasLoadedData else { return [] }
+        
+        let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let radiusMeters = radius * 111000
+        
+        var nearbyLines: Set<String> = []
+        
+        for station in allSubwayStations {
+            let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+            let distance = targetLocation.distance(from: stationLocation)
+            
+            if distance <= radiusMeters {
+                nearbyLines.insert(station.lineName)
+            }
         }
         
-        // Need at least 2 more stations to determine direction
-        guard currentIndex + 2 < route.stations.count else {
-            print("     ❌ Not enough stations to determine direction")
-            return false
-        }
-
-        let current = station.coordinate
-        let next = route.stations[currentIndex + 1].coordinate
-        let afterNext = route.stations[currentIndex + 2].coordinate
-
-        // Create direction vectors (use next 2 stations for better direction)
-        let routeVector1 = CGVector(dx: next.longitude - current.longitude, dy: next.latitude - current.latitude)
-        let routeVector2 = CGVector(dx: afterNext.longitude - next.longitude, dy: afterNext.latitude - next.latitude)
-        
-        // Average the vectors for more stable direction
-        let avgRouteVector = CGVector(
-            dx: (routeVector1.dx + routeVector2.dx) / 2,
-            dy: (routeVector1.dy + routeVector2.dy) / 2
-        )
-        
-        let toMidpointVector = CGVector(dx: midpoint.longitude - current.longitude, dy: midpoint.latitude - current.latitude)
-
-        // Normalize vectors
-        let routeLength = sqrt(pow(avgRouteVector.dx, 2) + pow(avgRouteVector.dy, 2))
-        let midpointLength = sqrt(pow(toMidpointVector.dx, 2) + pow(toMidpointVector.dy, 2))
-        
-        guard routeLength > 0, midpointLength > 0 else {
-            print("     ❌ Zero length vector")
-            return false
-        }
-
-        let dot = (avgRouteVector.dx * toMidpointVector.dx + avgRouteVector.dy * toMidpointVector.dy) / (routeLength * midpointLength)
-        
-        // Also check if the midpoint is actually reachable (not too far from the route)
-        let distanceToMidpoint = CLLocation(latitude: current.latitude, longitude: current.longitude)
-            .distance(from: CLLocation(latitude: midpoint.latitude, longitude: midpoint.longitude))
-        
-        // More strict criteria:
-        // 1. Direction must be strongly toward midpoint (dot > 0.7 instead of 0.6)
-        // 2. Midpoint must be within reasonable distance (< 5km from station)
-        let isDirectionGood = dot > 0.7
-        let isDistanceReasonable = distanceToMidpoint < 5000 // 5km
-        
-        print("     📐 Direction check: dot=\(String(format: "%.3f", dot)), distance=\(Int(distanceToMidpoint))m")
-        print("     📊 Result: direction=\(isDirectionGood), distance=\(isDistanceReasonable)")
-        
-        return isDirectionGood && isDistanceReasonable
+        return Array(nearbyLines).sorted()
     }
+    
+    func getClosestStationInfo(to coordinate: CLLocationCoordinate2D) -> (station: SubwayStation, distance: Double)? {
+        guard hasLoadedData else { return nil }
+        
+        let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        var closestStation: SubwayStation?
+        var minDistance: Double = Double.infinity
+        
+        for station in allSubwayStations {
+            let stationLocation = CLLocation(latitude: station.coordinate.latitude, longitude: station.coordinate.longitude)
+            let distance = targetLocation.distance(from: stationLocation)
+            
+            if distance < minDistance {
+                minDistance = distance
+                closestStation = station
+            }
+        }
+        
+        if let station = closestStation {
+            return (station: station, distance: minDistance)
+        }
+        
+        return nil
+    }
+    
+    func getZoomLevel(from region: MKCoordinateRegion) -> Double {
+        let latitudeDelta = region.span.latitudeDelta
+        
+        if latitudeDelta > 0.5 {
+            return 0.3
+        } else if latitudeDelta > 0.1 {
+            return 0.6
+        } else if latitudeDelta > 0.05 {
+            return 1.0
+        } else if latitudeDelta > 0.01 {
+            return 1.5
+        } else {
+            return 2.0
+        }
+    }
+    
+    func getStationRadius(for zoomLevel: Double) -> CGFloat {
+        let baseRadius: CGFloat = 3.0
+        let zoomAdjustedRadius = baseRadius * CGFloat(max(0.5, min(2.0, zoomLevel)))
+        return max(2.0, zoomAdjustedRadius)
+    }
+    
+    func getStationCircleRadius(for zoomLevel: Double) -> Double {
+        let baseRadius: Double = 0.000135
+        let zoomAdjustedRadius = baseRadius * max(0.5, min(2.0, zoomLevel))
+        return zoomAdjustedRadius
+    }
+    
+    func shouldFallbackToWalking(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, transitTime: TimeInterval, multiplierThreshold: Double = 1.3) -> Bool {
+        let fromLoc = CLLocation(latitude: from.latitude, longitude: from.longitude)
+        let toLoc = CLLocation(latitude: to.latitude, longitude: to.longitude)
+        let distanceInMeters = fromLoc.distance(from: toLoc)
+        let miles = distanceInMeters / 1609.34
 
-    // MARK: - Method to replace in MeepAppView for testing
+        let estimatedWalkingTime = miles * 20 * 60
 
-    // In your MeepAppView, replace the route checking in handleSubwayDataLoad with:
-    /*
-    let userRoutes = subwayOverlayManager.getHelpfulSubwayRoutesTowardEnhanced(midpoint: midpoint, from: userLoc)
-    let friendRoutes = subwayOverlayManager.getHelpfulSubwayRoutesTowardEnhanced(midpoint: midpoint, from: friendLoc)
-
-    // Also add debug calls:
-    subwayOverlayManager.debugRouteDetection(midpoint: midpoint, from: userLoc)
-    subwayOverlayManager.debugRouteDetection(midpoint: midpoint, from: friendLoc)
-    */
-
-
+        return transitTime > estimatedWalkingTime * multiplierThreshold
+    }
+    
+    
     // MARK: - Debug Methods
     
     func debugStationData(for region: MKCoordinateRegion? = nil) {
@@ -1054,33 +1691,20 @@ class OptimizedSubwayMapManager: ObservableObject {
         print("📊 Total station annotations: \(allStations.count)")
         print("📊 Total subway stations: \(allSubwayStations.count)")
         print("📊 Visible stations: \(visibleStations.count)")
+        print("🔧 GTFS loaded: \(isGTFSLoaded)")
         
         if let region = region {
             print("🗺 Current map span: \(region.span.latitudeDelta)")
             print("🗺 Station threshold: 0.02 (will show: \(region.span.latitudeDelta < 0.02))")
         }
         
-        // Show station breakdown by line
         let stationsByLine = Dictionary(grouping: allSubwayStations) { $0.lineName }
         for (line, stations) in stationsByLine.sorted(by: { $0.key < $1.key }) {
             print("🚇 Line \(line): \(stations.count) stations")
         }
         
-        // Show first few stations for each line
-        for (line, stations) in stationsByLine.prefix(3) {
-            print("📍 \(line) stations:")
-            for station in stations.prefix(3) {
-                print("   - \(station.stationId) at (\(String(format: "%.6f", station.coordinate.latitude)), \(String(format: "%.6f", station.coordinate.longitude)))")
-            }
-        }
-        
-        // Check if any routes have stations
         let routesWithStations = loadedRoutes.filter { !$0.stations.isEmpty }
         print("📈 Routes with stations: \(routesWithStations.count)/\(loadedRoutes.count)")
-        
-        for route in routesWithStations.prefix(3) {
-            print("🚇 Route \(route.routeId): \(route.stations.count) stations, \(route.coordinates.count) coordinates")
-        }
     }
     
     func debugCSVParsing(fileName: String) {
@@ -1132,7 +1756,6 @@ class OptimizedSubwayMapManager: ObservableObject {
         if shouldShowStations && visibleStations.isEmpty && !allStations.isEmpty {
             print("⚠️ WARNING: Should show stations but none are visible!")
             
-            // Check if any stations are in the region
             let buffer = region.span.latitudeDelta * 0.3
             let minLat = region.center.latitude - region.span.latitudeDelta/2 - buffer
             let maxLat = region.center.latitude + region.span.latitudeDelta/2 + buffer
@@ -1149,93 +1772,92 @@ class OptimizedSubwayMapManager: ObservableObject {
             print("   📍 Stations in region bounds: \(stationsInRegion.count)")
             print("   🗺 Region bounds: lat(\(String(format: "%.6f", minLat)) to \(String(format: "%.6f", maxLat))), lon(\(String(format: "%.6f", minLon)) to \(String(format: "%.6f", maxLon)))")
             
-            // Show nearest stations
             let nearestStations = allStations.prefix(3)
             for station in nearestStations {
                 print("   🚉 Station: \(station.title ?? "Unknown") at (\(String(format: "%.6f", station.coordinate.latitude)), \(String(format: "%.6f", station.coordinate.longitude)))")
             }
             
-            // Try manually updating visible elements
             print("🔧 Manually triggering updateVisibleElements...")
             updateVisibleElements(for: region)
         }
     }
     
-    /// Force update visible stations for debugging
     func forceUpdateStations(for region: MKCoordinateRegion) {
         print("🔧 Force updating stations...")
         updateVisibleElements(for: region)
         print("🎯 After force update: \(visibleStations.count) visible stations")
     }
+    
+    func debugRouteDetection(midpoint: CLLocationCoordinate2D, from userCoordinate: CLLocationCoordinate2D) {
+        guard hasLoadedData else {
+            print("❌ No subway data loaded")
+            return
+        }
+        
+        print("🔍 === ENHANCED SUBWAY ROUTE DEBUG ===")
+        print("   📍 User location: (\(String(format: "%.6f", userCoordinate.latitude)), \(String(format: "%.6f", userCoordinate.longitude)))")
+        print("   🎯 Midpoint: (\(String(format: "%.6f", midpoint.latitude)), \(String(format: "%.6f", midpoint.longitude)))")
+        print("   🔧 GTFS loaded: \(isGTFSLoaded)")
+        
+        if isGTFSLoaded {
+            let gtfsViableRoutes = getGTFSViableRoutes(from: userCoordinate, to: midpoint)
+            print("   🚇 GTFS viable routes: \(gtfsViableRoutes)")
+        }
+        
+        let nearbyStations = getNearbyStations(to: userCoordinate, maxDistance: 0.015, limit: 5)
+        print("   🚉 Found \(nearbyStations.count) nearby stations:")
+        
+        for (index, stationInfo) in nearbyStations.enumerated() {
+            let station = stationInfo.station
+            let distance = stationInfo.distance
+            print("     \(index + 1). \(station.stationId) (\(station.lineName)) - \(Int(distance))m away")
+        }
+        
+        print("========================================")
+    }
 }
 
-
-
-    // MARK: - Subway Route Direction Utility
-
-    /// Determine if a subway route is heading toward a given midpoint from a specific station
-    func isSubwayHeadingTowardMidpoint(midpoint: CLLocationCoordinate2D, from station: SubwayTrackPoint, in route: SubwayRoute) -> Bool {
-        guard let currentIndex = route.stations.firstIndex(where: {
-            $0.stationId == station.stationId
-        }), currentIndex + 1 < route.stations.count else {
-            return false
-        }
-
-        let current = station.coordinate
-        let next = route.stations[currentIndex + 1].coordinate
-
-        // Create direction vectors
-        let routeVector = CGVector(dx: next.longitude - current.longitude, dy: next.latitude - current.latitude)
-        let toMidpointVector = CGVector(dx: midpoint.longitude - current.longitude, dy: midpoint.latitude - current.latitude)
-
-        // Normalize vectors
-        let routeLength = sqrt(pow(routeVector.dx, 2) + pow(routeVector.dy, 2))
-        let midpointLength = sqrt(pow(toMidpointVector.dx, 2) + pow(toMidpointVector.dy, 2))
-        guard routeLength > 0, midpointLength > 0 else { return false }
-
-        let dot = (routeVector.dx * toMidpointVector.dx + routeVector.dy * toMidpointVector.dy) / (routeLength * midpointLength)
-
-        return dot > 0.6 // ~cosine(53°); adjust threshold as needed
-    }
-
-
-
-    /// Estimate walking time and compare to transit time to determine if fallback is better
-    func shouldFallbackToWalking(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, transitTime: TimeInterval, multiplierThreshold: Double = 1.3) -> Bool {
-        let fromLoc = CLLocation(latitude: from.latitude, longitude: from.longitude)
-        let toLoc = CLLocation(latitude: to.latitude, longitude: to.longitude)
-        let distanceInMeters = fromLoc.distance(from: toLoc)
-        let miles = distanceInMeters / 1609.34
-
-        let estimatedWalkingTime = miles * 20 * 60 // seconds (20 mins per mile)
-
-        return transitTime > estimatedWalkingTime * multiplierThreshold
-    }
-
-
-
 // MARK: - Error Types
-        enum SubwayLoadingError: LocalizedError {
-            case fileNotFound(String)
-            case invalidCSV
-            case noTrackPoints
-            case processingError(String)
-            
-            var errorDescription: String? {
-                switch self {
-                case .fileNotFound(let filename):
-                    return "Subway CSV file '\(filename)' not found in bundle"
-                case .invalidCSV:
-                    return "Invalid CSV structure"
-                case .noTrackPoints:
-                    return "No valid track points found"
-                case .processingError(let message):
-                    return "Processing error: \(message)"
-                }
-            }
-    }
 
-// MARK: - Helper Extensions
+enum GTFSError: LocalizedError {
+    case fileNotFound(String)
+    case invalidFormat
+    case unknown
+    
+    var errorDescription: String? {
+        switch self {
+        case .fileNotFound(let filename):
+            return "GTFS file not found: \(filename)"
+        case .invalidFormat:
+            return "Invalid GTFS file format"
+        case .unknown:
+            return "Unknown GTFS error"
+        }
+    }
+}
+
+enum SubwayLoadingError: LocalizedError {
+    case fileNotFound(String)
+    case invalidCSV
+    case noTrackPoints
+    case processingError(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .fileNotFound(let filename):
+            return "Subway CSV file '\(filename)' not found in bundle"
+        case .invalidCSV:
+            return "Invalid CSV structure"
+        case .noTrackPoints:
+            return "No valid track points found"
+        case .processingError(let message):
+            return "Processing error: \(message)"
+        }
+    }
+}
+
+// MARK: - Useful Extensions (These are appropriate as they extend system types)
+
 extension MKPolyline {
     var coordinates: [CLLocationCoordinate2D] {
         var coords = [CLLocationCoordinate2D](repeating: kCLLocationCoordinate2DInvalid, count: pointCount)
