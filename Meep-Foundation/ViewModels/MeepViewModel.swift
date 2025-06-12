@@ -19,7 +19,7 @@ import GooglePlaces
 // MARK: – Google Photo Limits & Auto‐Load Config
 private var googlePhotoCallCount = 0
 private let googlePhotoDailyCap = 3000
-private let maxAutoPhotosPerSearch = 0
+private let maxAutoPhotosPerSearch = 10
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
