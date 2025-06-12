@@ -184,6 +184,7 @@ class FirebaseService: ObservableObject {
         let email = data["email"] as? String ?? ""
         let phoneNumber = data["phoneNumber"] as? String ?? ""
         let profileImageUrl = data["profileImageUrl"] as? String ?? ""
+        let profileImageThumbnailUrl = data["profileImageThumbnailUrl"] as? String ?? ""
         
         // Get timestamps and convert to Date
         let createdTimestamp = data["createdAt"] as? Timestamp
@@ -201,7 +202,8 @@ class FirebaseService: ObservableObject {
             phoneNumber: phoneNumber,
             profileImageUrl: profileImageUrl,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            profileImageThumbnailUrl: profileImageThumbnailUrl
         )
     }
     
@@ -211,6 +213,7 @@ class FirebaseService: ObservableObject {
     ///   - email: User's email
     ///   - username: User's username
     ///   - profileImageUrl: User's profile image URL
+    ///   - profileImageThumbnailUrl: User's profile image thumbnail URL
     ///   - completion: Callback with success status and error message
     func createUserProfile(
         fullName: String,
@@ -218,6 +221,7 @@ class FirebaseService: ObservableObject {
         username: String,
         phoneNumber: String,
         profileImageUrl: String,
+        profileImageThumbnailUrl: String,
         gender: String,
         dateOfBirth: String,
         completion: @escaping (Bool, String?) -> Void
@@ -248,6 +252,7 @@ class FirebaseService: ObservableObject {
                     email: email,
                     username: username,
                     profileImageUrl: profileImageUrl,
+                    profileImageThumbnailUrl: profileImageThumbnailUrl,
                     phoneNumber: phoneNumber,
                     gender: gender,
                     dateOfBirth: dateOfBirth,
@@ -264,6 +269,7 @@ class FirebaseService: ObservableObject {
     ///   - email: User's email
     ///   - username: User's username
     ///   - profileImageUrl: User's profile image URL
+    ///   - profileImageThumbnailUrl: User's profile image thumbnail URL
     ///   - completion: Callback with success status and error message
     private func saveUserData(
         uid: String,
@@ -271,6 +277,7 @@ class FirebaseService: ObservableObject {
         email: String,
         username: String,
         profileImageUrl: String,
+        profileImageThumbnailUrl: String,
         phoneNumber: String,
         gender: String,
         dateOfBirth: String,
@@ -285,6 +292,7 @@ class FirebaseService: ObservableObject {
             "username": username,
             "phoneNumber": phoneNumber,
             "profileImageUrl": profileImageUrl,
+            "profileImageThumbnailUrl": profileImageThumbnailUrl,
             "gender": gender,
             "dateOfBirth": dateOfBirth,
             "createdAt": Timestamp(date: Date()),
@@ -309,7 +317,8 @@ class FirebaseService: ObservableObject {
                     createdAt: Date(),
                     updatedAt: Date(),
                     gender: gender,
-                    dateOfBirth: dateOfBirth
+                    dateOfBirth: dateOfBirth,
+                    profileImageThumbnailUrl: profileImageThumbnailUrl
                 )
             }
 
@@ -367,6 +376,21 @@ class FirebaseService: ObservableObject {
                 
                 print("User account deleted successfully")
                 completion(true, nil)
+            }
+        }
+    }
+}
+
+extension FirebaseService {
+    /// Load user profile and return when complete
+    func loadUser(uid: String, completion: @escaping (Bool) -> Void) {
+        let db = Firestore.firestore()
+        db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
+            if let data = snapshot?.data() {
+                self?.updateMeepUserFromFirestore(data: data)
+                completion(true)
+            } else {
+                completion(false)
             }
         }
     }

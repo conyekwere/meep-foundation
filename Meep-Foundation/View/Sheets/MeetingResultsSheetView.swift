@@ -8,9 +8,13 @@
 
 import SwiftUI
 
+import MapKit
+
 struct MeetingResultsSheetView: View {
     @ObservedObject var viewModel: MeepViewModel
     @Environment(\.colorScheme) var colorScheme
+    @State private var showDirectionsOptions: Bool = false
+    @State private var selectedPointForDirections: MeetingPoint? = nil
 
     var body: some View {
         ZStack {
@@ -41,13 +45,36 @@ struct MeetingResultsSheetView: View {
                                 SkeletonMeetingPointCard()
                             }
                         } else {
-                            ForEach(viewModel.meetingPoints.filter {
+                            ForEach(Array(viewModel.meetingPoints.filter {
                                 viewModel.selectedCategory.name == "All" || $0.category == viewModel.selectedCategory.name
-                            }, id: \.id) { point in
-                                MeetingPointCard(point: point, showDirections: {
-                                    viewModel.showDirections(to: point)
-                                }, userLocation: viewModel.userLocation) // ✅ Fix argument order
-                                .frame(maxWidth: UIScreen.main.bounds.width * 0.95)
+                            }.enumerated()), id: \.element.id) { index, point in
+                                // Special handling for the first item if it's subway info
+                                if index == 0 && (viewModel.userTransportMode == .train || viewModel.friendTransportMode == .train) {
+                                    
+                                    Button(action: {
+                                        selectedPointForDirections = point
+                                        showDirectionsOptions = true
+                                    }) {
+                                        SubwayMeetingPointInfoCard(
+                                            point: point,
+                                            subwayLines: viewModel.getSubwayLinesNear(coordinate: point.coordinate),
+                                            userLocation: viewModel.userLocation,
+                                            subwayManager: viewModel.subwayManager
+                                        )
+                                        .frame(maxWidth: UIScreen.main.bounds.width * 0.95)
+                                    }
+                                } else {
+                                    MeetingPointCard(
+                                        point: point,
+                                        showDirections: {
+                                            selectedPointForDirections = point
+                                            showDirectionsOptions = true
+                                        },
+                                        userLocation: viewModel.userLocation,
+                                        myTransit: viewModel.userTransportMode
+                                    )
+                                    .frame(maxWidth: UIScreen.main.bounds.width * 0.95)
+                                }
                             }
                         }
                     }
@@ -58,6 +85,35 @@ struct MeetingResultsSheetView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
             .ignoresSafeArea(edges: .bottom)
+            .confirmationDialog("Get Directions", isPresented: $showDirectionsOptions, titleVisibility: .visible) {
+                if let meetingPoint = selectedPointForDirections {
+                    Button("Apple Maps") {
+                        let placemark = MKPlacemark(coordinate: meetingPoint.coordinate)
+                        let mapItem = MKMapItem(placemark: placemark)
+                        mapItem.name = meetingPoint.name
+                        mapItem.openInMaps(launchOptions: [
+                            MKLaunchOptionsDirectionsModeKey: viewModel.userTransportMode.launchOption
+                        ])
+                    }
+
+                    let googleMapsMode: String = {
+                        switch viewModel.userTransportMode {
+                        case .walk: return "walking"
+                        case .bike: return "bicycling"
+                        case .train: return "transit"
+                        case .car: return "driving"
+                        }
+                    }()
+
+                    if let url = URL(string: "comgooglemaps://?daddr=\(meetingPoint.coordinate.latitude),\(meetingPoint.coordinate.longitude)&directionsmode=\(googleMapsMode)"),
+                       UIApplication.shared.canOpenURL(url) {
+                        Button("Google Maps") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
         }
     }
 }

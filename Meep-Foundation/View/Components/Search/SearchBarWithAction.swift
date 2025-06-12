@@ -62,10 +62,10 @@ struct SearchBarWithAction: View {
                                 .foregroundColor(Color(.gray))
                                 .frame(width: 34, height: 34)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(Color(.lightGray).opacity(0.3), lineWidth: 2))
+                                .overlay(Circle().stroke(Color(.lightGray).opacity(0.6), lineWidth: 1))
                                 .rotationEffect(.degrees(-90))
                             
-                            if filterCount > 0 { // ✅ Only show badge if filters are applied
+                            if filterCount > 0 {
                                 Text("\(filterCount)")
                                     .font(.caption2)
                                     .fontWeight(.bold)
@@ -73,7 +73,7 @@ struct SearchBarWithAction: View {
                                     .frame(width: 16, height: 16)
                                     .background(Color.black)
                                     .clipShape(Circle())
-                                    .offset(x: 14, y: -16) // ✅ Position Badge on Top-Right Corner
+                                    .offset(x: 14, y: -16) 
                             }
                         }
                        
