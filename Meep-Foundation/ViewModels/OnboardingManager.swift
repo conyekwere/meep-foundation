@@ -17,6 +17,16 @@ class OnboardingManager: ObservableObject {
     private init() {
         // Private initializer for singleton
     }
+
+    /// Whether this is the first app launch.
+    var isNewUser: Bool {
+        return appLaunchCount == 1
+    }
+
+    /// Total number of times the app has been launched.
+    var launchCount: Int {
+        return appLaunchCount
+    }
     
     func incrementAppLaunch() {
         appLaunchCount += 1

@@ -48,7 +48,7 @@ struct OnboardingSheetView: View {
                                 ),
                                 actionTitle: "Allow Location",
                                 action: {
-                                    viewModel.requestUserLocation()
+                                    viewModel.getCurrentLocationIfAuthorized() 
                                 }
                             )
                             .cornerRadius(16)

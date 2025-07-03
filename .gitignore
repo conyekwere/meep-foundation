@@ -20,4 +20,5 @@ Podfile.lock
 .build/
 
 # Misc
-.DS_Store
+.DS_Store.DS_Store
+xcuserdata/

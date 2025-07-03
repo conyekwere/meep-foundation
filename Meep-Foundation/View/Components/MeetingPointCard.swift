@@ -7,12 +7,14 @@
 
 import SwiftUI
 import CoreLocation
+import Foundation
 
 struct MeetingPointCard: View {
     let point: MeetingPoint
     let showDirections: () -> Void
     let userLocation: CLLocationCoordinate2D?
     let myTransit: TransportMode
+    @ObservedObject var viewModel: MeepViewModel
 
     var body: some View {
         VStack{
@@ -37,7 +39,6 @@ struct MeetingPointCard: View {
                                     .scaledToFill()
                                     .frame(height: 200)
                                     .clipped()
-             
                             case .failure:
                                 // If loading fails, fall back to an emoji cover
                                 coverEmojiView
@@ -53,6 +54,19 @@ struct MeetingPointCard: View {
                     }
                 }
                 .cornerRadius(12)
+                .overlay(
+                    Group {
+                        if viewModel.visitedPlaceIDs.contains(point.id.uuidString) {
+                            Text("Visited")
+                                .font(.caption2)
+                                .padding(6)
+                                .background(Color.black.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                    }
+                    .padding(8),
+                    alignment: .topTrailing
+                )
                 
                 // ––– Name –––
                 Text(point.name)

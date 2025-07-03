@@ -28,3 +28,4 @@ enum AnnotationType {
     case midpoint
     case place(emoji: String)
 }
+

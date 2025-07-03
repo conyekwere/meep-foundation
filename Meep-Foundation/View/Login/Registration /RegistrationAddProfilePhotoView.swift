@@ -12,6 +12,7 @@ import Firebase
 struct RegistrationAddProfilePhotoView: View {
     
     @State private var isImagePickerPresented: Bool = false
+    @State private var isCameraPresented: Bool = false
     @State private var showPhotoOptions: Bool = false
     @State private var selectedImage: UIImage? = nil
     @State private var isUploading = false
@@ -97,7 +98,7 @@ struct RegistrationAddProfilePhotoView: View {
                             }
                             .overlay(
                                 Text(String(fullName.prefix(1)))
-                                    .font(.system(size: 44)) 
+                                    .font(.system(size: 44))
                                     .fontWeight(.semibold)
                                     .fontWidth(.expanded)
                                     .foregroundColor(.white)
@@ -115,8 +116,11 @@ struct RegistrationAddProfilePhotoView: View {
                             isImagePickerPresented = true
                         }
                         Button("Camera") {
-                            // Camera functionality can be added here
-                            isImagePickerPresented = true
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                isCameraPresented = true
+                            } else {
+                                print("📵 Camera not available on this device.")
+                            }
                         }
                         Button("Cancel", role: .cancel) {}
                     }
@@ -195,7 +199,12 @@ struct RegistrationAddProfilePhotoView: View {
 
                 .padding(.top, 8)
         .sheet(isPresented: $isImagePickerPresented) {
-            ImagePicker(image: $selectedImage)
+            ImagePicker(image: $selectedImage, sourceType: .photoLibrary)
+        }
+        .sheet(isPresented: $isCameraPresented) {
+            ImagePicker(image: $selectedImage, sourceType: .camera)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: isCameraPresented)
         }
     }
 }
