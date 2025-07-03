@@ -11,6 +11,7 @@ import CoreLocation
 import MapKit
 import Contacts
 import ContactsUI
+import PostHog
 
 struct MeetingSearchSheetView: View {
     
@@ -31,6 +32,9 @@ struct MeetingSearchSheetView: View {
     @State private var locationHistoryText: String = ""
     @State private var locationToSave = ""
     @State private var tempCoordinate: CLLocationCoordinate2D? = nil
+    
+    
+    @State private var showContactDisclosure: Bool = false
     
     // MARK: - Geocode Error State
     @State private var geocodeError: String? = nil
@@ -88,6 +92,13 @@ struct MeetingSearchSheetView: View {
     private func handleDoneButtonTap() {
         if isMyLocationValid && isFriendsLocationValid &&
            viewModel.userLocation != nil && viewModel.friendLocation != nil {
+            PostHogSDK.shared.capture("search_completed", properties: [
+                "my_location": myLocation,
+                "friend_location": friendLocation,
+                "used_current_location": myLocation.contains("Current Location"),
+                "used_saved_location": locationsManager.homeLocation?.address == myLocation ||
+                                       locationsManager.workLocation?.address == myLocation
+            ])
             processBothLocations {
                 onDone()
             }
@@ -162,7 +173,7 @@ struct MeetingSearchSheetView: View {
     }
     
     private func handleCurrentLocationRequest() {
-        viewModel.requestUserLocation()
+        viewModel.getCurrentLocationIfAuthorized()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             guard let userCoord = viewModel.userLocation else { return }
 
@@ -243,6 +254,14 @@ struct MeetingSearchSheetView: View {
 
     func presentShareSheet() {
         // Generate the request data
+        // Removed PHGPostHog.shared()?.capture call
+
+        
+        PostHogSDK.shared.capture("app_shared", properties: [
+            "method": "share_sheet",
+            "content_type": "meeting_location"
+        ])
+        
         let fullName = firebaseService.meepUser?.displayName ??
                        UserDefaults.standard.string(forKey: "userName") ?? "User"
         let firstName = fullName.components(separatedBy: " ").first ?? fullName
@@ -853,15 +872,7 @@ struct MeetingSearchSheetView: View {
                 
                 // Ask for Friend's Location button (shown for all states)
 //                Button(action: {
-//                    requestContactAccess { granted in
-//                        if granted {
-//                            // Show share sheet pointer and present share sheet
-//                            withAnimation {
-//                                self.showingShareArrowPointer = true
-//                            }
-//                            self.presentShareSheet()
-//                        }
-//                    }
+//                      showContactDisclosure = true
 //                }) {
 //                    HStack(spacing: 16) {
 //                        Image(systemName: "message")
@@ -885,12 +896,28 @@ struct MeetingSearchSheetView: View {
 //                    .frame(maxWidth: .infinity, alignment: .leading)
 //                }
                 
+
+                    if showContactDisclosure {
+                        ContactPrivacyDisclosureView(showDisclosure: $showContactDisclosure) {
+                            requestContactAccess { granted in
+                                if granted {
+                                    withAnimation {
+                                        self.showingShareArrowPointer = true
+                                    }
+                                    self.presentShareSheet()
+                                }
+                            }
+                        }
+                    }
+                
+                
                 if onboardingManager.shouldShowOnboardingElement() {
                     Image(systemName: "chevron.up")
                         .font(.title3)
                         .foregroundColor(.primary)
                         .padding(.trailing, 16)
                         .offset(y: arrowOffsetY)
+                        .hidden()
                         .onAppear {
                             withAnimation(
                                 Animation.easeInOut(duration: 0.5)
@@ -907,6 +934,8 @@ struct MeetingSearchSheetView: View {
         }
         .scrollClipDisabled(true)
         .padding(.top, 40)
+        
+        
     }
     
     @ViewBuilder
@@ -1063,10 +1092,11 @@ struct MeetingSearchSheetView: View {
         }
         .overlay(
             Group {
-                if showingContactArrowPointer {
-                    ArrowPointerView()
-                        .transition(.opacity)
-                }
+//                if showingContactArrowPointer {
+//                    ArrowPointerView()
+//                        .transition(.opacity)
+//                        .hidden(true)
+//                }
                 
                 if showingShareArrowPointer {
                     ShareSheetPointerView()
@@ -1078,7 +1108,7 @@ struct MeetingSearchSheetView: View {
     
     // MARK: - Setup and Event Handlers
     private func setupInitialState() {
-        viewModel.requestUserLocation()
+        viewModel.getCurrentLocationIfAuthorized()
         setupKeyboardObservers()
         setupInitialLocation()
         setupSearchCompleters()

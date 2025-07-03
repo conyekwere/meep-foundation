@@ -2,17 +2,16 @@
 <plist version="1.0">
 <dict>
     <key>aps-environment</key>
-    <string>development</string>
+    <string>production</string>
+    
+    <key>application-identifier</key>
+    <string>P7W8JZ4GWA.chima.Meep-Foundation</string>
+    
     <key>com.apple.developer.associated-domains</key>
     <array>
-        <!-- Your existing Firebase domain -->
         <string>applinks:meep-2681f.firebaseapp.com</string>
-        
-        <!-- AASA subdomain (where your AASA file will be hosted) -->
         <string>applinks:aasa.meep.earth</string>
         <string>webcredentials:aasa.meep.earth</string>
-        
-        <!-- Main domain (where your website/share page is hosted) -->
         <string>applinks:meep.earth</string>
         <string>webcredentials:meep.earth</string>
     </array>

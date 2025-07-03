@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PostHog
 
 struct AdvancedFiltersBottomSheet: View {
     @Binding var myTransit: TransportMode
@@ -22,6 +23,7 @@ struct AdvancedFiltersBottomSheet: View {
 
     
     @ObservedObject var viewModel: MeepViewModel
+    let onTransitChecker: () -> Void
     
     
     let dateRange: ClosedRange<Date> = {
@@ -184,11 +186,23 @@ struct AdvancedFiltersBottomSheet: View {
                 .cornerRadius(10)
 
                 Button("Show Results") {
+                    
+                    
                     viewModel.updateActiveFilterCount(myTransit: myTransit, friendTransit: friendTransit, searchRadius: searchRadius, departureTime: departureTime)
+                    
+                    PostHogSDK.shared.capture("filters_applied", properties: [
+                        "my_transit": myTransit.rawValue,
+                        "friend_transit": friendTransit.rawValue,
+                        "search_radius": searchRadius,
+                        "has_departure_time": departureTime != nil,
+                        "filter_count": viewModel.activeFilterCount
+                    ])
+                    
 
                     viewModel.searchRadius = searchRadius
-                    viewModel.searchNearbyPlaces()     
-
+                    viewModel.searchNearbyPlaces()
+                    
+                    onTransitChecker()
                     dismiss()
                 }
                 .frame(maxWidth: .infinity)
@@ -255,6 +269,6 @@ struct AdvancedFiltersBottomSheet: View {
         myTransit: .constant(.train),
         friendTransit: .constant(.train),
         searchRadius: .constant(0.2), // Default 0.2 miles
-        departureTime: .constant(nil), viewModel: MeepViewModel()
+        departureTime: .constant(nil), viewModel: MeepViewModel(), onTransitChecker: {}
     )
 }

@@ -18,6 +18,6 @@ struct Category: Identifiable, Hashable {
     }
     
     static func == (lhs: Category, rhs: Category) -> Bool {
-        lhs.id == rhs.id
+        lhs.name == rhs.name && lhs.emoji == rhs.emoji
     }
 }

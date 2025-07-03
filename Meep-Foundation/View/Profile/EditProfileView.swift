@@ -79,7 +79,7 @@ struct EditProfileView: View {
                             .padding(12)
                             .font(.system(size: 12))
                             .frame(width: 40, height: 40, alignment: .center)
-                            .background(Color(.lightGray).opacity(0.1))
+                            //.background(Color(.lightGray).opacity(0.1))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 30)
                                     .stroke(Color(.systemGray6), lineWidth: 2)

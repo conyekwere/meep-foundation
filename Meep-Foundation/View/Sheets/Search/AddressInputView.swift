@@ -137,7 +137,7 @@ struct AddressInputView: View {
 
                         Button(action: {
                             print("Current Location selected")
-                            viewModel.requestUserLocation()
+                            viewModel.getCurrentLocationIfAuthorized()
                         }) {
                             HStack(spacing: 16) {
                                 Image(systemName: "location")

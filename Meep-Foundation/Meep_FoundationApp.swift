@@ -10,6 +10,7 @@ import FirebaseAuth
 import GoogleMaps
 import GooglePlaces
 import UserNotifications
+import PostHog
 
 
 @main
@@ -24,6 +25,12 @@ struct MeepApp: App {
                 .environmentObject(OnboardingManager.shared)
                 .onAppear {
                     OnboardingManager.shared.incrementAppLaunch()
+                    
+                    // Track app opened (ADD THIS)
+                    PostHogSDK.shared.capture("app_opened", properties: [
+                        "is_new_user": OnboardingManager.shared.isNewUser,
+                        "launch_count": OnboardingManager.shared.launchCount
+                    ])
                 }
                 .onOpenURL { url in
                     print("📬 onOpenURL triggered with URL: \(url)")
@@ -44,6 +51,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         FirebaseApp.configure()
        // Auth.auth().settings?.isAppVerificationDisabledForTesting = true
        // print("⚠️ Firebase reCAPTCHA fallback disabled for testing")
+        
+        let POSTHOG_API_KEY = "PostHogApiKey"
+        let POSTHOG_HOST = "https://app.posthog.com"
+        let config = PostHogConfig(apiKey: POSTHOG_API_KEY, host: POSTHOG_HOST)
+        PostHogSDK.shared.setup(config)
+        
+        
+     //   config.sessionReplay = true
+           // choose whether to mask images or text
+        //   config.sessionReplayConfig.maskAllImages = false
+         //  config.sessionReplayConfig.maskAllTextInputs = true
+           // screenshot is disabled by default
+           // The screenshot may contain sensitive information, use with caution
+          // config.sessionReplayConfig.screenshotMode = true
         
         // Set up notification delegate
         UNUserNotificationCenter.current().delegate = self
@@ -106,8 +127,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     
     // Handling device token for push notifications (important for phone auth)
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    #if DEBUG
         Auth.auth().setAPNSToken(deviceToken, type: .sandbox)
-        print("📲 APNs Token registered: \(deviceToken.map { String(format: "%02.2hhx", $0) }.joined())")
+    #else
+        Auth.auth().setAPNSToken(deviceToken, type: .prod)
+    #endif
+        
     }
     
     // Method to forward notifications to Firebase Auth

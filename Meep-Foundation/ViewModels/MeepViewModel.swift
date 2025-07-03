@@ -10,11 +10,13 @@
 //  Created by Chima Onyekwere on 1/21/25.
 //
 
+import Foundation
 import SwiftUI
 import MapKit
 import CoreLocation
 import Combine
 import GooglePlaces
+import PostHog
 
 // MARK: – Google Photo Limits & Auto‐Load Config
 private var googlePhotoCallCount = 0
@@ -22,6 +24,34 @@ private let googlePhotoDailyCap = 3000
 private let maxAutoPhotosPerSearch = 10
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
+
+    // MARK: - App Launch & Calculation Timestamps
+    @AppStorage("firstLaunchTimestamp") private var firstLaunchTimestamp: Double = 0
+    @AppStorage("firstCalculationTimestamp") private var firstCalculationTimestamp: Double?
+
+    // MARK: - Visited Places Persistence
+
+    private let visitedPlacesKey = "visitedPlaceIDs"
+
+    /// IDs of meeting points the user has visited.
+    var visitedPlaceIDs: [String] {
+        get {
+            UserDefaults.standard.stringArray(forKey: visitedPlacesKey) ?? []
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: visitedPlacesKey)
+        }
+    }
+
+    /// Marks a meeting point as visited, storing its ID.
+    func markVisited(_ point: MeetingPoint) {
+        var ids = visitedPlaceIDs
+        let idString = point.id.uuidString
+        if !ids.contains(idString) {
+            ids.append(idString)
+            visitedPlaceIDs = ids
+        }
+    }
     
     // MARK: - 🌍 Map & Meeting Point Management
     @Published var mapRegion: MKCoordinateRegion = .init(
@@ -188,6 +218,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
     @Published var searchResults: [MeepAnnotation] = []
+
+    // MARK: - Loading State for Nearby Places
+    @Published var isLoadingNearbyPlaces: Bool = false
     
     // MARK: - Google Directions Integration
     private var directionsService: GoogleDirectionsService {
@@ -237,7 +270,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             results.append(MeepAnnotation(coordinate: fLoc, title: "Friend", type: .friend))
         }
         
-        results.append(contentsOf: searchResults)
+        results.append(contentsOf: searchResults.filter {
+            selectedCategory.name == "All" || getCategory(for: $0.type.emoji) == selectedCategory.name
+        })
         return results
     }
     
@@ -566,10 +601,14 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     private func showGoogleBasedFallbackToast(reason: String, isUser: Bool) {
         let userType = isUser ? "your" : "friend's"
         let fullReason = "Google suggests alternatives for \(userType) location: \(reason)"
-        
+
+        // Haptic feedback before showing toast
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.warning)
+
         currentToast = TransitFallbackToast.create(for: fullReason)
         showTransitFallbackToast = true
-        
+
         // Auto-dismiss after 6 seconds
         toastDismissTimer?.invalidate()
         toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { _ in
@@ -580,15 +619,15 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
             }
         }
-        
-        // Consider auto-fallback for very inefficient routes
-        if reason.contains("mostly walking") {
-            if isUser {
-                userTransportMode = .walk
-            } else {
-                friendTransportMode = .walk
-            }
-        }
+
+        // 👇 Auto-suggestion for fallback transport is muted for now
+        // if reason.contains("mostly walking") {
+        //     if isUser {
+        //         userTransportMode = .walk
+        //     } else {
+        //         friendTransportMode = .walk
+        //     }
+        // }
     }
     
     /// Process travel times and determine optimal meeting point
@@ -809,10 +848,27 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             return
         }
         
+        // Instrument time to first midpoint calculation
+        if firstCalculationTimestamp == nil {
+            let delta = Date().timeIntervalSince1970 - firstLaunchTimestamp
+            PostHogSDK.shared.capture("time_to_first_midpoint", properties: ["seconds": delta])
+            firstCalculationTimestamp = Date().timeIntervalSince1970
+        }
+        
+        PostHogSDK.shared.capture("midpoint_calculated", properties: [
+            "user_transport": userTransportMode.rawValue,
+            "friend_transport": friendTransportMode.rawValue,
+            "search_radius": searchRadius,
+            "has_departure_time": departureTime != nil,
+            "user_location": sharableUserLocation,
+            "friend_location": sharableFriendLocation
+        ])
+        self.isLoadingNearbyPlaces = true
+
         // Use more reasonable search radius (1 miles max)
         let adjustedSearchRadius = min(searchRadius, 1.0)
         let delta = adjustedSearchRadius * 0.0145
-        
+
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchQuery
         request.region = MKCoordinateRegion(
@@ -826,11 +882,17 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
             if let error = error {
                 print("Apple Maps search error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.isLoadingNearbyPlaces = false
+                }
                 return
             }
 
             guard let response = response else {
                 print("No places found.")
+                DispatchQueue.main.async {
+                    self.isLoadingNearbyPlaces = false
+                }
                 return
             }
 
@@ -849,6 +911,68 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
                 self.updateCategoriesFromSearchResults()
                 self.fetchPhotosForTopFive()
+                self.isLoadingNearbyPlaces = false
+            }
+        }
+    }
+
+    /// Search nearby places using selectedCategory for category-specific filtering.
+    func searchNearbyPlacesFiltered() {
+        guard userLocation != nil && friendLocation != nil else {
+            print("⚠️ Skipping filtered search — both user and friend locations are not available.")
+            return
+        }
+
+        self.isLoadingNearbyPlaces = true
+
+        let adjustedSearchRadius = min(searchRadius, 1.0)
+        let delta = adjustedSearchRadius * 0.0145
+
+        let query = selectedCategory.name == "All" ? searchQuery : selectedCategory.name
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        request.region = MKCoordinateRegion(
+            center: enhancedMidpoint,
+            span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
+        )
+
+        let search = MKLocalSearch(request: request)
+        search.start { [weak self] response, error in
+            guard let self = self else { return }
+
+            if let error = error {
+                print("Apple Maps filtered search error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.isLoadingNearbyPlaces = false
+                }
+                return
+            }
+
+            guard let response = response else {
+                print("No filtered places found.")
+                DispatchQueue.main.async {
+                    self.isLoadingNearbyPlaces = false
+                }
+                return
+            }
+
+            let fetchedMeetingPoints = response.mapItems.compactMap { self.convert(mapItem: $0) }
+            let sortedPoints = fetchedMeetingPoints.sorted {
+                let locA = CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                let locB = CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude)
+                let midLoc = CLLocation(latitude: self.enhancedMidpoint.latitude, longitude: self.enhancedMidpoint.longitude)
+                return locA.distance(from: midLoc) < locB.distance(from: midLoc)
+            }
+
+            DispatchQueue.main.async {
+                self.meetingPoints = sortedPoints
+                self.searchResults = sortedPoints.map {
+                    MeepAnnotation(coordinate: $0.coordinate, title: $0.name, type: .place(emoji: $0.emoji))
+                }
+                self.updateCategoriesFromSearchResults()
+                self.fetchPhotosForTopFive()
+                self.isLoadingNearbyPlaces = false
             }
         }
     }
@@ -1079,10 +1203,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             print("didUpdateLocations: No locations found.")
             return
         }
-        
+
         let newCoordinate = loc.coordinate
         let oldCoordinate = userLocation
-        
+
         // Check if location changed significantly (more than 100 meters)
         let significantChange: Bool
         if let oldLoc = oldCoordinate {
@@ -1092,20 +1216,25 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         } else {
             significantChange = true
         }
-        
+
         print("Location updated: \(loc.coordinate.latitude), \(loc.coordinate.longitude)")
+        // Haptic warning if outside NYC
+        if !isWithinNYC(newCoordinate) {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.warning)
+        }
         DispatchQueue.main.async { [weak self] in
             self?.userLocation = newCoordinate
-            
+
             if significantChange {
                 self?.mapRegion = MKCoordinateRegion(
                     center: newCoordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
                 )
-                
+
                 // Clear cached Google midpoint on significant location change
                 self?.cachedGoogleMidpoint = nil
-                
+
                 // Trigger Google-based recalculation
                 if self?.friendLocation != nil {
                     self?.calculateGoogleOptimizedMidpoint()
@@ -1113,7 +1242,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 }
             }
         }
-        
+
         locationManager?.stopUpdatingLocation()
     }
     
@@ -1121,9 +1250,14 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("Location error: \(error.localizedDescription)")
     }
     
+    /// Requests permission and location if needed. Use this only for first-time requests.
     func requestUserLocation() {
-        locationManager?.requestWhenInUseAuthorization()
-        locationManager?.startUpdatingLocation()
+        if locationManager?.authorizationStatus == .notDetermined {
+            locationManager?.requestWhenInUseAuthorization()
+        } else if locationManager?.authorizationStatus == .authorizedWhenInUse ||
+                  locationManager?.authorizationStatus == .authorizedAlways {
+            locationManager?.requestLocation()
+        }
     }
     
     // MARK: - 📍 Reverse Geocoding
@@ -1794,4 +1928,116 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+// MARK: - Location Permission Utilities
+
+/// This should ONLY get location if permission already granted
+func getCurrentLocationIfAuthorized() {
+    guard locationManager?.authorizationStatus == .authorizedWhenInUse ||
+          locationManager?.authorizationStatus == .authorizedAlways else {
+        return // Don't request, just return
+    }
+    locationManager?.requestLocation()
+    // MARK: - NYC Geofencing
+
+    /// Handles out-of-NYC behavior: switches to car mode and shows a beta warning toast.
+    func handleOutOfNYCBehavior(userLoc: CLLocationCoordinate2D?, friendLoc: CLLocationCoordinate2D?) {
+        guard let userLoc = userLoc, let friendLoc = friendLoc else { return }
+
+        if !isWithinNYC(userLoc) || !isWithinNYC(friendLoc) {
+            print("⚠️ Outside NYC - switching to car and showing beta warning")
+//            userTransportMode = .car
+//            friendTransportMode = .car
+
+            currentToast = TransitFallbackToast(
+                icon: "car.fill",
+                title: "Beta only works in NYC",
+                message: "Try at your own risk",
+                primaryColor: .red,
+                secondaryColor: .red.opacity(0.8)
+            )
+            showTransitFallbackToast = true
+
+            toastDismissTimer?.invalidate()
+            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
+                withAnimation(.easeOut(duration: 0.3)) {
+                    self.showTransitFallbackToast = false
+                    self.currentToast = nil
+                }
+            }
+        } else if realTransitMidpoint.latitude != 0 {
+            registerGeofence(at: realTransitMidpoint, identifier: "midpoint")
+        }
+    }
 }
+
+    /// Handles behavior when the user or friend is outside NYC
+    @MainActor
+    func handleOutOfNYCBehavior(userLoc: CLLocationCoordinate2D?, friendLoc: CLLocationCoordinate2D?) {
+        guard let userLoc = userLoc, let friendLoc = friendLoc else { return }
+
+        let nycBounds = (
+            north: 40.917577,
+            south: 40.477399,
+            east: -73.700272,
+            west: -74.259090
+        )
+
+        let isUserInNYC = (nycBounds.south...nycBounds.north).contains(userLoc.latitude) &&
+                          (nycBounds.west...nycBounds.east).contains(userLoc.longitude)
+
+        let isFriendInNYC = (nycBounds.south...nycBounds.north).contains(friendLoc.latitude) &&
+                            (nycBounds.west...nycBounds.east).contains(friendLoc.longitude)
+
+        if !isUserInNYC || !isFriendInNYC {
+            self.showTransitFallbackToast = true
+            self.currentToast = TransitFallbackToast.create(for: "Meep is only available within New York City.")
+        }
+    }
+// MARK: - NYC Bounding Box Helper
+private func isWithinNYC(_ coordinate: CLLocationCoordinate2D) -> Bool {
+    let nycBoundingBox = (
+        minLat: 40.4774, maxLat: 40.9176,
+        minLon: -74.2591, maxLon: -73.7004
+    )
+    return coordinate.latitude >= nycBoundingBox.minLat &&
+           coordinate.latitude <= nycBoundingBox.maxLat &&
+           coordinate.longitude >= nycBoundingBox.minLon &&
+           coordinate.longitude <= nycBoundingBox.maxLon
+}
+
+
+    /// Registers a geofence at the given coordinate if it is within NYC.
+    func registerGeofence(at coordinate: CLLocationCoordinate2D, identifier: String) {
+        guard isWithinNYC(coordinate) else {
+            print("🚫 Geofence not registered: Outside NYC")
+            return
+        }
+
+        let region = CLCircularRegion(
+            center: coordinate,
+            radius: 100,
+            identifier: identifier
+        )
+        region.notifyOnEntry = true
+        region.notifyOnExit = false
+
+        locationManager?.startMonitoring(for: region)
+        print("✅ Geofence registered for: \(identifier)")
+    }
+
+    /// This should ONLY request permission (call from privacy disclosure)
+    func requestLocationPermission() {
+        locationManager?.requestWhenInUseAuthorization()
+    }
+    
+}
+
+// MARK: - AnnotationType Emoji Extension
+extension AnnotationType {
+    var emoji: String {
+        if case .place(let emoji) = self { return emoji }
+        return ""
+    }
+}
+
+
