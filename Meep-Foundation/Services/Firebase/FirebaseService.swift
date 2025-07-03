@@ -379,6 +379,127 @@ class FirebaseService: ObservableObject {
             }
         }
     }
+    
+    
+    
+    /// Fetch the list of users the current user has blocked
+        func getBlockedUsers(completion: @escaping ([MeepUser]) -> Void) {
+            guard let uid = Auth.auth().currentUser?.uid else { completion([]); return }
+            let db = Firestore.firestore()
+            let userDoc = db.collection("users").document(uid)
+
+            userDoc.getDocument { snap, err in
+                guard let data = snap?.data(),
+                      let blockedIDs = data["blockedUsers"] as? [String] else {
+                    return completion([])
+                }
+
+                let group = DispatchGroup()
+                var results: [MeepUser] = []
+                let usersRef = db.collection("users")
+                
+                for targetID in blockedIDs {
+                    group.enter()
+                    usersRef.document(targetID).getDocument { s, e in
+                        if let d = s?.data(), let json = try? JSONSerialization.data(withJSONObject: d),
+                           let m = try? JSONDecoder().decode(MeepUser.self, from: json) {
+                            results.append(m)
+                        }
+                        group.leave()
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    completion(results)
+                }
+            }
+        }
+
+        /// Add a user to the block list
+        func blockUser(_ targetID: String, completion: @escaping (Bool) -> Void) {
+            guard let uid = Auth.auth().currentUser?.uid else { return completion(false) }
+            let db = Firestore.firestore()
+            let userDoc = db.collection("users").document(uid)
+
+            userDoc.updateData([
+                "blockedUsers": FieldValue.arrayUnion([targetID])
+            ]) { err in
+                completion(err == nil)
+            }
+        }
+
+        /// Remove a user from the block list
+        func unblockUser(_ targetID: String, completion: @escaping (Bool) -> Void) {
+            guard let uid = Auth.auth().currentUser?.uid else { return completion(false) }
+            let db = Firestore.firestore()
+            let userDoc = db.collection("users").document(uid)
+
+            userDoc.updateData([
+                "blockedUsers": FieldValue.arrayRemove([targetID])
+            ]) { err in
+                completion(err == nil)
+            }
+        }
+}
+
+// MARK: - User Search Extension
+extension FirebaseService {
+    /// Search for users by username or displayName (manual decoding to handle Timestamps)
+    func searchUsers(query: String, completion: @escaping ([MeepUser], Error?) -> Void) {
+        let db = Firestore.firestore()
+        let lowerQuery = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !lowerQuery.isEmpty else {
+            return completion([], nil)
+        }
+
+        db.collection("users").getDocuments { snapshot, error in
+            if let error = error {
+                completion([], error)
+                return
+            }
+
+            // Decode each document field-by-field, converting Timestamps to Date
+            let matches: [MeepUser] = snapshot?.documents.compactMap { doc in
+                let data = doc.data()
+                guard
+                    let displayName = data["displayName"] as? String,
+                    let username    = data["username"]    as? String
+                else { return nil }
+
+                let email                     = data["email"]                  as? String ?? ""
+                let phone                     = data["phoneNumber"]           as? String ?? ""
+                let profileImageUrl           = data["profileImageUrl"]       as? String ?? ""
+                let thumbUrl                  = data["profileImageThumbnailUrl"] as? String ?? ""
+                let createdAt: Date           = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                let updatedAt: Date           = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
+
+                let user = MeepUser(
+                    id:                    doc.documentID,
+                    displayName:           displayName,
+                    username:              username,
+                    email:                 email,
+                    phoneNumber:           phone,
+                    profileImageUrl:       profileImageUrl,
+                    createdAt:             createdAt,
+                    updatedAt:             updatedAt,
+                    profileImageThumbnailUrl: thumbUrl
+                )
+
+                // Only include if it matches the search query
+                if user.username.lowercased().contains(lowerQuery)
+                   || user.displayName.lowercased().contains(lowerQuery) {
+                    return user
+                } else {
+                    return nil
+                }
+            } ?? []
+
+            completion(matches, nil)
+        }
+    }
 }
 
 extension FirebaseService {
@@ -386,10 +507,17 @@ extension FirebaseService {
     func loadUser(uid: String, completion: @escaping (Bool) -> Void) {
         let db = Firestore.firestore()
         db.collection("users").document(uid).getDocument { [weak self] snapshot, error in
+            if let error = error {
+                print("[FirebaseService] loadUser error:", error.localizedDescription)
+                completion(false)
+                return
+            }
             if let data = snapshot?.data() {
+                print("[FirebaseService] loadUser data:", data)
                 self?.updateMeepUserFromFirestore(data: data)
                 completion(true)
             } else {
+                print("[FirebaseService] loadUser no data for uid: \(uid)")
                 completion(false)
             }
         }

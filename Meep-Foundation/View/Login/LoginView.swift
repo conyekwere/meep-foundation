@@ -8,12 +8,13 @@
 
 import SwiftUI
 import FirebaseAuth
+import PostHog
 
 struct LoginView: View {
     // Environment
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
-    
+    @State private var showPrivacyDisclosure = false
     // Callback when login/registration is complete
     var onDismiss: (Bool) -> Void
     
@@ -216,15 +217,32 @@ struct LoginView: View {
                         }, fullName: fullName)
                     case .locationAccess:
                         LocationPermissionView(onContinue: {
-                            viewModel.requestUserLocation()
-                            step = .registrationComplete
+                            showPrivacyDisclosure = true
                         }, profileImageUrl: profileImageUrl, fullName: fullName)
+                            .overlay(
+                                Group {
+                                    if showPrivacyDisclosure {
+                                        LocationPrivacyDisclosureView(showDisclosure: $showPrivacyDisclosure) {
+                                            viewModel.requestUserLocation()
+                                            step = .registrationComplete
+                                        }
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(Color.black.opacity(0.4).ignoresSafeArea())
+                                    }
+                                }
+                            )
                     
                     case .registrationComplete:
                         CelebrationScreenView(onComplete: {
                             Task {
                                 completeRegistration(profileImageUrl: profileImageUrl)
                                 onDismiss(true)
+                                guard let uid = firebaseService.currentUser?.uid else { return }
+                                PostHogSDK.shared.identify(uid, userProperties: [
+                                    "name": fullName,
+                                    "email": email,
+                                    "created_at": Date().timeIntervalSince1970
+                                ])
                             }
                         })
                     default:
@@ -233,6 +251,8 @@ struct LoginView: View {
                 }
             }
         }
+        // Removed .sheet for privacy disclosure; now handled inline in .locationAccess step
+
     }
     
     private func completeRegistration(profileImageUrl: String) {

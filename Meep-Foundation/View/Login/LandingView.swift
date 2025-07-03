@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import PostHog
 
 struct LandingView: View {
     // State
@@ -24,6 +25,7 @@ struct LandingView: View {
     
     // App coordinator to handle navigation
     @EnvironmentObject private var coordinator: AppCoordinator
+    @AppStorage("firstLaunchTimestamp") private var firstLaunchTimestamp: Double = 0
     
     var body: some View {
         ZStack {
@@ -167,7 +169,15 @@ struct LandingView: View {
                 .zIndex(5)
             }
         }
-    }
+        .onAppear {
+            if firstLaunchTimestamp == 0 {
+                firstLaunchTimestamp = Date().timeIntervalSince1970
+                PostHogSDK.shared.capture("app_first_open", properties: [
+                    "timestamp": firstLaunchTimestamp
+                ])
+            }
+        }
+}
 }
 
 

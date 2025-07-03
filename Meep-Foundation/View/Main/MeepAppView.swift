@@ -8,9 +8,10 @@
 
 import SwiftUI
 import MapKit
+import PostHog
 
 enum UIState {
-    case onboarding, searching, results, floatingResults
+    case onboarding, searching, results, floatviingResults
 }
 
 struct MeepAppView: View {
@@ -20,6 +21,13 @@ struct MeepAppView: View {
     @StateObject private var viewModel = MeepViewModel()
 
     @State private var showErrorModal: Bool = false
+    @AppStorage("lastDirectedVenueName") private var lastDirectedVenueName: String?
+    @AppStorage("lastDirectedVenueID") private var lastDirectedVenueID: String?
+    @AppStorage("lastDirectedVenueEmoji") private var lastDirectedVenueEmoji: String = ""
+    @AppStorage("lastDirectedTimestamp") private var lastDirectedTimestamp: Double?
+    @AppStorage("firstLaunchTimestamp") private var firstLaunchTimestamp: Double = 0
+    @AppStorage("firstCalculationTimestamp") private var firstCalculationTimestamp: Double?
+    @State private var showMeetingConfirmationModal: Bool = false
     
     @StateObject private var firebaseService = FirebaseService.shared
     
@@ -45,6 +53,11 @@ struct MeepAppView: View {
     @State private var currentToast: TransitFallbackToast?
     
     @State private var toastDismissTimer: Timer? = nil
+    @State private var showLocationDisclosure: Bool = false
+
+    // Loading overlay state
+    @State private var isLoading: Bool = false
+    @State private var loadingMessage: String = "Loading..."
     
     // Sheet height constants
     private let sheetMin: CGFloat = 90
@@ -127,51 +140,6 @@ struct MeepAppView: View {
         print("=========================")
     }
 
-    private func outsideMapRegion() {
-        if let userLoc = viewModel.userLocation, !isWithinNYC(userLoc) {
-            print("⚠️ Outside NYC - switching to car and showing beta warning")
-            myTransit = .car
-            viewModel.userTransportMode = .car
-            friendTransit = .car
-            viewModel.friendTransportMode = .car
-            currentToast = TransitFallbackToast(
-                icon: "car.fill",
-                title: "Beta only works in NYC",
-                message: "Try at your own risk",
-                primaryColor: .red,
-                secondaryColor: .red.opacity(0.8)
-            )
-            showTransitFallbackToast = true
-            toastDismissTimer?.invalidate()
-            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
-                withAnimation(.easeOut(duration: 0.3)) {
-                    showTransitFallbackToast = false
-                    currentToast = nil
-                }
-            }
-        } else if let friendLoc = viewModel.friendLocation, !isWithinNYC(friendLoc) {
-            print("⚠️ Outside NYC - switching to car and showing beta warning")
-            myTransit = .car
-            viewModel.userTransportMode = .car
-            friendTransit = .car
-            viewModel.friendTransportMode = .car
-            currentToast = TransitFallbackToast(
-                icon: "car.fill",
-                title: "Beta only works in NYC",
-                message: "Try at your own risk",
-                primaryColor: .red,
-                secondaryColor: .red.opacity(0.8)
-            )
-            showTransitFallbackToast = true
-            toastDismissTimer?.invalidate()
-            toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
-                withAnimation(.easeOut(duration: 0.3)) {
-                    showTransitFallbackToast = false
-                    currentToast = nil
-                }
-            }
-        }
-    }
 
     
     private func handleSubwayDataLoad() {
@@ -277,7 +245,12 @@ struct MeepAppView: View {
         
         if !subwayOverlayManager.hasLoadedData {
             print("📡 Loading subway data...")
+            isLoading = true
+            loadingMessage = "Loading subway data..."
             subwayOverlayManager.loadSubwayData()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                isLoading = false
+            }
         } else {
             print("✅ Subway data already loaded, running fallback check")
             // Data is already loaded, check fallback immediately
@@ -285,15 +258,6 @@ struct MeepAppView: View {
         }
     }
     
-    private func isWithinNYC(_ coordinate: CLLocationCoordinate2D) -> Bool {
-        let minLat = 40.4774
-        let maxLat = 40.9176
-        let minLon = -74.2591
-        let maxLon = -73.7002
-
-        return (coordinate.latitude >= minLat && coordinate.latitude <= maxLat) &&
-               (coordinate.longitude >= minLon && coordinate.longitude <= maxLon)
-    }
 
     
     
@@ -306,6 +270,12 @@ struct MeepAppView: View {
     }
     
     private func setSelectedMeetingPoint(for annotation: MeepAnnotation) {
+        PostHogSDK.shared.capture("venue_selected", properties: [
+            "venue_name": annotation.title,
+            "venue_category": viewModel.getCategory(for: annotation.type.emoji),
+            "venue_emoji": annotation.type.emoji
+        ])
+        
         // Extract emoji from annotation
         let emoji: String
         if case let .place(emojiValue) = annotation.type {
@@ -342,6 +312,9 @@ struct MeepAppView: View {
             // Try to fetch image from Google Places API
             print("🔍 New meeting point - attempting to fetch image for: \(annotation.title)")
             
+            // Loading state for finding meeting spots
+            isLoading = true
+            loadingMessage = "Finding meeting spots..."
             // Create a temporary array with just this point
             let tempPoint = viewModel.selectedPoint!
             viewModel.fetchGooglePlacesMetadata(for: [tempPoint])
@@ -349,6 +322,7 @@ struct MeepAppView: View {
             // After a delay, update the selected point with any new image that was found
             // Using a capture list without 'weak' since MeepAppView is a struct
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [viewModel] in
+                isLoading = false
                 // Find the meeting point in the array that matches our selected point
                 if let updatedPoint = viewModel.meetingPoints.first(where: {
                     $0.name == tempPoint.name &&
@@ -398,6 +372,28 @@ struct MeepAppView: View {
 
         ZStack {
 
+            // Loading overlay
+            if isLoading {
+                Group {
+                    switch loadingMessage {
+                    case "Finding meeting spots...":
+                        MeepLoadingStateView.findingMeetingSpots()
+                    case "Loading subway data...":
+                        MeepLoadingStateView.loadingSubwayData()
+                    default:
+                        MeepLoadingStateView(
+                            title: loadingMessage,
+                            subtitle: nil,
+                            progressSteps: ["Processing..."]
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.thinMaterial)
+                .transition(.opacity)
+                .zIndex(10)
+            }
+
 
             let shouldShowSubwayLines = (myTransit == .train || friendTransit == .train) &&
                                        viewModel.userLocation != nil &&
@@ -421,6 +417,7 @@ struct MeepAppView: View {
             )
 
             .ignoresSafeArea()
+            .blur(radius: (uiState == .onboarding || uiState == .results) && (showTransitFallbackToast || viewModel.isFloatingCardVisible) ? 4 : 0)
 //           .gesture(
 //                DragGesture()
 //                    .onChanged { _ in viewModel.isUserInteractingWithMap = true }
@@ -482,7 +479,11 @@ struct MeepAppView: View {
             .padding()
             .zIndex(3)
             
-            
+//            if showLocationDisclosure {
+//                LocationPrivacyDisclosureView(showDisclosure: $showLocationDisclosure) {
+//                    viewModel.getCurrentLocationIfAuthorized()
+//                }
+//            }
             
             // MARK: Onboarding Sheet (Draggable)
             if uiState == .onboarding  && !viewModel.isFloatingCardVisible && !showTransitFallbackToast{
@@ -593,7 +594,7 @@ struct MeepAppView: View {
                     
                     // Check if outside of NYC
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        outsideMapRegion()
+                        viewModel.handleOutOfNYCBehavior(userLoc: viewModel.userLocation, friendLoc: viewModel.friendLocation)
                     }
                     
                     // Debug the state right after setting it up
@@ -625,22 +626,26 @@ struct MeepAppView: View {
                 friendTransit: $friendTransit,
                 searchRadius: $searchRadius,
                 departureTime: $departureTime,
-                viewModel: viewModel // ✅ Pass ViewModel from Parent
+                viewModel: viewModel,
+                onTransitChecker: {
+                    
+                    if (myTransit == .train || friendTransit == .train),
+                          viewModel.userLocation != nil,
+                          viewModel.friendLocation != nil
+                     {
+                        loadSubwayDataIfNeeded()
+                    }
+                    
+                }
             )
             .presentationDetents([.large])
         }
         
         .sheet(isPresented: $showErrorModal) {
             VStack(spacing: 32) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .resizable()
-                    .frame(width: 60, height: 60)
-                    .foregroundColor(.red)
-
-                Text("\(viewModel.sharableUserLocation.isEmpty ? "Location" : viewModel.sharableUserLocation) not supported in Beta")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .padding()
+                Text("⚠️ \(viewModel.sharableUserLocation.isEmpty ? "This location" : viewModel.sharableUserLocation) isn’t supported yet.")
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
 
                 Button(action: {
                     showErrorModal = false
@@ -648,7 +653,7 @@ struct MeepAppView: View {
                         UIApplication.shared.open(url)
                     }
                 }) {
-                    Text("Sign up for waitlist")
+                    Label("Join the Waitlist", systemImage: "envelope.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -662,16 +667,37 @@ struct MeepAppView: View {
             .interactiveDismissDisabled()
         }
         .onAppear {
-            viewModel.requestUserLocation()
+            viewModel.getCurrentLocationIfAuthorized()
+            if firstLaunchTimestamp == 0 {
+                firstLaunchTimestamp = Date().timeIntervalSince1970
+            }
+            if let ts = lastDirectedTimestamp, Date().timeIntervalSince1970 - ts > 86400 {
+                lastDirectedVenueName = nil
+                lastDirectedVenueID = nil
+                lastDirectedVenueEmoji = ""
+                lastDirectedTimestamp = nil
+            }
+//            if !viewModel.isLocationAccessGranted {
+//               showLocationDisclosure = true
+//
+//            }
             
             
-            if let userLocation = viewModel.userLocation, !isWithinNYC(userLocation) {
-                showErrorModal = true
+            
+            
+            let userLoc = viewModel.userLocation
+            let friendLoc = viewModel.friendLocation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let strongViewModel = viewModel
+                strongViewModel.handleOutOfNYCBehavior(userLoc: userLoc, friendLoc: friendLoc)
             }
             self.searchRadius = viewModel.searchRadius
             // Sync transport modes with ViewModel
             self.myTransit = viewModel.userTransportMode
             self.friendTransit = viewModel.friendTransportMode
+            if lastDirectedVenueName != nil {
+                showMeetingConfirmationModal = true
+            }
         }
         .onChange(of: searchRequest) { newValue in
             if newValue {
@@ -727,11 +753,43 @@ struct MeepAppView: View {
                 subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
             }
         }
+        .alert(
+            "Did you meet at \(lastDirectedVenueEmoji) \(lastDirectedVenueName ?? "the suggested location")?",
+            isPresented: $showMeetingConfirmationModal
+        ) {
+            Button("Yes") {
+                PostHogSDK.shared.capture("meeting_confirmed", properties: [
+                    "venue_name": lastDirectedVenueName ?? "",
+                    "venue_id": lastDirectedVenueID ?? ""
+                ])
+                PostHogSDK.shared.capture("place_visited", properties: [
+                    "venue_name": lastDirectedVenueName ?? "",
+                    "venue_id": lastDirectedVenueID ?? "",
+                    "visited_at": Date().timeIntervalSince1970
+                ])
+                lastDirectedVenueName = nil
+                lastDirectedVenueID = nil
+                lastDirectedVenueEmoji = ""
+                lastDirectedTimestamp = nil
+            }
+            Button("Remind me later") {
+                showMeetingConfirmationModal = false
+            }
+            Button("No", role: .cancel) {
+                lastDirectedVenueName = nil
+                lastDirectedVenueID = nil
+                lastDirectedVenueEmoji = ""
+                lastDirectedTimestamp = nil
+            }
+        }
     }
     
 }
 
 
-#Preview {
-    MeepAppView(isNewUser: true)
+struct MeepAppView_Previews: PreviewProvider {
+    static var previews: some View {
+        MeepAppView(isNewUser: true)
+            .environment(\.colorScheme, .light) // optional: simulate light mode
+    }
 }

@@ -26,6 +26,7 @@ struct ProfileBottomSheet: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var isEditProfilePresented = false
+    @State private var isBlockedUsersPresented = false
     
     // Environment
     @Environment(\.dismiss) var dismiss
@@ -102,6 +103,9 @@ struct ProfileBottomSheet: View {
         .fullScreenCover(isPresented: $isEditProfilePresented) {
             EditProfileView(vm: EditProfileViewModel(imageUploader: ImageUploadService(), user: firebaseService.meepUser!))
         }
+        .fullScreenCover(isPresented: $isBlockedUsersPresented){
+            BlockedListView()
+        }
     }
     
     // MARK: - View Components
@@ -166,6 +170,11 @@ struct ProfileBottomSheet: View {
             }
             .buttonStyle(PlainButtonStyle())
             .confirmationDialog("Account Actions", isPresented: $showAccountActions, titleVisibility: .visible) {
+                
+                Button("Blocked") {
+                    isBlockedUsersPresented = true
+                }
+                
                 Button("Logout", role: .destructive) {
                     showLogoutAlert = true
                 }

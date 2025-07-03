@@ -126,7 +126,7 @@ struct LocationPermissionView: View {
                 Spacer()
 
                 Button(action: onContinue) {
-                    Text("Allow Location")
+                    Text("Continue")
                         .font(.headline)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)

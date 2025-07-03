@@ -8,6 +8,7 @@
 
 import SwiftUI
 import MapKit
+import PostHog
 
 struct FloatingCardView: View {
     @ObservedObject var viewModel: MeepViewModel
@@ -17,6 +18,10 @@ struct FloatingCardView: View {
 
     @State private var isImageLoaded = false
     @State private var showDirectionsOptions = false
+    @AppStorage("lastDirectedVenueName") private var lastDirectedVenueName: String?
+    @AppStorage("lastDirectedVenueID") private var lastDirectedVenueID: String?
+    @AppStorage("lastDirectedVenueEmoji") private var lastDirectedVenueEmoji: String = ""
+    @AppStorage("lastDirectedTimestamp") private var lastDirectedTimestamp: Double?
 
     
     
@@ -37,7 +42,6 @@ struct FloatingCardView: View {
                                 Color.gray.opacity(0.2)
                                 ProgressView()
                             }
-                            .cornerRadius(10)
                             .cornerRadius(10)
                             
                         case .success(let image):
@@ -109,6 +113,21 @@ struct FloatingCardView: View {
                     }
                 }
             }
+            .cornerRadius(10)
+            .overlay(
+                Group {
+                    if viewModel.visitedPlaceIDs.contains(meetingPoint.id.uuidString) {
+                        Image(systemName: "checkmark")
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(6)
+                            .background(Color.black)
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(4),
+                alignment: .bottomTrailing
+            )
             .frame(height: 160)
             .onAppear {
                 // If no imageUrl yet → fetch single photo for selectedPoint
@@ -181,12 +200,23 @@ struct FloatingCardView: View {
         .padding(.bottom, 16)
         .confirmationDialog("Get Directions", isPresented: $showDirectionsOptions, titleVisibility: .visible) {
             Button("Apple Maps") {
+                PostHogSDK.shared.capture("directions_requested", properties: [
+                    "venue_name": meetingPoint.name,
+                    "app": "apple_maps",
+                    "transport_mode": viewModel.userTransportMode.rawValue
+                ])
+                lastDirectedVenueID = meetingPoint.id.uuidString
+                lastDirectedVenueEmoji = meetingPoint.emoji
+                lastDirectedTimestamp = Date().timeIntervalSince1970
+                lastDirectedVenueName = meetingPoint.name
+                viewModel.markVisited(meetingPoint)
                 let placemark = MKPlacemark(coordinate: meetingPoint.coordinate)
                 let mapItem = MKMapItem(placemark: placemark)
                 mapItem.name = meetingPoint.name
                 mapItem.openInMaps(launchOptions: [
                     MKLaunchOptionsDirectionsModeKey: myTransit.launchOption
                 ])
+                
             }
 
             let googleMapsMode: String = {
@@ -201,6 +231,16 @@ struct FloatingCardView: View {
             if let url = URL(string: "comgooglemaps://?daddr=\(meetingPoint.coordinate.latitude),\(meetingPoint.coordinate.longitude)&directionsmode=\(googleMapsMode)"),
                UIApplication.shared.canOpenURL(url) {
                 Button("Google Maps") {
+                    PostHogSDK.shared.capture("directions_requested", properties: [
+                        "venue_name": meetingPoint.name,
+                        "app": "google_maps",
+                        "transport_mode": viewModel.userTransportMode.rawValue
+                    ])
+                    lastDirectedVenueID = meetingPoint.id.uuidString
+                    lastDirectedVenueEmoji = meetingPoint.emoji
+                    lastDirectedTimestamp = Date().timeIntervalSince1970
+                    lastDirectedVenueName = meetingPoint.name
+                    viewModel.markVisited(meetingPoint)
                     UIApplication.shared.open(url)
                 }
             }
