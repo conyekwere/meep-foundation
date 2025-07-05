@@ -23,9 +23,18 @@ struct LandingView: View {
     // Firebase service
     @StateObject private var firebaseService = FirebaseService.shared
     
+    
     // App coordinator to handle navigation
     @EnvironmentObject private var coordinator: AppCoordinator
     @AppStorage("firstLaunchTimestamp") private var firstLaunchTimestamp: Double = 0
+    
+    var isRunningInTestFlightOrDebug: Bool {
+    #if DEBUG
+        return true
+    #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    #endif
+    }
     
     var body: some View {
         ZStack {
@@ -92,6 +101,25 @@ struct LandingView: View {
                 
                 // Action buttons
                 VStack(spacing: 16) {
+                    
+                    if isRunningInTestFlightOrDebug {
+                        Button(action: {
+                            let viewModel = MeepViewModel()
+                            viewModel.skipAuthAndEnterDemo()
+                            coordinator.showMainApp(isNewUser: false)
+                        }) {
+                            Text("Try Demo")
+                                .font(.subheadline)
+                                .foregroundColor(.white)
+                                .padding(.vertical, 20)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.gray.opacity(0.3))
+                                .cornerRadius(40)
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    
                     // Create account button
                     Button(action: {
                         showCreateAccountView = true
@@ -123,6 +151,8 @@ struct LandingView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 16)
+                    
+
                     
                     TermsAndPrivacyText()
                         .padding(.horizontal, 24)
@@ -179,5 +209,3 @@ struct LandingView: View {
         }
 }
 }
-
-

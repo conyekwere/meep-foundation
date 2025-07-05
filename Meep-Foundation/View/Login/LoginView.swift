@@ -14,7 +14,7 @@ struct LoginView: View {
     // Environment
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
-    @State private var showPrivacyDisclosure = false
+    @State private var showLocationPrivacyDisclosure = false
     // Callback when login/registration is complete
     var onDismiss: (Bool) -> Void
     
@@ -217,12 +217,12 @@ struct LoginView: View {
                         }, fullName: fullName)
                     case .locationAccess:
                         LocationPermissionView(onContinue: {
-                            showPrivacyDisclosure = true
+                            showLocationPrivacyDisclosure = true
                         }, profileImageUrl: profileImageUrl, fullName: fullName)
                             .overlay(
                                 Group {
-                                    if showPrivacyDisclosure {
-                                        LocationPrivacyDisclosureView(showDisclosure: $showPrivacyDisclosure) {
+                                    if showLocationPrivacyDisclosure {
+                                        LocationPrivacyDisclosureView(showDisclosure: $showLocationPrivacyDisclosure) {
                                             viewModel.requestUserLocation()
                                             step = .registrationComplete
                                         }
