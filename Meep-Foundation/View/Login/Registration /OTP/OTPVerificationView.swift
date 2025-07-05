@@ -240,20 +240,15 @@ struct OTPVerificationView: View {
                     return
                 }
                 
-                // Check for no account
-                if firebaseService.meepUser == nil  {
-                    if !isCreatingAccount {
-                        showNoAccountModal = true
-                        return
-                    }
-                    else {
-                        onComplete(true)
-                        return
-                    }
+                guard let user = authResult?.user else {
+                    errorMessage = "Authentication failed. Please try again."
+                    return
                 }
-   
-                
-                // Authentication successful
+
+                // Assign user to firebaseService.meepUser if needed
+                firebaseService.currentUser = user
+
+                // Continue flow regardless of currentUser state
                 onComplete(true)
             }
         } else {

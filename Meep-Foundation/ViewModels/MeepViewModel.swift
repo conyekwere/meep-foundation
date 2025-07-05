@@ -689,6 +689,27 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    
+    /// Skip authentication and enter the app in demo mode
+    func skipAuthAndEnterDemo() {
+        let demoUser = MeepUser(
+            id: "demo",
+            displayName: "Demo User",
+            username: "demo",
+            profileImageUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-CTSh56ETSnD9ussJzfSa5Vm8JHsceV.png" // Optional image
+        )
+
+        DispatchQueue.main.async {
+            FirebaseService.shared.meepUser = demoUser
+            self.userLocation = CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855) // Times Square
+            self.friendLocation = CLLocationCoordinate2D(latitude: 40.730610, longitude: -73.935242) // Brooklyn
+            self.cachedGoogleMidpoint = self.calculateGeographicMidpoint(self.userLocation!, self.friendLocation!)
+            self.searchNearbyPlaces()
+        }
+    }
+    
+    
+    
     // MARK: - Enhanced Transport Mode Management
     
     func setUserTransportMode(_ mode: TransportMode) {

@@ -72,6 +72,7 @@ struct PhoneVerificationView: View {
                                 .font(.largeTitle)
                                 .fontDesign(.rounded)
                                 .foregroundColor(.white)
+                                .minimumScaleFactor(0.9)
                                 .opacity(0.8)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 9)
@@ -89,7 +90,9 @@ struct PhoneVerificationView: View {
                             if phoneNumber.isEmpty {
                                 Text(selectedCountry.maxLength < 10 ? "212555012" : "(212) 555-0123")
                                     .foregroundColor(.white.opacity(0.6))
-                                    .font(.largeTitle)
+                                    .font(.system(size: UIDevice.current.userInterfaceIdiom == .phone && UIScreen.main.bounds.width <= 320 ? 28 : 32, weight: .regular))
+                                    .minimumScaleFactor(0.6)
+                                    .multilineTextAlignment(.leading)
                                     .fontDesign(.rounded)
                             }
                             TextField("", text: $phoneNumber)
@@ -98,6 +101,7 @@ struct PhoneVerificationView: View {
                                 .fontDesign(.rounded)
                                 .foregroundColor(.white)
                                 .multilineTextAlignment(.leading)
+                                .minimumScaleFactor(0.8)
                                 .focused($phoneFieldFocused)
                                 .onChange(of: phoneNumber) { oldValue, newValue in
                                     phoneNumber = formatPhoneNumber(newValue)
