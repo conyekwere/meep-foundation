@@ -12,7 +12,7 @@ struct OnboardingSheetView: View {
     @Environment(\.colorScheme) var colorScheme
     @Binding var isLocationAllowed: Bool
     @Binding var searchRequest: Bool
-
+    @State private var showLocationPrivacyDisclosure = false
     var body: some View {
         ZStack {
             VStack(spacing: 16) {
@@ -46,9 +46,15 @@ struct OnboardingSheetView: View {
                                             .frame(width: 108, height: 108)
                                     }
                                 ),
-                                actionTitle: "Allow Location",
+                                actionTitle: "Continue",
                                 action: {
-                                    viewModel.getCurrentLocationIfAuthorized() 
+                                    if isLocationAllowed {
+                                        viewModel.getCurrentLocationIfAuthorized()
+                                    }
+                                    else{
+                                        viewModel.requestUserLocation()
+                                        
+                                    }
                                 }
                             )
                             .cornerRadius(16)
@@ -86,8 +92,37 @@ struct OnboardingSheetView: View {
                         .cornerRadius(16)
                         .padding(.horizontal, 16)
                         .frame(height: 390)
-                        .padding(.bottom, 64)
                   
+                        // Second Card: Meet Your Friends
+                        OnboardingCardView(
+                            title: "Feedback",
+                            subtitle: "Help us improve with your thoughts",
+                            gradientColors: [Color(hex: "5F58FF"), Color(hex: "322DAE")],
+                            icon: AnyView(
+                                ZStack {
+                                    Image(systemName: "questionmark.bubble")
+                                        .resizable()
+                                        .frame(width: 30, height: 30)
+                                        .foregroundStyle(Color.white)
+                                    
+                                    
+                                    Circle()
+                                        .strokeBorder(Color.white, lineWidth: 3)
+                                        .frame(width: 100, height: 100)
+                                }
+                            ),
+                            actionTitle: "Share Feedback",
+                            action: {
+                                if let url = URL(string: "https://tally.so/r/wagLMB") {
+                                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                                }
+                            }
+                        )
+                        .cornerRadius(16)
+                        .padding(.horizontal, 16)
+                        .frame(height: 390)
+                        .padding(.bottom, 64)
+                        
                         Spacer(minLength: 16)
                     }
                     .ignoresSafeArea(edges: .bottom)

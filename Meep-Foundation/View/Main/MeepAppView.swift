@@ -15,7 +15,7 @@ enum UIState {
 }
 
 struct MeepAppView: View {
-    
+    @State private var showLocationPrivacyDisclosure: Bool = false
     @StateObject private var subwayOverlayManager = OptimizedSubwayMapManager()
     
     @StateObject private var viewModel = MeepViewModel()
@@ -753,6 +753,17 @@ struct MeepAppView: View {
                 subwayOverlayManager.updateVisibleElements(for: viewModel.mapRegion)
             }
         }
+        .overlay(
+            Group {
+                if showLocationPrivacyDisclosure {
+                    LocationPrivacyDisclosureView(showDisclosure: $showLocationPrivacyDisclosure) {
+                        viewModel.requestUserLocation()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black.opacity(0.4).ignoresSafeArea())
+                }
+            }
+        )
         .alert(
             "Did you meet at \(lastDirectedVenueEmoji) \(lastDirectedVenueName ?? "the suggested location")?",
             isPresented: $showMeetingConfirmationModal
