@@ -28,4 +28,5 @@ Config.xcconfig
 
 # API Keys
 .env
-secrets/
+secrets/heresdk.xcframework/
+heresdk.xcframework/
