@@ -285,6 +285,29 @@ class GeographicAnalyzer {
         
         return false
     }
+    
+    static func generateTestPoints(around center: CLLocationCoordinate2D,
+                                 radius: Double) -> [CLLocationCoordinate2D] {
+        var points: [CLLocationCoordinate2D] = []
+        let earthRadius = 6371000.0 // meters
+        
+        // Generate points in a grid pattern
+        for angle in stride(from: 0.0, to: 360.0, by: 45.0) {
+            for distance in stride(from: radius * 0.3, through: radius, by: radius * 0.3) {
+                let radianAngle = angle * .pi / 180.0
+                let deltaLat = distance * cos(radianAngle) / earthRadius * (180.0 / .pi)
+                let deltaLng = distance * sin(radianAngle) / earthRadius * (180.0 / .pi) / cos(center.latitude * .pi / 180.0)
+                
+                let testPoint = CLLocationCoordinate2D(
+                    latitude: center.latitude + deltaLat,
+                    longitude: center.longitude + deltaLng
+                )
+                points.append(testPoint)
+            }
+        }
+        
+        return points
+    }
 }
 
 class TransferAnalyzer {
@@ -390,11 +413,83 @@ class TransferAnalyzer {
     static func hasViableTransferConnection(fromLines: [String], toLines: [String],
                                            fromLocation: CLLocationCoordinate2D,
                                            toLocation: CLLocationCoordinate2D) -> Bool {
-        
+        print("🔗 Checking Google-based fallback route viability...")
+
+        // Priority 1: Ask Google for a transit route
+        let directionsService = GoogleDirectionsService.shared
+        let group = DispatchGroup()
+        var viableRouteFound = false
+
+        group.enter()
+        directionsService.getTransitTime(from: fromLocation, to: toLocation) { result in
+            defer { group.leave() }
+            if let duration = result {
+                let distance = fromLocation.distance(to: toLocation)
+                let estimatedWalkTime = (distance / 1609.34) * 20 * 60
+                viableRouteFound = duration < estimatedWalkTime * 1.3
+                print("     🧭 Google transit: \(Int(duration))s vs est. walk: \(Int(estimatedWalkTime))s")
+            }
+            // else: result is nil, do nothing (no viable route)
+        }
+
+        group.wait()
+        if viableRouteFound {
+            print("     ✅ Google transit viable")
+            return true
+        }
+
+        print("     🔄 Fallback to internal simulation (2–3 hop transfers)")
+        return simulateViableTransferPath(fromLines: fromLines, toLines: toLines,
+                                          fromLocation: fromLocation, toLocation: toLocation)
+    }
+
+    static func simulateViableTransferPath(fromLines: [String], toLines: [String],
+                                           fromLocation: CLLocationCoordinate2D,
+                                           toLocation: CLLocationCoordinate2D) -> Bool {
+        var checkedChains = Set<String>()
+
         for fromLine in fromLines {
-            if checkTransferConnections(fromLine: fromLine, toLines: toLines,
-                                      fromStation: fromLocation, toMidpoint: toLocation) {
-                return true
+            for (hub1, linesAtHub1) in majorTransferHubs where linesAtHub1.contains(fromLine) {
+                for (hub2, linesAtHub2) in majorTransferHubs {
+                    // Direct 2-hop check
+                    let key = "\(hub1)->\(hub2)"
+                    if checkedChains.contains(key) { continue }
+                    checkedChains.insert(key)
+
+                    if !linesAtHub2.isEmpty && !Set(linesAtHub2).intersection(toLines).isEmpty {
+                        let fromCoord = getTransferHubCoordinate(hub1)
+                        let toCoord = getTransferHubCoordinate(hub2)
+                        if isTransferGeographicallyViable(from: fromLocation, via: fromCoord, to: toCoord)
+                            && isTransferGeographicallyViable(from: toCoord, via: toCoord, to: toLocation) {
+                            print("         ✅ Found 2-hop path via \(hub1) → \(hub2)")
+                            return true
+                        }
+                    }
+
+                    // Try 3-hop chain: hub1 → hubX → hub2
+                    for (hubX, linesAtHubX) in majorTransferHubs {
+                        let chainKey = "\(hub1)->\(hubX)->\(hub2)"
+                        if checkedChains.contains(chainKey) { continue }
+                        checkedChains.insert(chainKey)
+
+                        let connectsHub1HubX = !Set(linesAtHub1).intersection(linesAtHubX).isEmpty
+                        let connectsHubXHub2 = !Set(linesAtHubX).intersection(linesAtHub2).isEmpty
+                        let connectsHub2ToLines = !Set(linesAtHub2).intersection(toLines).isEmpty
+
+                        if connectsHub1HubX && connectsHubXHub2 && connectsHub2ToLines {
+                            let hub1Coord = getTransferHubCoordinate(hub1)
+                            let hubXCoord = getTransferHubCoordinate(hubX)
+                            let hub2Coord = getTransferHubCoordinate(hub2)
+
+                            if isTransferGeographicallyViable(from: fromLocation, via: hub1Coord, to: hubXCoord)
+                                && isTransferGeographicallyViable(from: hubXCoord, via: hubXCoord, to: hub2Coord)
+                                && isTransferGeographicallyViable(from: hub2Coord, via: hub2Coord, to: toLocation) {
+                                print("         ✅ Found 3-hop path via \(hub1) → \(hubX) → \(hub2)")
+                                return true
+                            }
+                        }
+                    }
+                }
             }
         }
         return false
@@ -1329,25 +1424,40 @@ class OptimizedSubwayMapManager: ObservableObject {
         }
         
         if reason.isEmpty {
-            let userDirectConnections = Set(userLines).intersection(Set(midpointLines))
-            let friendDirectConnections = Set(friendLines).intersection(Set(midpointLines))
-            
+            var userDirectConnections = Set(userLines).intersection(Set(midpointLines))
+            var friendDirectConnections = Set(friendLines).intersection(Set(midpointLines))
+
+            // Relax fallback logic: allow 1-transfer paths
+            if userDirectConnections.isEmpty {
+                if TransferAnalyzer.hasViableTransferConnection(fromLines: userLines, toLines: midpointLines,
+                    fromLocation: userLocation, toLocation: midpoint) {
+                    userDirectConnections.insert("transfer-ok")
+                }
+            }
+
+            if friendDirectConnections.isEmpty {
+                if TransferAnalyzer.hasViableTransferConnection(fromLines: friendLines, toLines: midpointLines,
+                    fromLocation: friendLocation, toLocation: midpoint) {
+                    friendDirectConnections.insert("transfer-ok")
+                }
+            }
+
             print("   User direct connections: \(Array(userDirectConnections))")
             print("   Friend direct connections: \(Array(friendDirectConnections))")
-            
+
             if userDirectConnections.isEmpty {
                 userViable = false
                 if reason.isEmpty {
-                    reason = "No direct subway connection from user location to midpoint"
+                    reason = "No viable subway route from user location to midpoint"
                 }
             }
-            
+
             if friendDirectConnections.isEmpty {
                 friendViable = false
                 if reason.isEmpty {
-                    reason = "No direct subway connection from friend location to midpoint"
+                    reason = "No viable subway route from friend location to midpoint"
                 } else if !userViable {
-                    reason = "No direct subway connections available for this trip"
+                    reason = "No viable subway routes available for this trip"
                 }
             }
         }

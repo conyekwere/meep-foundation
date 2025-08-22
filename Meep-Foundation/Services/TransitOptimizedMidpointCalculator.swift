@@ -9,6 +9,8 @@
 import Foundation
 import CoreLocation
 
+
+
 class TransitOptimizedMidpointCalculator {
     
     /// Safely convert Double to Int; returns 0 if value is NaN or infinite.
@@ -17,60 +19,161 @@ class TransitOptimizedMidpointCalculator {
     }
     
     private let directionsService = GoogleDirectionsService()
-    private let budgetManager = GoogleAPIBudgetManager.shared
+    private let googleBudgetManager = GoogleAPIBudgetManager.shared
+    private let hereBudgetManager = HereAPIBudgetManager.shared
     
     // MARK: - Main Transit Midpoint Calculation
     
     /// Calculate the optimal transit midpoint using Google Directions
     func calculateTransitMidpoint(userLocation: CLLocationCoordinate2D,
-                                friendLocation: CLLocationCoordinate2D) async -> CLLocationCoordinate2D {
+                                  friendLocation: CLLocationCoordinate2D) async -> CLLocationCoordinate2D {
         
         print("🎯 === CALCULATING TRANSIT-OPTIMIZED MIDPOINT ===")
         print("   User location: (\(userLocation.latitude), \(userLocation.longitude))")
         print("   Friend location: (\(friendLocation.latitude), \(friendLocation.longitude))")
         
-        // Check budget first
-        guard budgetManager.shouldUseGoogleForMidpoint(userLocation: userLocation, 
-                                                      friendLocation: friendLocation) else {
-            print("💡 Budget limit reached, using geographic fallback")
-            return GeographicAnalyzer.calculateGeographicMidpoint(userLocation, friendLocation)
-        }
-        
-        // Step 1: Identify major transit hubs between the two locations
-        let candidateHubs = getTransitHubCandidates(from: userLocation, to: friendLocation)
-        print("📍 Transit hub candidates: \(candidateHubs.map { $0.name })")
-        
-        // Step 2: Test each hub to find the optimal one
-        var bestHub: TransitHub?
-        var bestScore = Double.infinity
-        
-        for hub in candidateHubs {
+        // Check Google budget first
+        if googleBudgetManager.shouldUseGoogleForMidpoint(userLocation: userLocation,
+                                                          friendLocation: friendLocation) {
+            // Step 1: Identify major transit hubs between the two locations
+            let candidateHubs = getTransitHubCandidates(from: userLocation, to: friendLocation)
+            print("📍 Transit hub candidates: \(candidateHubs.map { $0.name })")
+            
+            // Step 2: Test each hub to find the optimal one
+            var bestHub: TransitHub?
+            var bestScore = Double.infinity
+            
+            for hub in candidateHubs {
+                do {
+                    let score = try await evaluateTransitHub(
+                        hub: hub,
+                        userLocation: userLocation,
+                        friendLocation: friendLocation
+                    )
+                    
+                    print("🚇 \(hub.name): Score = \(safeInt(score/60))min total, balance = \(safeInt(abs(score - bestScore)/60))min")
+                    
+                    if score < bestScore {
+                        bestScore = score
+                        bestHub = hub
+                    }
+                } catch {
+                    print("⚠️ Failed to evaluate \(hub.name): \(error)")
+                    continue
+                }
+            }
+            
+            if let optimalHub = bestHub {
+                print("✅ OPTIMAL TRANSIT MIDPOINT: \(optimalHub.name)")
+                print("   Total travel time: \(Int(bestScore/60)) minutes")
+                return optimalHub.coordinate
+            } else {
+                print("❌ No viable transit hubs found, using geographic midpoint")
+                return GeographicAnalyzer.calculateGeographicMidpoint(userLocation, friendLocation)
+            }
+        } else {
+            print("💡 Google budget limit reached, using HERE’s hub-based solver")
+            // Use the same hub candidate list as Google branch
+            let candidateHubs = getTransitHubCandidates(from: userLocation, to: friendLocation)
+            print("📍 Transit hub candidates: \(candidateHubs.map { $0.name })")
+
+            var bestHub: TransitHub?
+            var bestScore = Double.infinity
+
+            // Evaluate each hub via HERE
+            for hub in candidateHubs {
+                do {
+                    let userResp = try await HereDirectionsService.shared.getDirections(
+                        origin: userLocation,
+                        destination: hub.coordinate
+                    )
+                    let friendResp = try await HereDirectionsService.shared.getDirections(
+                        origin: friendLocation,
+                        destination: hub.coordinate
+                    )
+                    guard let uRoute = userResp.routes.first,
+                          let fRoute = friendResp.routes.first else {
+                        throw TransitMidpointError.noTransitRoute
+                    }
+
+                    // Use the parsed durationValue (in seconds) from HERE routes
+                    let uTime: TimeInterval = uRoute.durationValue
+                    let fTime: TimeInterval = fRoute.durationValue
+                    let uTransfers = HereRouteAnalyzer.countTransfers(in: uRoute)
+                    let fTransfers = HereRouteAnalyzer.countTransfers(in: fRoute)
+
+                    var score = uTime + fTime
+                    score += abs(uTime - fTime) * 3
+                    score += Double(uTransfers + fTransfers) * 300
+                    if hub.importance == .major { score -= 300 }
+
+                    print("🚇 \(hub.name): Score = \(safeInt(score/60))min")
+
+                    if score < bestScore {
+                        bestScore = score
+                        bestHub = hub
+                    }
+                } catch {
+                    print("⚠️ HERE evaluation failed for \(hub.name): \(error)")
+                    continue
+                }
+            }
+
+            if let optimalHub = bestHub {
+                print("✅ HERE-hub midpoint: \(optimalHub.name)")
+                return optimalHub.coordinate
+            } else {
+                print("❌ HERE couldn’t find a viable hub, falling back to in-house solver")
+            }
+
+            // In-house fallback: geographic midpoint then transit-hub evaluation
+            print("💡 Trying in-house transit-hub solver")
+            let geoMid = GeographicAnalyzer.calculateGeographicMidpoint(userLocation, friendLocation)
             do {
-                let score = try await evaluateTransitHub(
-                    hub: hub,
+                let geoHub = TransitHub(
+                    name: "Geographic Midpoint",
+                    coordinate: geoMid,
+                    lines: [],
+                    importance: .local
+                )
+                let geoScore = try await evaluateTransitHub(
+                    hub: geoHub,
                     userLocation: userLocation,
                     friendLocation: friendLocation
                 )
-                
-                print("🚇 \(hub.name): Score = \(safeInt(score/60))min total, balance = \(safeInt(abs(score - bestScore)/60))min")
-                
-                if score < bestScore {
-                    bestScore = score
-                    bestHub = hub
-                }
+                print("📍 Geographic midpoint viable: Score = \(safeInt(geoScore/60))min")
+                return geoMid
             } catch {
-                print("⚠️ Failed to evaluate \(hub.name): \(error)")
-                continue
+                print("⚠️ Geographic midpoint not viable (\(error)), evaluating station candidates")
             }
-        }
-        
-        if let optimalHub = bestHub {
-            print("✅ OPTIMAL TRANSIT MIDPOINT: \(optimalHub.name)")
-            print("   Total travel time: \(Int(bestScore/60)) minutes")
-            return optimalHub.coordinate
-        } else {
-            print("❌ No viable transit hubs found, using geographic midpoint")
-            return GeographicAnalyzer.calculateGeographicMidpoint(userLocation, friendLocation)
+
+            let inhouseHubs = getTransitHubCandidates(from: userLocation, to: friendLocation)
+            var inhouseBest: TransitHub?
+            var inhouseScore = Double.infinity
+            for hub in inhouseHubs {
+                do {
+                    let score = try await evaluateTransitHub(
+                        hub: hub,
+                        userLocation: userLocation,
+                        friendLocation: friendLocation
+                    )
+                    print("🚇 \(hub.name): Score = \(safeInt(score/60))min")
+                    if score < inhouseScore {
+                        inhouseScore = score
+                        inhouseBest = hub
+                    }
+                } catch {
+                    print("⚠️ Failed to evaluate \(hub.name): \(error)")
+                    continue
+                }
+            }
+            if let inhouse = inhouseBest {
+                print("✅ In-house optimal transit midpoint: \(inhouse.name)")
+                return inhouse.coordinate
+            } else {
+                print("❌ No viable station hubs, returning geographic midpoint")
+                return geoMid
+            }
         }
     }
     
@@ -101,7 +204,7 @@ class TransitOptimizedMidpointCalculator {
             TransitHub(name: "Jay St-MetroTech", coordinate: CLLocationCoordinate2D(latitude: 40.6924, longitude: -73.9874),
                       lines: ["A", "C", "F", "R"], importance: .secondary),
             
-            // East Side Connections  
+            // East Side Connections
             TransitHub(name: "Lexington Ave/59th St", coordinate: CLLocationCoordinate2D(latitude: 40.7625, longitude: -73.9673),
                       lines: ["4", "5", "6", "N", "Q", "R", "W"], importance: .major),
             
@@ -199,7 +302,7 @@ class TransitOptimizedMidpointCalculator {
         
         // Calculate score based on:
         // 1. Total travel time (lower is better)
-        // 2. Balance between users (lower difference is better) 
+        // 2. Balance between users (lower difference is better)
         // 3. Number of transfers (fewer is better)
         // 4. Hub importance (major hubs get bonus)
         

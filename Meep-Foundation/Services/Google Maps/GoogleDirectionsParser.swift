@@ -6,13 +6,6 @@
 //
 
 
-//
-//  GoogleDirectionsParser.swift
-//  Meep-Foundation
-//
-//  Created by Chima Onyekwere on 6/12/25.
-//
-
 import Foundation
 import CoreLocation
 

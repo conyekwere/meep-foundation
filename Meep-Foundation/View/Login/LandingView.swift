@@ -102,22 +102,22 @@ struct LandingView: View {
                 // Action buttons
                 VStack(spacing: 16) {
                     
-                    if isRunningInTestFlightOrDebug {
-                        Button(action: {
-                            let viewModel = MeepViewModel()
-                            viewModel.skipAuthAndEnterDemo()
-                            coordinator.showMainApp(isNewUser: false)
-                        }) {
-                            Text("Try Demo")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .padding(.vertical, 20)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.gray.opacity(0.3))
-                                .cornerRadius(40)
-                        }
-                        .padding(.horizontal, 20)
-                    }
+//                    if isRunningInTestFlightOrDebug {
+//                        Button(action: {
+//                            let viewModel = MeepViewModel()
+//                            viewModel.skipAuthAndEnterDemo()
+//                            coordinator.showMainApp(isNewUser: false)
+//                        }) {
+//                            Text("Try Demo")
+//                                .font(.subheadline)
+//                                .foregroundColor(.white)
+//                                .padding(.vertical, 20)
+//                                .frame(maxWidth: .infinity)
+//                                .background(Color.gray.opacity(0.3))
+//                                .cornerRadius(40)
+//                        }
+//                        .padding(.horizontal, 20)
+//                    }
                     
                     
                     // Create account button
@@ -135,7 +135,7 @@ struct LandingView: View {
                     }
                     .padding(.horizontal, 20)
                     
-                    // Sign in button
+                     //Sign in button
                     Button(action: {
                         showLoginView = true
                     }) {

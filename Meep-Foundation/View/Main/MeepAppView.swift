@@ -57,6 +57,7 @@ struct MeepAppView: View {
 
     // Loading overlay state
     @State private var isLoading: Bool = false
+    
     @State private var loadingMessage: String = "Loading..."
     
     // Sheet height constants
@@ -211,7 +212,7 @@ struct MeepAppView: View {
         if didFallback {
             print("🚨 Triggering fallback toast: \(fallbackMessage)")
             currentToast = TransitFallbackToast.create(for: fallbackMessage)
-            showTransitFallbackToast = true
+            self.showTransitFallbackToast = true
             toastDismissTimer?.invalidate()
             toastDismissTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { _ in
                 withAnimation(.easeOut(duration: 0.3)) {
@@ -225,13 +226,22 @@ struct MeepAppView: View {
         }
     }
 
-    // Helper to load subway data if needed
+    // Update the loadSubwayDataIfNeeded function to skip if already loaded
+
     private func loadSubwayDataIfNeeded() {
         print("🔄 loadSubwayDataIfNeeded called")
         print("   - Transit modes: user=\(myTransit), friend=\(friendTransit)")
         print("   - Locations: user=\(viewModel.userLocation != nil), friend=\(viewModel.friendLocation != nil)")
         print("   - UI state: \(uiState)")
-        
+        print("   - Subway data already loaded: \(subwayOverlayManager.hasLoadedData)")
+        loadingMessage = "Loading subway data..."
+        // Skip if subway data is already loaded
+        if subwayOverlayManager.hasLoadedData {
+            print("✅ Subway data already loaded, triggering fallback check immediately")
+            handleSubwayDataLoad()
+            return
+        }
+
         guard (myTransit == .train || friendTransit == .train),
               viewModel.userLocation != nil,
               viewModel.friendLocation != nil,
@@ -239,22 +249,24 @@ struct MeepAppView: View {
             print("❌ Subway data not needed")
             return
         }
-        
-        // Connect subway manager IMMEDIATELY
-        viewModel.subwayManager = subwayOverlayManager
-        
-        if !subwayOverlayManager.hasLoadedData {
-            print("📡 Loading subway data...")
-            isLoading = true
-            loadingMessage = "Loading subway data..."
-            subwayOverlayManager.loadSubwayData()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                isLoading = false
+
+        // Connect subway manager once
+        if viewModel.subwayManager == nil {
+            viewModel.subwayManager = subwayOverlayManager
+        }
+
+        print("📡 Loading subway data...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if !subwayOverlayManager.hasLoadedData {
+                isLoading = true
+                loadingMessage = "Loading subway data..."
             }
-        } else {
-            print("✅ Subway data already loaded, running fallback check")
-            // Data is already loaded, check fallback immediately
-            handleSubwayDataLoad()
+        }
+
+        subwayOverlayManager.loadSubwayData()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isLoading = false
         }
     }
     
@@ -312,8 +324,7 @@ struct MeepAppView: View {
             // Try to fetch image from Google Places API
             print("🔍 New meeting point - attempting to fetch image for: \(annotation.title)")
             
-            // Loading state for finding meeting spots
-            isLoading = true
+     
             loadingMessage = "Finding meeting spots..."
             // Create a temporary array with just this point
             let tempPoint = viewModel.selectedPoint!
@@ -322,7 +333,7 @@ struct MeepAppView: View {
             // After a delay, update the selected point with any new image that was found
             // Using a capture list without 'weak' since MeepAppView is a struct
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [viewModel] in
-                isLoading = false
+         
                 // Find the meeting point in the array that matches our selected point
                 if let updatedPoint = viewModel.meetingPoints.first(where: {
                     $0.name == tempPoint.name &&
@@ -385,6 +396,7 @@ struct MeepAppView: View {
                             title: loadingMessage,
                             subtitle: nil,
                             progressSteps: ["Processing..."]
+                            
                         )
                     }
                 }
@@ -418,16 +430,16 @@ struct MeepAppView: View {
 
             .ignoresSafeArea()
             .blur(radius: (uiState == .onboarding || uiState == .results) && (showTransitFallbackToast || viewModel.isFloatingCardVisible) ? 4 : 0)
-//           .gesture(
-//                DragGesture()
-//                    .onChanged { _ in viewModel.isUserInteractingWithMap = true }
-//                    .onEnded { _ in
-//                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-//                            viewModel.isUserInteractingWithMap = false
-//                            viewModel.searchNearbyPlaces()
-//                        }
-//                    }
-//            )
+           .gesture(
+                DragGesture()
+                    .onChanged { _ in viewModel.isUserInteractingWithMap = true }
+                    .onEnded { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            viewModel.isUserInteractingWithMap = false
+                            viewModel.searchNearbyPlaces()
+                        }
+                    }
+            )
             
             // MARK: Top Search Bars Based on UIState
             VStack {
@@ -523,7 +535,37 @@ struct MeepAppView: View {
             
             // MARK: Toast Overlay (transit fallback)
             if showTransitFallbackToast {
-                transitFallbackToastView
+                if let toast = currentToast {
+                    TransitFallbackToastView(toast: toast, isVisible: true) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showTransitFallbackToast = false
+                            currentToast = nil
+                        }
+                        toastDismissTimer?.invalidate()
+                    }
+                    .padding(.top, 60)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(999)
+                } else {
+                    TransitFallbackToastView(
+                        toast: TransitFallbackToast(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "NYC Only",
+                            message: "Meep works best in New York City.",
+                            primaryColor: .red,
+                            secondaryColor: .orange
+                        ),
+                        isVisible: true
+                    ) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showTransitFallbackToast = false
+                        }
+                        toastDismissTimer?.invalidate()
+                    }
+                    .padding(.top, 60)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(999)
+                }
             }
             
             // MARK: Floating Card for Selected Point
@@ -588,25 +630,38 @@ struct MeepAppView: View {
                 },
                 onDone: {
                     isSearching = false
+                    isLoading = true
+                    loadingMessage = "Finding meeting spots..."
                     uiState = .results
-                    
+
                     viewModel.subwayManager = subwayOverlayManager
                     
-                    // Check if outside of NYC
+                    // Reset midpoint title + midpoint
+                    viewModel.resetMidpoint()
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        debugSubwayState()
+                        loadSubwayDataIfNeeded()
+                    }
+                    // Refresh locations
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         viewModel.handleOutOfNYCBehavior(userLoc: viewModel.userLocation, friendLoc: viewModel.friendLocation)
                     }
-                    
-                    // Debug the state right after setting it up
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        debugSubwayState()
-                    }
-                    
-                    // Then load subway data
+
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        debugSubwayState()
                         loadSubwayDataIfNeeded()
                     }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        loadingMessage = "Loading subway data..."
+                     
+                    }
                     
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        isLoading = true
+                     
+                    }
 
                 }
             )
@@ -666,6 +721,8 @@ struct MeepAppView: View {
             .presentationDetents([.fraction(0.4)])
             .interactiveDismissDisabled()
         }
+        // Add this to your MeepAppView's .onAppear modifier
+
         .onAppear {
             viewModel.getCurrentLocationIfAuthorized()
             if firstLaunchTimestamp == 0 {
@@ -677,13 +734,6 @@ struct MeepAppView: View {
                 lastDirectedVenueEmoji = ""
                 lastDirectedTimestamp = nil
             }
-//            if !viewModel.isLocationAccessGranted {
-//               showLocationDisclosure = true
-//
-//            }
-            
-            
-            
             
             let userLoc = viewModel.userLocation
             let friendLoc = viewModel.friendLocation
@@ -692,9 +742,29 @@ struct MeepAppView: View {
                 strongViewModel.handleOutOfNYCBehavior(userLoc: userLoc, friendLoc: friendLoc)
             }
             self.searchRadius = viewModel.searchRadius
+            
             // Sync transport modes with ViewModel
             self.myTransit = viewModel.userTransportMode
             self.friendTransit = viewModel.friendTransportMode
+            
+            // Connect subway manager early
+            if viewModel.subwayManager == nil {
+                viewModel.subwayManager = subwayOverlayManager
+            }
+            
+            // 🚇 PRELOAD SUBWAY DATA ON LAUNCH
+            // Since both default to train mode, load subway data immediately
+            if !subwayOverlayManager.hasLoadedData {
+                print("🚇 Preloading subway data on app launch...")
+                
+    
+                
+                // Load the subway data
+                subwayOverlayManager.loadSubwayData()
+                
+
+            }
+            
             if lastDirectedVenueName != nil {
                 showMeetingConfirmationModal = true
             }

@@ -9,6 +9,7 @@ import Foundation
 import CoreLocation
 
 class GoogleDirectionsService {
+    static let shared = GoogleDirectionsService()
     private let apiKey: String
     private let baseURL = "https://maps.googleapis.com/maps/api/directions/json"
     
@@ -207,4 +208,36 @@ class GoogleDirectionsService {
         
         return score
     }
+    
+    
+    /// Fetch simple transit time using Google Directions API
+    func getTransitTime(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        completion: @escaping (TimeInterval?) -> Void
+    ) {
+        let request = GoogleDirectionsRequest(
+            origin: origin,
+            destination: destination,
+            mode: .transit,
+            departureTime: Date().addingTimeInterval(300) // 5 minutes from now
+        )
+
+        Task {
+            do {
+                let response = try await getDirections(request)
+                if let route = response.routes.first {
+                    completion(route.duration.value)
+                } else {
+                    print("⚠️ Google returned no routes for transit.")
+                    completion(nil)
+                }
+            } catch {
+                print("❌ Google transit fallback failed: \(error)")
+                completion(nil)
+            }
+        }
+    }
+
 }
+
