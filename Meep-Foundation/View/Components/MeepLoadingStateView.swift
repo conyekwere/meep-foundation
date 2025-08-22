@@ -15,6 +15,7 @@ struct MeepLoadingStateView: View {
     @State private var currentStep: Int = 0
     @State private var animationProgress: CGFloat = 0
     @State private var pulseScale: CGFloat = 1.0
+    @State private var stepTimer: Timer?
     
     private let animationDuration: Double = 2.0
     
@@ -55,7 +56,11 @@ struct MeepLoadingStateView: View {
                     )
             }
             .frame(width: 120, height: 120)
-            .padding(.bottom,24)
+            
+            
+            
+            Spacer()
+                
             // Progress indicator
 //            ProgressView(value: animationProgress, total: 1.0)
 //                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
@@ -94,22 +99,25 @@ struct MeepLoadingStateView: View {
         .onAppear {
             startAnimations()
         }
+        .onDisappear {
+            stepTimer?.invalidate()
+            stepTimer = nil
+        }
     }
     
     private func startAnimations() {
-        // Start pulse animation
-        pulseScale = 1.2
-        
-        // Start progress animation
-        withAnimation(.linear(duration: animationDuration * Double(progressSteps.count))) {
-            animationProgress = 1.0
+        // Smoothly grow the pulse instead of jumping
+        withAnimation(.easeOut(duration: 0.6)) {
+            pulseScale = 1.2
         }
-        
-        // Cycle through steps
+
+        // Delay progress step cycling slightly for smoother UX
         if !progressSteps.isEmpty {
-            Timer.scheduledTimer(withTimeInterval: animationDuration, repeats: true) { timer in
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    currentStep = (currentStep + 1) % progressSteps.count
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                stepTimer = Timer.scheduledTimer(withTimeInterval: animationDuration, repeats: true) { _ in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        currentStep = (currentStep + 1) % progressSteps.count
+                    }
                 }
             }
         }

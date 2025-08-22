@@ -11,7 +11,28 @@ import GoogleMaps
 import GooglePlaces
 import UserNotifications
 import PostHog
+// Using HERE REST API instead of SDK
 
+/// Configuration for HERE Transit Router API
+struct HereAPIConfig {
+    /// Your HERE API key from Info.plist
+    static var apiKey: String {
+        Bundle.main.object(forInfoDictionaryKey: "HERE_API_KEY") as? String ?? ""
+    }
+    /// HERE base URL (public) from Info.plist, fallback to default
+    static var baseURL: String {
+        Bundle.main.object(forInfoDictionaryKey: "HEREBaseURL") as? String ?? "https://transit.router.hereapi.com/v8"
+    }
+    
+    // ✅ SECURE: Read from config files
+    static var accessKeyId: String {
+        Bundle.main.object(forInfoDictionaryKey: "HERE_ACCESS_KEY_ID") as? String ?? ""
+    }
+    
+    static var accessKeySecret: String {
+        Bundle.main.object(forInfoDictionaryKey: "HERE_ACCESS_KEY_SECRET") as? String ?? ""
+    }
+}
 
 @main
 struct MeepApp: App {
@@ -47,24 +68,14 @@ struct MeepApp: App {
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        
         // Configure Firebase
         FirebaseApp.configure()
-       // Auth.auth().settings?.isAppVerificationDisabledForTesting = true
-       // print("⚠️ Firebase reCAPTCHA fallback disabled for testing")
         
-        let POSTHOG_API_KEY = "PostHogApiKey"
-        let POSTHOG_HOST = "https://app.posthog.com"
+        let POSTHOG_API_KEY = Bundle.main.object(forInfoDictionaryKey: "PostHogApiKey") as? String ?? ""
+        let POSTHOG_HOST = "https://us.i.posthog.com"
         let config = PostHogConfig(apiKey: POSTHOG_API_KEY, host: POSTHOG_HOST)
         PostHogSDK.shared.setup(config)
-        
-        
-     //   config.sessionReplay = true
-           // choose whether to mask images or text
-        //   config.sessionReplayConfig.maskAllImages = false
-         //  config.sessionReplayConfig.maskAllTextInputs = true
-           // screenshot is disabled by default
-           // The screenshot may contain sensitive information, use with caution
-          // config.sessionReplayConfig.screenshotMode = true
         
         // Set up notification delegate
         UNUserNotificationCenter.current().delegate = self
@@ -77,6 +88,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             print("✅ Google Maps & Places API Key Loaded")
         } else {
             fatalError("❌ Google API Key is missing or invalid")
+        }
+
+        // ✅ HERE REST API (no SDK initialization needed)
+        print("✅ HERE REST API ready for transit routing")
+
+        // Configure HERE Transit Router API (REST fallback)
+        let hereApiKey = HereAPIConfig.apiKey
+        let hereBaseURL = HereAPIConfig.baseURL
+        if !hereApiKey.isEmpty {
+            print("✅ HERE REST API configured: key=\(hereApiKey), baseURL=\(hereBaseURL)")
+        } else {
+            print("❌ HERE API key missing in Info.plist")
         }
 
         configureAppAppearance()
@@ -120,6 +143,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         application.setStatusBarOrientation(.portrait, animated: false)
         return true
     }
+
     
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         return .portrait
@@ -132,7 +156,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     #else
         Auth.auth().setAPNSToken(deviceToken, type: .prod)
     #endif
-        
     }
     
     // Method to forward notifications to Firebase Auth

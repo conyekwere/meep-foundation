@@ -172,7 +172,7 @@ struct LoginView: View {
                             }
                         )
                         .environmentObject(ThemeSettings(disableBackgrounds: true))
-
+                        
                     case .otp:
                         OTPVerificationView(
                             phoneNumber: verifiedPhoneNumber,
@@ -183,6 +183,11 @@ struct LoginView: View {
                                     step = .registerFullName
                                 } else {
                                     onDismiss(true)
+                                    
+                                    // 🔒 Ensure top-level state transitions to main
+                                    DispatchQueue.main.async {
+                                        AppCoordinator.shared.showMainApp(isNewUser: false)
+                                    }
                                 }
                             }
                         }
@@ -239,8 +244,9 @@ struct LoginView: View {
                                 onDismiss(true)
                                 guard let uid = firebaseService.currentUser?.uid else { return }
                                 PostHogSDK.shared.identify(uid, userProperties: [
+                                    "phone": firebaseService.currentUser?.phoneNumber ?? "",
                                     "name": fullName,
-                                    "email": email,
+                                    "username": username,
                                     "created_at": Date().timeIntervalSince1970
                                 ])
                             }

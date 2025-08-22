@@ -4,12 +4,7 @@
 //
 //  Created by Chima Onyekwere on 4/4/25.
 //
-//
-//  AppState.swift
-//  Meep-Foundation
-//
-//  Created by Chima Onyekwere on 4/4/25.
-//
+
 
 import SwiftUI
 import FirebaseAuth
