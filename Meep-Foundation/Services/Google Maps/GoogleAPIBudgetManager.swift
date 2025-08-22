@@ -14,18 +14,32 @@ class GoogleAPIBudgetManager {
     static let shared = GoogleAPIBudgetManager()
     
     // MARK: - Budget Configuration
-    private let monthlyBudget = 2000
+    private let monthlyBudget = 10000
     private let directionsCallCost = 1 // Each directions call costs 1 request
     private let placesPhotoCost = 1   // Each photo call costs 1 request
+
+    private let monthlyBudgetDollars: Double = 1000.0
+    private let costPerDirectionsCall: Double = 0.005
     
     // MARK: - Storage Keys
     private let requestCountKey = "GoogleAPIRequestCount"
     private let lastResetDateKey = "GoogleAPILastResetDate"
+    private let spendKey = "GoogleAPISpendThisMonth"
+    private let resetKey = "GoogleAPILastResetDate"
     
     // MARK: - Budget Tracking
     private var currentRequestCount: Int {
         get { UserDefaults.standard.integer(forKey: requestCountKey) }
         set { UserDefaults.standard.set(newValue, forKey: requestCountKey) }
+    }
+    
+    private var currentSpend: Double {
+      get { UserDefaults.standard.double(forKey: spendKey) }
+      set { UserDefaults.standard.set(newValue, forKey: spendKey) }
+    }
+    private var lastReset: Date {
+      get { UserDefaults.standard.object(forKey: resetKey) as? Date ?? Date() }
+      set { UserDefaults.standard.set(newValue, forKey: resetKey) }
     }
     
     private var lastResetDate: Date {
@@ -46,8 +60,25 @@ class GoogleAPIBudgetManager {
     }
     
     func canMakeDirectionsCall() -> Bool {
-        checkAndResetIfNeeded()
-        return remainingRequests >= directionsCallCost
+      checkAndResetIfNeeded()
+      guard currentSpend + costPerDirectionsCall <= monthlyBudgetDollars else {
+        return false
+      }
+      currentSpend += costPerDirectionsCall
+      logUsage()
+      return true
+    }
+    
+    /// Remaining dollar budget for the month
+    var remainingBudget: Double {
+      checkAndResetIfNeeded()
+      return max(0, monthlyBudgetDollars - currentSpend)
+    }
+
+    /// Percentage of dollar budget spent this month (0.0–1.0)
+    private var spendPercentage: Double {
+      checkAndResetIfNeeded()
+      return currentSpend / monthlyBudgetDollars
     }
     
     func canMakePhotoCall() -> Bool {
@@ -69,7 +100,7 @@ class GoogleAPIBudgetManager {
     
     // MARK: - Smart Usage Strategies
     
-    func shouldUseGoogleForMidpoint(userLocation: CLLocationCoordinate2D, 
+    func shouldUseGoogleForMidpoint(userLocation: CLLocationCoordinate2D,
                                    friendLocation: CLLocationCoordinate2D) -> Bool {
         // Always allow if we have plenty of budget (less than 50% used)
         if usagePercentage < 0.5 {
@@ -114,8 +145,20 @@ class GoogleAPIBudgetManager {
         if !calendar.isDate(lastResetDate, equalTo: now, toGranularity: .month) {
             print("🔄 Google API Budget: New month detected, resetting counter")
             currentRequestCount = 0
+            currentSpend = 0
             lastResetDate = now
         }
+    }
+    
+    /// Log current spend and warnings when thresholds are crossed
+    private func logUsage() {
+      let pct = spendPercentage * 100
+      print(String(format: "📊 Google Budget: Spent $%.2f/%.2f (%.1f%%)", currentSpend, monthlyBudgetDollars, pct))
+      if pct >= 90 {
+        print("🚨 Google Budget: Above 90%!")
+      } else if pct >= 80 {
+        print("⚠️ Google Budget: Above 80%!")
+      }
     }
     
     private func logUsage(_ action: String) {
@@ -180,7 +223,7 @@ extension GoogleDirectionsService {
         let budgetManager = GoogleAPIBudgetManager.shared
         
         // Check if we should use Google for this request
-        guard budgetManager.shouldUseGoogleForMidpoint(userLocation: userLocation, 
+        guard budgetManager.shouldUseGoogleForMidpoint(userLocation: userLocation,
                                                       friendLocation: friendLocation) else {
             print("💡 Google Midpoint: Using geographic fallback to preserve budget")
             return MidpointCalculator.calculateGeographicMidpoint(userLocation, friendLocation)

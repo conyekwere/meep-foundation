@@ -18,6 +18,7 @@ target 'Meep-Foundation' do
   pod 'Alamofire'
   pod 'lottie-ios'
   pod 'Kingfisher'
+  pod "PostHog", "~> 3.0"
 
 
   target 'Meep-FoundationTests' do

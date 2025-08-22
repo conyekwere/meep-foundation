@@ -19,9 +19,9 @@ import GooglePlaces
 import PostHog
 
 // MARK: – Google Photo Limits & Auto‐Load Config
-private var googlePhotoCallCount = 0
+private var googlePhotoCallCount = 20
 private let googlePhotoDailyCap = 3000
-private let maxAutoPhotosPerSearch = 10
+private let maxAutoPhotosPerSearch = 0
 
 class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
@@ -62,6 +62,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     weak var subwayManager: OptimizedSubwayMapManager?
     
 
+    
     // MARK: - 🎯 Midpoint Calculation & Filtering
     
     @Published var meetingPoints: [MeetingPoint] = [
@@ -214,6 +215,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var userTransportMode: TransportMode = .train
     @Published var friendTransportMode: TransportMode = .train
     @Published var isUserInteractingWithMap = false
+    @Published var isCalculatingMidpoint: Bool = false
     
     // MARK: - Annotations
     @Published var sampleAnnotations: [MeepAnnotation] = []
@@ -260,8 +262,11 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         var results: [MeepAnnotation] = []
         
         if userLocation != nil && friendLocation != nil {
-             results.append(MeepAnnotation(coordinate: enhancedMidpoint, title: midpointTitle, type: .midpoint))
-         }
+            let midpoint = enhancedMidpoint
+            if !results.contains(where: { $0.coordinate.latitude == midpoint.latitude && $0.coordinate.longitude == midpoint.longitude }) {
+                results.append(MeepAnnotation(coordinate: midpoint, title: midpointTitle, type: .midpoint))
+            }
+        }
         
         if let uLoc = userLocation {
             results.append(MeepAnnotation(coordinate: uLoc, title: "You", type: .user))
@@ -283,14 +288,46 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let userLoc = userLocation, let friendLoc = friendLocation else {
             return CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855) // Default to Times Square
         }
-        
-        // Use cached Google-optimized midpoint if available
+
+        // If we have a cached Google-optimized midpoint, use it
         if let cachedMidpoint = cachedGoogleMidpoint {
             return cachedMidpoint
         }
-        
-        // Fallback to geographic midpoint while Google optimization runs in background
+
+        // If either participant is using transit, avoid bouncing to geographic midpoint;
+        // keep the current map center until optimization completes
+        if userTransportMode == .train || friendTransportMode == .train {
+            return mapRegion.center
+        }
+
+        // Otherwise, fallback to geographic midpoint for non-transit modes
         return calculateGeographicMidpoint(userLoc, friendLoc)
+    }
+    
+    
+    
+    /// Skip authentication and enter the app in demo mode
+    func skipAuthAndEnterDemo() {
+        let demoUser = MeepUser(
+            id: "demo",
+            displayName: "Demo User",
+            username: "demo",
+            profileImageUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-CTSh56ETSnD9ussJzfSa5Vm8JHsceV.png" // Optional image
+        )
+
+        DispatchQueue.main.async {
+            FirebaseService.shared.meepUser = demoUser
+            self.userLocation = CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855) // Times Square
+            self.friendLocation = CLLocationCoordinate2D(latitude: 40.730610, longitude: -73.935242) // Brooklyn
+            self.cachedGoogleMidpoint = self.calculateGeographicMidpoint(self.userLocation!, self.friendLocation!)
+            self.searchNearbyPlaces()
+        }
+    }
+    
+    func resetMidpoint() {
+        self.cachedGoogleMidpoint = nil
+        self.meetingPoint = enhancedMidpoint
+        self.searchNearbyPlaces()
     }
     
     /// Calculate Google-optimized midpoint in background
@@ -355,6 +392,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     /// Enhanced optimal meeting point calculation with Google Directions
     private func calculateOptimalMeetingPointWithGoogle() {
+
         guard let userLoc = userLocation, let friendLoc = friendLocation else {
             print("❌ Missing one or both locations")
             return
@@ -524,6 +562,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                                               friendLoc: CLLocationCoordinate2D,
                                               targetMidpoint: CLLocationCoordinate2D) {
         
+        
+
+        
+        
         var userTime: TimeInterval = 900 // 15 min default
         var friendTime: TimeInterval = 900
         var hasGoogleData = false
@@ -588,7 +630,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         let totalTime = route.duration.value
         let walkingPercentage = totalTime > 0 ? totalWalkingTime / totalTime : 0
         
-        if !hasSubwaySteps || walkingPercentage > 0.7 {
+        if !hasSubwaySteps && walkingPercentage > 0.95 {
             let reason = !hasSubwaySteps ?
                 "No subway routes found - Google suggests walking/bus" :
                 "Route is mostly walking (\(safeInt(walkingPercentage * 100))%)"
@@ -603,8 +645,9 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         let fullReason = "Google suggests alternatives for \(userType) location: \(reason)"
 
         // Haptic feedback before showing toast
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.warning)
+        // let generator = UINotificationFeedbackGenerator()
+        // generator.notificationOccurred(.warning)
+        print("⚠️ Toast triggered due to Google suggestion: \(fullReason)")
 
         currentToast = TransitFallbackToast.create(for: fullReason)
         showTransitFallbackToast = true
@@ -690,25 +733,6 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     
-    /// Skip authentication and enter the app in demo mode
-    func skipAuthAndEnterDemo() {
-        let demoUser = MeepUser(
-            id: "demo",
-            displayName: "Demo User",
-            username: "demo",
-            profileImageUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Logo-CTSh56ETSnD9ussJzfSa5Vm8JHsceV.png" // Optional image
-        )
-
-        DispatchQueue.main.async {
-            FirebaseService.shared.meepUser = demoUser
-            self.userLocation = CLLocationCoordinate2D(latitude: 40.7580, longitude: -73.9855) // Times Square
-            self.friendLocation = CLLocationCoordinate2D(latitude: 40.730610, longitude: -73.935242) // Brooklyn
-            self.cachedGoogleMidpoint = self.calculateGeographicMidpoint(self.userLocation!, self.friendLocation!)
-            self.searchNearbyPlaces()
-        }
-    }
-    
-    
     
     // MARK: - Enhanced Transport Mode Management
     
@@ -786,16 +810,16 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     func checkSubwayViabilityWithGoogle() {
         guard let userLoc = userLocation, let friendLoc = friendLocation else { return }
         guard let subwayManager = subwayManager else { return }
-        
+
         // Only check if someone wants to use subway
         guard userTransportMode == .train || friendTransportMode == .train else { return }
-        
+
         Task {
             // Check both users' subway viability with Google
             var userViable = true
             var friendViable = true
             var reasons: [String] = []
-            
+
             if userTransportMode == .train {
                 let (viable, reason, _, _) = await shouldUseSubwayWithGoogleDirections(
                     from: userLoc,
@@ -806,7 +830,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                     reasons.append("User: \(reason)")
                 }
             }
-            
+
             if friendTransportMode == .train {
                 let (viable, reason, _, _) = await shouldUseSubwayWithGoogleDirections(
                     from: friendLoc,
@@ -817,29 +841,28 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                     reasons.append("Friend: \(reason)")
                 }
             }
-            
+
             DispatchQueue.main.async { [weak self] in
-                var didFallback = false
-                
-                if !userViable && self?.userTransportMode == .train {
-                    self?.userTransportMode = .walk
-                    didFallback = true
-                }
-                
-                if !friendViable && self?.friendTransportMode == .train {
-                    self?.friendTransportMode = .walk
-                    didFallback = true
-                }
-                
-                if didFallback {
-                    let combinedReason = reasons.joined(separator: "; ")
+                // Don't automatically switch transport modes based solely on fallback toast.
+                // Instead, just show the toast and preserve subway validity for user/friend.
+                let combinedReason = reasons.joined(separator: "; ")
+                if !userViable || !friendViable {
                     self?.showGoogleBasedFallbackToast(reason: combinedReason, isUser: !userViable)
-                    
-                    // Recalculate with new transport modes
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        self?.calculateOptimalMeetingPointWithGoogle()
-                    }
                 }
+                // Optionally, you may want to recalculate meeting point if needed, but do not forcibly change modes.
+                // If you want to allow fallback, guard it behind explicit user action or additional checks.
+            }
+
+            // Invoke the more comprehensive analysis if available
+            let basicAnalysis = (userViable, friendViable, reasons.joined(separator: "; "))
+            Task {
+                let fullAnalysis = await self.analyzeSubwayViabilityWithGoogle(
+                    userLocation: userLoc,
+                    friendLocation: friendLoc,
+                    midpoint: enhancedMidpoint,
+                    basicAnalysis: basicAnalysis
+                )
+                print("🚇 Full subway viability analysis:", fullAnalysis)
             }
         }
     }
@@ -1159,15 +1182,17 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     // MARK: - Apple Maps Travel Time (Fallback)
     
-    private func fetchTravelTime(from origin: CLLocationCoordinate2D,
-                                   to destination: CLLocationCoordinate2D,
-                                   mode: TransportMode,
-                                   departureTime: Date? = nil,
-                                   completion: @escaping (TimeInterval) -> Void) {
+    private func fetchTravelTime(
+        from origin: CLLocationCoordinate2D,
+        to destination: CLLocationCoordinate2D,
+        mode: TransportMode,
+        departureTime: Date? = nil,
+        completion: @escaping (TimeInterval) -> Void
+    ) {
         let request = MKDirections.Request()
         request.source = MKMapItem(placemark: MKPlacemark(coordinate: origin))
         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: destination))
-        
+
         switch mode {
         case .walk:
             request.transportType = .walking
@@ -1178,16 +1203,33 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             request.requestsAlternateRoutes = true
         case .train:
             request.transportType = .transit
-            // Use the selected departure time if provided (for transit directions)
             if let depTime = departureTime {
                 request.departureDate = depTime
             }
         }
-        
+
         MKDirections(request: request).calculate { response, error in
             if let travelTime = response?.routes.first?.expectedTravelTime, error == nil {
                 let adjustedTravelTime = mode == .bike ? travelTime / 3 : travelTime
                 completion(adjustedTravelTime)
+            } else if mode == .train {
+                print("❌ Apple Transit failed, falling back to Google")
+
+                self.directionsService.getTransitTime(
+                    from: origin,
+                    to: destination
+                ) { googleTime in
+                    if let googleTime = googleTime {
+                        DispatchQueue.main.async {
+                            self.showTransitFallbackToast = true
+                            completion(googleTime)
+                        }
+                    } else {
+                        print("❌ Google Transit also failed, falling back to walk")
+                        self.showTransitFallbackToast = true
+                        self.fetchTravelTime(from: origin, to: destination, mode: .walk, completion: completion)
+                    }
+                }
             } else {
                 completion(15 * 60) // default fallback: 15 minutes
             }
@@ -1623,6 +1665,7 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     /// Calculate true transit-optimized midpoint
     private func calculateTrueTransitMidpoint() async {
+
         guard let userLoc = userLocation, let friendLoc = friendLocation else { return }
         
         // Only use transit optimization if someone wants to use transit
@@ -1650,8 +1693,10 @@ class MeepViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             
             // Search for places near the true transit midpoint
             self?.searchNearbyPlaces()
+
         }
     }
+    
     
     var realTransitMidpoint: CLLocationCoordinate2D {
            guard let userLoc = userLocation, let friendLoc = friendLocation else {

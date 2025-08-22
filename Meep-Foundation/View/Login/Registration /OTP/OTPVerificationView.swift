@@ -21,6 +21,8 @@ struct OTPVerificationView: View {
     @State private var isCountdownFinished = false
     @State private var showErrorModal = false // New local state property
     @State private var showNoAccountModal = false // New local state property
+    @State private var showAccountExistsModal = false // New modal for existing account during creation
+    @State private var showLoginSuccessModal = false // New modal for successful login
     
     // Environment
     @Environment(\.colorScheme) var colorScheme
@@ -150,8 +152,6 @@ struct OTPVerificationView: View {
                     .frame(width:60, height: 60)
                     .foregroundColor(.red)
 
-
-
                 Text("Incorrect Code. Please try again.")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -174,12 +174,28 @@ struct OTPVerificationView: View {
             .presentationDetents([.fraction(0.4)])
             .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $showNoAccountModal) { // New sheet for no account modal
+        .sheet(isPresented: $showNoAccountModal) { // Sheet for no account modal
             VStack(spacing: 32) {
-                Text("No account found for this phone number.")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .padding()
+                Image(systemName: "person.crop.circle.badge.question")
+                    .resizable()
+                    .frame(width:90, height: 90)
+                    .foregroundColor(.orange)
+                    
+                
+                VStack(spacing: 8) {
+                    Text("Account does not exists!")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding()
+                    
+                    Text("No account found for this phone number. Would you like to create one?")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                        .lineLimit(nil)
+                }
+
 
                 Button(action: {
                     isCreatingAccount = true // Updated to set isCreatingAccount
@@ -209,6 +225,80 @@ struct OTPVerificationView: View {
             .presentationDetents([.fraction(0.4)])
             .interactiveDismissDisabled()
         }
+        .sheet(isPresented: $showAccountExistsModal) { // New sheet for account exists during creation
+            VStack(spacing: 32) {
+                Image(systemName: "checkmark.circle.fill")
+                    .resizable()
+                    .frame(width:90, height: 90)
+                    .foregroundColor(.green)
+                
+                VStack(spacing: 8) {
+                    Text("Account already exists!")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding()
+                    
+                    Text("We found an existing account with this phone number. You've been logged in successfully.")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                }
+
+                Button(action: {
+                    showAccountExistsModal = false
+                    onComplete(true) // Navigate to home
+                }) {
+                    Text("Continue to Home")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            .padding()
+            .presentationDetents([.fraction(0.5)])
+            .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showLoginSuccessModal) { // New sheet for successful login
+            VStack(spacing: 32) {
+                Image(systemName: "checkmark.circle.fill")
+                    .resizable()
+                    .frame(width:90, height: 90)
+                    .foregroundColor(.green)
+                
+                VStack(spacing: 8) {
+                    Text("Welcome back!")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding()
+                    
+                    Text("You've been successfully logged in.")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                }
+
+                Button(action: {
+                    showLoginSuccessModal = false
+                    onComplete(true) // Navigate to home
+                }) {
+                    Text("Continue to Home")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.black)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            .padding()
+            .presentationDetents([.fraction(0.45)])
+            .interactiveDismissDisabled()
+        }
     }
     
     // Verify OTP code
@@ -228,9 +318,8 @@ struct OTPVerificationView: View {
             
             // Remove [weak self] since this is a struct (error fix)
             Auth.auth().signIn(with: credential) { (authResult, error) in
-                isLoading = false
-                
                 if let error = error {
+                    isLoading = false
                     let message = error.localizedDescription
                     errorMessage = message
 
@@ -240,16 +329,37 @@ struct OTPVerificationView: View {
                     return
                 }
                 
-                guard let user = authResult?.user else {
-                    errorMessage = "Authentication failed. Please try again."
+                // Authentication successful, now check if user exists
+                guard let currentUser = authResult?.user else {
+                    isLoading = false
+                    errorMessage = "Failed to get user information"
                     return
                 }
-
-                // Assign user to firebaseService.meepUser if needed
-                firebaseService.currentUser = user
-
-                // Continue flow regardless of currentUser state
-                onComplete(true)
+                
+                // Use loadUser to check if profile exists
+                firebaseService.loadUser(uid: currentUser.uid) { exists in
+                    isLoading = false
+                    
+                    if exists {
+                        // User exists
+                        if isCreatingAccount {
+                            // User tried to create account but already exists
+                            showAccountExistsModal = true
+                        } else {
+                            // Normal login success
+                            showLoginSuccessModal = true
+                        }
+                    } else {
+                        // User doesn't exist
+                        if isCreatingAccount {
+                            // Continue with account creation
+                            onComplete(true)
+                        } else {
+                            // Tried to login but no account
+                            showNoAccountModal = true
+                        }
+                    }
+                }
             }
         } else {
             // Fallback to original approach if no verification ID found
