@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		132A4C542E20480C00C8F004 /* heresdk.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 132A4C522E20477A00C8F004 /* heresdk.xcframework */; };
-		132A4C552E20480C00C8F004 /* heresdk.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 132A4C522E20477A00C8F004 /* heresdk.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		133E651E2D6DA5690008DA18 /* Config.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 133E651D2D6DA5690008DA18 /* Config.xcconfig */; };
 		4B2D9A55210B6831195EB82D /* Pods_Meep_FoundationTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DDA7C12B5BE71CC9F81A1F63 /* Pods_Meep_FoundationTests.framework */; };
 		67205F60A865FF3BE942F26E /* Pods_Meep_Foundation_Meep_FoundationUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */; };
@@ -49,7 +47,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				132A4C552E20480C00C8F004 /* heresdk.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -57,7 +54,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		132A4C522E20477A00C8F004 /* heresdk.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:PQEP8H94J7:HERE Deutschland GmbH"; lastKnownFileType = wrapper.xcframework; path = heresdk.xcframework; sourceTree = "<group>"; };
 		133E651D2D6DA5690008DA18 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		13F6665E2DEB6879008C21AF /* AppClip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppClip.framework; path = System/Library/Frameworks/AppClip.framework; sourceTree = SDKROOT; };
 		1F815A418823B9FA82B2A5B9 /* Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; path = "Target Support Files/Pods-Meep-Foundation-Meep-FoundationUITests/Pods-Meep-Foundation-Meep-FoundationUITests.release.xcconfig"; sourceTree = "<group>"; };
@@ -115,7 +111,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				132A4C542E20480C00C8F004 /* heresdk.xcframework in Frameworks */,
 				6D6DB5BCBF6BCB37EFFCFE67 /* Pods_Meep_Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -179,7 +174,6 @@
 		6F654688B7FA5782E76E6D79 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				132A4C522E20477A00C8F004 /* heresdk.xcframework */,
 				13F6665E2DEB6879008C21AF /* AppClip.framework */,
 				B632C42BB14B94DB21E67555 /* Pods_Meep_Foundation.framework */,
 				39E86BB803D99F3BBEDAC731 /* Pods_Meep_Foundation_Meep_FoundationUITests.framework */,
